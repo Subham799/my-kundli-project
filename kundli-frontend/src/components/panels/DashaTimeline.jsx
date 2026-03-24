@@ -1,0 +1,731 @@
+// DashaTimeline — Premium Accordion Dasha Explorer with API-powered Year Selector + Alignment Search
+// ✅ Updated: DashaAVTab ("🔢 AV विश्लेषण") tab added
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronDown, ChevronRight, Search, Calendar, Loader2 } from "lucide-react";
+import { PLANET_META } from "../../constants";
+import { fetchDashasForYear, fetchDashaAlignment } from "../../api/kundliApi";
+import DashaAVTab from "./DashaAVTab";   // ← NEW IMPORT
+
+// ── Planet constants ─────────────────────────────────────────
+const LORDS    = ["केतु","शुक्र","सूर्य","चंद्र","मंगल","राहु","गुरु","शनि","बुध"];
+const YEARS    = {"केतु":7,"शुक्र":20,"सूर्य":6,"चंद्र":10,"मंगल":7,"राहु":18,"गुरु":16,"शनि":19,"बुध":17};
+const TO_CODE  = {"केतु":"Ke","शुक्र":"Ve","सूर्य":"Su","चंद्र":"Mo","मंगल":"Ma","राहु":"Ra","गुरु":"Ju","शनि":"Sa","बुध":"Me"};
+
+const TINTS = {
+  Su:{bg:"rgba(245,158,11,0.07)",border:"rgba(245,158,11,0.22)",glow:"rgba(245,158,11,0.13)"},
+  Mo:{bg:"rgba(148,163,184,0.07)",border:"rgba(148,163,184,0.18)",glow:"rgba(148,163,184,0.1)"},
+  Ma:{bg:"rgba(239,68,68,0.07)",border:"rgba(239,68,68,0.2)",glow:"rgba(239,68,68,0.11)"},
+  Me:{bg:"rgba(16,185,129,0.07)",border:"rgba(16,185,129,0.2)",glow:"rgba(16,185,129,0.11)"},
+  Ju:{bg:"rgba(249,115,22,0.07)",border:"rgba(249,115,22,0.2)",glow:"rgba(249,115,22,0.11)"},
+  Ve:{bg:"rgba(236,72,153,0.07)",border:"rgba(236,72,153,0.2)",glow:"rgba(236,72,153,0.11)"},
+  Sa:{bg:"rgba(139,92,246,0.07)",border:"rgba(139,92,246,0.2)",glow:"rgba(139,92,246,0.11)"},
+  Ra:{bg:"rgba(99,102,241,0.07)",border:"rgba(99,102,241,0.2)",glow:"rgba(99,102,241,0.11)"},
+  Ke:{bg:"rgba(148,163,184,0.05)",border:"rgba(148,163,184,0.15)",glow:"rgba(148,163,184,0.07)"},
+};
+const T = c => TINTS[c] || TINTS.Su;
+
+// Calculate progress % between two year strings
+function calcPct(start, end) {
+  const s = new Date(parseInt(start),0,1);
+  const e = new Date(parseInt(end),0,1);
+  const now = new Date();
+  if (now <= s) return 0;
+  if (now >= e) return 100;
+  return Math.round(((now-s)/(e-s))*100);
+}
+
+// Get circular AD sequence starting from lord
+function getADs(lord) {
+  const i = LORDS.indexOf(lord); if(i<0) return [];
+  return LORDS.map((_,j)=>LORDS[(i+j)%9]);
+}
+function getPDs(lord) {
+  const i = LORDS.indexOf(lord); if(i<0) return [];
+  return LORDS.map((_,j)=>LORDS[(i+j)%9]);
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function ProgressBar({pct, color="#F59E0B", delay=0}) {
+  return (
+    <div className="relative h-1.5 rounded-full overflow-hidden bg-white/5">
+      <motion.div className="absolute inset-y-0 left-0 rounded-full"
+        style={{background:`linear-gradient(90deg,${color}70,${color})`}}
+        initial={{width:0}} animate={{width:`${pct}%`}}
+        transition={{duration:1.1,delay,ease:"easeOut"}}/>
+    </div>
+  );
+}
+
+function PlanetChip({code, hindi, small=false}) {
+  const meta = PLANET_META[code]||{};
+  const t = T(code);
+  return (
+    <div className={`flex items-center gap-1.5 rounded-lg ${small?"px-1.5 py-1":"px-2 py-1.5"} border`}
+      style={{background:t.bg, borderColor:t.border}}>
+      <span className={`font-black ${small?"text-xs":"text-sm"}`} style={{color:meta.color}}>{meta.symbol}</span>
+      <span className={`font-semibold text-slate-200 ${small?"text-[10px]":"text-xs"}`}
+        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{hindi}</span>
+    </div>
+  );
+}
+
+// ── Level 3: Pratyantardasha Grid ────────────────────────────
+function PDGrid({adLord, curPD, isCurrentAD}) {
+  const list = getPDs(adLord);
+  return (
+    <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}}
+      exit={{height:0,opacity:0}} transition={{duration:0.2}}>
+      <div className="px-4 pb-3 pt-2 border-t border-slate-800/50">
+        <div className="text-[9px] text-slate-600 uppercase tracking-widest mb-2"
+          style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>प्रत्यंतर्दशा</div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {list.map((lord,i) => {
+            const code = TO_CODE[lord]||"Su";
+            const meta = PLANET_META[code]||{};
+            const t = T(code);
+            const isCur = isCurrentAD && lord === curPD;
+            return (
+              <motion.div key={i} initial={{opacity:0,scale:0.88}} animate={{opacity:1,scale:1}}
+                transition={{delay:i*0.03}}
+                className={`relative rounded-xl p-2 border ${isCur?"ring-1 ring-amber-400/50 shadow-sm shadow-amber-500/20":""}`}
+                style={{background:isCur?t.glow:t.bg, borderColor:isCur?t.border:"rgba(255,255,255,0.05)"}}>
+                <div className="flex items-center gap-1 mb-0.5">
+                  <span className="text-xs font-black" style={{color:meta.color}}>{meta.symbol}</span>
+                  <span className="text-[10px] font-semibold text-slate-300 truncate"
+                    style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</span>
+                </div>
+                <div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>
+                {isCur && (
+                  <span className="absolute -top-1 -right-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-200 border border-amber-500/50"
+                    style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>चालू</span>
+                )}
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Level 2: Antardasha Row ───────────────────────────────────
+function ADRow({lord, isCurrentMD, curAD, curPD}) {
+  const [open, setOpen] = useState(false);
+  const code = TO_CODE[lord]||"Su";
+  const meta = PLANET_META[code]||{};
+  const t = T(code);
+  const isCur = isCurrentMD && lord===curAD;
+
+  return (
+    <div className={`border-b border-slate-800/40 last:border-0 ${isCur?"border-l-2 border-l-cyan-400/60":""}`}>
+      <button onClick={()=>setOpen(o=>!o)}
+        className={`w-full flex items-center gap-2.5 pl-10 pr-4 py-2.5 text-left transition-colors hover:bg-white/3 ${open?"bg-white/3":""}`}>
+        <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0 border"
+          style={{background:t.bg, color:meta.color, borderColor:t.border}}>{meta.symbol}</div>
+        <span className="text-xs font-semibold text-slate-300 flex-1"
+          style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</span>
+        <span className="text-[10px] text-slate-600">{YEARS[lord]} वर्ष</span>
+        {isCur && (
+          <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
+            style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>वर्तमान</span>
+        )}
+        {open?<ChevronDown size={11} className="text-slate-600 flex-shrink-0"/>
+             :<ChevronRight size={11} className="text-slate-700 flex-shrink-0"/>}
+      </button>
+      <AnimatePresence>
+        {open && <PDGrid adLord={lord} curPD={curPD} isCurrentAD={isCur}/>}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Level 1: Mahadasha Card ───────────────────────────────────
+function MDCard({d, curMD, curAD, curPD, idx}) {
+  const lord = d.lord_hi || d.lord || "";
+  const code = d.code || TO_CODE[lord] || "Su";
+  const meta = PLANET_META[code]||{};
+  const t = T(code);
+  const isCur = lord===curMD || code===curMD;
+  const pct = isCur ? (d.pct||calcPct(d.start,d.end)) : 0;
+  const [open, setOpen] = useState(isCur);
+  const adList = getADs(lord);
+
+  return (
+    <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:idx*0.05}}
+      className={`rounded-2xl border overflow-hidden transition-all duration-300 ${isCur?"ring-2 ring-amber-500/40 shadow-lg shadow-amber-500/10":""}`}
+      style={{background:isCur?t.glow:t.bg, borderColor:t.border}}>
+
+      {/* Header row */}
+      <button onClick={()=>setOpen(o=>!o)}
+        className="w-full flex items-center gap-3 p-4 text-left hover:brightness-110 transition-all">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black flex-shrink-0 border"
+          style={{background:`${meta.color}20`,color:meta.color,borderColor:`${meta.color}35`,
+            boxShadow:isCur?`0 0 14px ${meta.color}30`:"none"}}>
+          {meta.symbol}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+            <span className="text-sm font-bold text-slate-100"
+              style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord} महादशा</span>
+            {isCur && (
+              <span className="text-[8px] px-2 py-0.5 rounded-full font-bold bg-amber-500/25 text-amber-200 border border-amber-500/40 animate-pulse"
+                style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>● वर्तमान</span>
+            )}
+          </div>
+          <div className="text-[10px] text-slate-500 flex gap-2">
+            <span>आरंभ: <span className="text-slate-400">{d.start}</span></span>
+            <span>·</span>
+            <span>अंत: <span className="text-slate-400">{d.end}</span></span>
+            <span>·</span>
+            <span className="text-slate-600">{d.years} वर्ष</span>
+          </div>
+        </div>
+        {open?<ChevronDown size={15} className="text-slate-500 flex-shrink-0"/>
+             :<ChevronRight size={15} className="text-slate-600 flex-shrink-0"/>}
+      </button>
+
+      {/* Progress bar for active */}
+      {isCur && (
+        <div className="px-4 -mt-1 pb-3">
+          <div className="flex justify-between text-[10px] text-slate-600 mb-1">
+            <span style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>बीता हुआ</span>
+            <span style={{color:meta.color}}>{pct}%</span>
+          </div>
+          <ProgressBar pct={pct} color={meta.color} delay={0.3+idx*0.05}/>
+        </div>
+      )}
+
+      {/* Antardasha accordion */}
+      <AnimatePresence>
+        {open && (
+          <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}}
+            exit={{height:0,opacity:0}} transition={{duration:0.24}}>
+            <div className="border-t border-white/5 bg-slate-950/50">
+              <div className="px-10 py-1.5 text-[9px] text-slate-600 uppercase tracking-widest"
+                style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>अंतर्दशा</div>
+              {adList.map((adLord,ai) => (
+                <ADRow key={ai} lord={adLord} isCurrentMD={isCur} curAD={curAD} curPD={curPD}/>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// ── Year Selector (API-powered) ───────────────────────────────
+function YearSelector({meta}) {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const search = async () => {
+    setLoading(true);
+    const data = await fetchDashasForYear(meta?.dob, meta?.moonDegree, year);
+    setLoading(false);
+    if (data?.dashas) setResults(data.dashas);
+    else {
+      setResults([{mahadasha:"—", antardasha:"—", pratyantara:"—"}]);
+    }
+  };
+
+  return (
+    <div className="p-4 rounded-2xl border border-slate-700/40 bg-slate-800/15">
+      <div className="flex items-center gap-2 mb-1">
+        <Calendar size={13} className="text-amber-400"/>
+        <span className="text-sm font-semibold text-slate-200"
+          style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>🔍 वर्ष चयनकर्ता</span>
+      </div>
+      <p className="text-[10px] text-slate-600 mb-3"
+        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>किसी भी वर्ष की सक्रिय दशा देखें</p>
+
+      <div className="flex gap-2 mb-1">
+        <input type="number" value={year} min={1900} max={2100}
+          onChange={e=>setYear(parseInt(e.target.value)||new Date().getFullYear())}
+          className="flex-1 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-200 text-sm focus:outline-none focus:border-amber-500/50"
+          placeholder="वर्ष"/>
+        <button onClick={search} disabled={loading}
+          className="px-4 py-2 rounded-xl bg-amber-500/18 border border-amber-500/30 text-amber-300 text-sm font-semibold hover:bg-amber-500/28 transition-all disabled:opacity-60 flex items-center gap-1.5"
+          style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+          {loading ? <Loader2 size={13} className="animate-spin"/> : null}
+          दशा देखें
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {results && (
+          <motion.div initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} exit={{opacity:0}} className="mt-3">
+            <div className="flex flex-col gap-2">
+              {results.map((r,i) => {
+                const codes = [TO_CODE[r.mahadasha]||"Su", TO_CODE[r.antardasha]||"Su", TO_CODE[r.pratyantara||r.pratyantardasha]||"Su"];
+                const metas = codes.map(c=>PLANET_META[c]||{});
+                return (
+                  <motion.div key={i} initial={{opacity:0,x:-6}} animate={{opacity:1,x:0}} transition={{delay:i*0.04}}
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/25 flex-wrap">
+                    {[r.mahadasha,r.antardasha,r.pratyantara||r.pratyantardasha].map((lord,li)=>(
+                      <span key={li} className="flex items-center gap-1">
+                        <span className="text-xs font-black" style={{color:metas[li].color||"#94A3B8"}}>{metas[li].symbol}</span>
+                        <span className="text-xs text-slate-300" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</span>
+                        {li<2&&<span className="text-slate-700 text-xs mx-0.5">›</span>}
+                      </span>
+                    ))}
+                    {r.start && (
+                      <span className="ml-auto text-[10px] text-slate-600"
+                        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+                        {r.start} – {r.end}
+                      </span>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Alignment Search (API-powered) ───────────────────────────
+function AlignmentSearch({meta}) {
+  const [f, setF] = useState({md:"",ad:"",pd:""});
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const doSearch = async () => {
+    setLoading(true);
+    const data = await fetchDashaAlignment(meta?.dob, meta?.moonDegree, {mahadasha:f.md||undefined, antardasha:f.ad||undefined, pratyantara:f.pd||undefined});
+    setLoading(false);
+    if (data?.results) setResults(data.results);
+    else setResults([]);
+  };
+
+  const Sel = ({label, val, onChange}) => (
+    <div className="flex-1">
+      <div className="text-[10px] text-slate-600 mb-1"
+        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{label}</div>
+      <select value={val} onChange={e=>onChange(e.target.value)}
+        className="w-full px-2 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-200 text-xs focus:outline-none focus:border-cyan-500/50"
+        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+        <option value="">कोई भी</option>
+        {LORDS.map(l=><option key={l} value={l}>{l}</option>)}
+      </select>
+    </div>
+  );
+
+  return (
+    <div className="p-4 rounded-2xl border border-slate-700/40 bg-slate-800/15">
+      <div className="flex items-center gap-2 mb-1">
+        <Search size={13} className="text-cyan-400"/>
+        <span className="text-sm font-semibold text-slate-200"
+          style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>🎯 दशा संरेखण खोज</span>
+      </div>
+      <p className="text-[10px] text-slate-600 mb-3"
+        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+        विशेष दशा संयोजन खोजें — जैसे "कब आएगा शनि-राहु-केतु का समय?"
+      </p>
+
+      <div className="flex gap-2 mb-3">
+        <Sel label="महादशा"   val={f.md} onChange={v=>setF(x=>({...x,md:v}))}/>
+        <Sel label="अंतर्दशा" val={f.ad} onChange={v=>setF(x=>({...x,ad:v}))}/>
+        <Sel label="प्रत्यंतर" val={f.pd} onChange={v=>setF(x=>({...x,pd:v}))}/>
+      </div>
+      <button onClick={doSearch} disabled={loading}
+        className="w-full py-2.5 rounded-xl bg-cyan-500/12 border border-cyan-500/28 text-cyan-300 text-sm font-semibold hover:bg-cyan-500/22 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+        {loading && <Loader2 size={13} className="animate-spin"/>}
+        खोजें
+      </button>
+
+      <AnimatePresence>
+        {results !== null && (
+          <motion.div initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} exit={{opacity:0}} className="mt-3">
+            {results.length === 0
+              ? <p className="text-[11px] text-slate-500 text-center py-3"
+                  style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>कोई परिणाम नहीं मिला</p>
+              : <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1"
+                  style={{scrollbarWidth:"thin",scrollbarColor:"rgba(99,102,241,0.25) transparent"}}>
+                  <div className="text-[9px] text-slate-600 mb-1"
+                    style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>मिले {results.length} परिणाम</div>
+                  {results.map((r,i) => {
+                    const lords = [r.mahadasha, r.antardasha, r.pratyantara||r.pratyantardasha];
+                    const codes = lords.map(l=>TO_CODE[l]||"Su");
+                    const metas = codes.map(c=>PLANET_META[c]||{});
+                    return (
+                      <motion.div key={i} initial={{opacity:0,x:-5}} animate={{opacity:1,x:0}} transition={{delay:i*0.04}}
+                        className="px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/25">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                          {lords.map((lord,li)=>(
+                            <span key={li} className="flex items-center gap-1">
+                              <span className="text-xs font-black" style={{color:metas[li].color||"#94A3B8"}}>{metas[li].symbol}</span>
+                              <span className="text-xs font-semibold text-slate-200"
+                                style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</span>
+                              {li<2 && <span className="text-slate-600 text-xs">»</span>}
+                            </span>
+                          ))}
+                        </div>
+                        {(r.start||r.from) && (
+                          <div className="text-[10px] text-slate-500 flex gap-3"
+                            style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+                            <span>{r.start||r.from} से {r.end||r.to}</span>
+                            {r.duration && <span className="text-slate-600">अवधि: {r.duration}</span>}
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                </div>
+            }
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── MAIN EXPORT ───────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// DASHA PREDICTIONS — Detailed results with WHY reasoning
+// ═══════════════════════════════════════════════════════════
+const HI = { fontFamily:"'Noto Sans Devanagari',sans-serif" };
+const C  = { amber:"#F59E0B",cyan:"#22D3EE",rose:"#FB7185",green:"#4ADE80",purple:"#C084FC",
+             indigo:"#818CF8",orange:"#FB923C",teal:"#2DD4BF",red:"#EF4444",yellow:"#FCD34D",pink:"#F472B6" };
+
+const MD_DATA = {
+  Su:{ years:6, icon:"☉", color:"#FCD34D", name:"सूर्य महादशा",
+    personality:"अहंकार बढ़ेगा पर आत्मविश्वास भी। सरकारी काम सबसे शुभ।",
+    good:["सरकारी नौकरी/पद में उन्नति","पिता का सहयोग और आशीर्वाद","नेतृत्व की भूमिका मिलेगी","राजकीय/प्रशासनिक सम्मान","आत्मविश्वास चरम पर"],
+    bad:["अहंकार की वजह से रिश्ते टूट सकते हैं","आंख/हृदय रोग (कमजोर सूर्य हो तो)","पिता का स्वास्थ्य ध्यान रखें","गर्मी और पित्त रोग"],
+    career:"सरकार, राजनीति, प्रशासन, नेतृत्व, पशु चिकित्सा, खनन",
+    tip:"इस दशा में सरकारी काम, राजकीय संबंध बनाएं। रविवार को सूर्य नमस्कार करें।",
+    remedy:"सूर्य मंत्र: ॐ सूर्याय नमः | माणिक्य रत्न (यदि अनुकूल) | आदित्य हृदयम पाठ" },
+  Mo:{ years:10, icon:"☽", color:"#94A3B8", name:"चंद्र महादशा",
+    personality:"मन अत्यंत संवेदनशील। जनता से जुड़ाव बढ़ेगा। भावनाएं तीव्र होंगी।",
+    good:["माता का आशीर्वाद और सहयोग","जनता से प्रेम — सार्वजनिक जीवन","संपत्ति/भूमि लाभ संभव","विदेश यात्रा योग","व्यापार में वृद्धि (जल/दूध/खाद्य)"],
+    bad:["मानसिक उथल-पुथल, नींद की समस्या","पानी/नमी से रोग","माता की तबियत का ध्यान","भावुकता में गलत निर्णय"],
+    career:"जनसेवा, राजनीति, होटल/खाद्य, कृषि, नौकायन, नर्सिंग",
+    tip:"माता की सेवा करें। मन को शांत रखें। सोमवार व्रत शुभ।",
+    remedy:"चंद्र मंत्र: ॐ चन्द्राय नमः | मोती रत्न | दूध दान सोमवार को" },
+  Ma:{ years:7, icon:"♂", color:"#FB7185", name:"मंगल महादशा",
+    personality:"ऊर्जा और साहस चरम पर। जोश में होश खोने से बचें।",
+    good:["भूमि/संपत्ति लाभ","सेना/पुलिस/तकनीक में सफलता","भाई से सहयोग","साहसी कामों में सफलता"],
+    bad:["दुर्घटना/चोट का उच्च खतरा","रक्त विकार, रक्तचाप","भाई से झगड़ा संभव","बहुत ऊर्जा — क्रोध में निर्णय न लें"],
+    career:"सेना, पुलिस, इंजीनियरिंग, शल्य चिकित्सा, भूमि व्यवसाय, खेल",
+    tip:"भूमि खरीदें। साहसी काम करें। मंगलवार को हनुमान पूजा।",
+    remedy:"मंगल मंत्र: ॐ मंगलाय नमः | लाल मूंगा | हनुमान चालीसा" },
+  Ra:{ years:18, icon:"☊", color:"#818CF8", name:"राहु महादशा",
+    personality:"भ्रम और महत्वाकांक्षा साथ-साथ। विदेश से जुड़ाव बढ़ेगा।",
+    good:["विदेश में सफलता/बसना","तकनीक/IT में उन्नति","अचानक बड़ा लाभ","राजनीति में अप्रत्याशित उभरना","नया सोचने की शक्ति"],
+    bad:["भ्रम और झूठे वादों का शिकार","नाना/मातृ परिवार से दूरी","असामान्य/रहस्यमय बीमारियां","धोखाधड़ी का शिकार हो सकते हैं"],
+    career:"विदेश, IT/तकनीक, राजनीति, जासूसी, रसायन, मास मीडिया",
+    tip:"18 साल लंबी दशा। विदेश अवसर भुनाएं। गणेश पूजा नित्य करें।",
+    remedy:"राहु मंत्र: ॐ राहवे नमः | गोमेद रत्न (यदि अनुकूल) | दुर्गा सप्तशती" },
+  Ju:{ years:16, icon:"♃", color:"#FB923C", name:"गुरु महादशा",
+    personality:"ज्ञान और धर्म की ओर झुकाव। धन और संतान के योग।",
+    good:["संतान जन्म का शुभ समय","धन-संपत्ति में वृद्धि","शिक्षा में उच्च सफलता","विवाह के योग (यदि विवाह नहीं हुआ)","गुरु/संत का मार्गदर्शन मिलेगा"],
+    bad:["मोटापे की समस्या बढ़ सकती है","लिवर की समस्या (कमजोर गुरु)","अति उदारता से नुकसान","कानूनी मामले (गुरु पीड़ित हो तो)"],
+    career:"शिक्षा, धर्म/पुजारी, न्यायालय, बैंकिंग, वित्त, लेखन, चिकित्सा",
+    tip:"शिक्षा/धर्म में निवेश करें। गुरुवार को पीले वस्त्र पहनें।",
+    remedy:"गुरु मंत्र: ॐ गुरवे नमः | पुखराज रत्न | विष्णु सहस्रनाम" },
+  Sa:{ years:19, icon:"♄", color:"#8B5CF6", name:"शनि महादशा",
+    personality:"19 साल की कठिन पर फलदायी यात्रा। मेहनत का पक्का परिणाम।",
+    good:["मेहनत का 100% फल मिलेगा (देरी से)","दीर्घकालिक स्थिर सफलता","नौकरशाही/सेवा में उन्नति","आध्यात्मिक जागरण","अनुशासन और व्यवस्था"],
+    bad:["हर चीज में देरी — धैर्य जरूरी","जोड़ों/हड्डियों का दर्द","पुराने रोग उभर सकते हैं","मानसिक थकान और अवसाद"],
+    career:"न्यायपालिका, श्रम, कृषि, लोहा/तेल, आध्यात्म, सफाई, सेवा",
+    tip:"धैर्य रखें। निरंतर परिश्रम करते रहें। शनिवार को तेल दान।",
+    remedy:"शनि मंत्र: ॐ शनिचराय नमः | नीलम (यदि अनुकूल) | शनि शिंगणापुर दर्शन" },
+  Me:{ years:17, icon:"☿", color:"#4ADE80", name:"बुध महादशा",
+    personality:"बुद्धि तेज, वाणी प्रभावशाली। व्यापार और लेखन से लाभ।",
+    good:["व्यापार में जबरदस्त सफलता","लेखन/वाणी/मीडिया से लाभ","भांजे से लाभ","शिक्षा में उत्कृष्टता","नई भाषाएं सीखने का समय"],
+    bad:["त्वचा रोग संभव","चालाकी में फंसना — सावधान","मित्र या व्यापारी से धोखा","अत्यधिक सोचने से निर्णय अटकना"],
+    career:"व्यापार, लेखन, मीडिया/पत्रकारिता, गणित, कंप्यूटर, कानून, लेखाकार",
+    tip:"व्यापार, लेखन, शिक्षा में आगे बढ़ें। बुधवार को हरा रंग पहनें।",
+    remedy:"बुध मंत्र: ॐ बुधाय नमः | पन्ना रत्न | गणेश पूजा" },
+  Ke:{ years:7, icon:"☋", color:"#2DD4BF", name:"केतु महादशा",
+    personality:"वैराग्य और आध्यात्म की ओर। भौतिक सुख में कमी पर आंतरिक ज्ञान।",
+    good:["आध्यात्मिक उन्नति","गूढ़ विद्याओं में प्रवीणता","पितामह का आशीर्वाद","मोक्ष की राह पर","तंत्र/ज्योतिष में सफलता"],
+    bad:["रहस्यमय बीमारियां","दुर्घटना का भय","भटकाव और अनिश्चितता","भौतिक नुकसान","संबंधों में ठंडापन"],
+    career:"आध्यात्म, तंत्र, ज्योतिष, पशु चिकित्सा, दर्शन, रिसर्च",
+    tip:"ध्यान/साधना करें। तीर्थ यात्राएं करें। मंगलवार को गणेश पूजा।",
+    remedy:"केतु मंत्र: ॐ केतवे नमः | लहसुनिया रत्न | गणेश अथर्वशीर्ष" },
+  Ve:{ years:20, icon:"♀", color:"#F472B6", name:"शुक्र महादशा",
+    personality:"सबसे लंबी दशा। विलासिता, प्रेम, कला का स्वर्णकाल।",
+    good:["विवाह/प्रेम का सर्वोत्तम समय","वाहन/संपत्ति लाभ","कला/मनोरंजन में सफलता","विलासिता की वस्तुएं मिलेंगी","स्त्री सुख, सौंदर्य"],
+    bad:["मधुमेह/चीनी रोग का खतरा","यौन रोग से सावधानी","अत्यधिक विलासिता से धन हानि","आंखों/गुर्दे का ध्यान रखें"],
+    career:"कला, मनोरंजन, फैशन, सौंदर्य, विवाह व्यवसाय, होटल, वाहन",
+    tip:"20 साल सबसे लंबी। विवाह, कला, संपत्ति के लिए सर्वोत्तम। शुक्रवार व्रत।",
+    remedy:"शुक्र मंत्र: ॐ शुक्राय नमः | हीरा/ओपल | लक्ष्मी पूजा शुक्रवार" },
+};
+
+// Antardasha compatibility matrix
+const AD_COMPAT = {
+  Su:{Su:"मध्यम — स्वयं का अत्यधिक प्रभाव",Mo:"✅ अच्छा — माता/जनता से लाभ",Ma:"✅ मित्र — साहस और उन्नति",Me:"✅ मित्र — बुद्धि तेज, व्यापार",Ju:"✅ मित्र — धर्म-ज्ञान, पुत्र सुख",Ve:"⚠️ शत्रु — प्रेम-करियर में टकराव",Sa:"⚠️ शत्रु — बाधा, देरी, स्वास्थ्य",Ra:"⚠️ — भ्रम, अचानक परिवर्तन",Ke:"⚠️ — वैराग्य, आध्यात्मिक झुकाव"},
+  Mo:{Su:"✅ — माता-पिता दोनों से लाभ",Mo:"मध्यम — अत्यधिक भावुकता",Ma:"⚠️ शत्रु — मानसिक तनाव, क्रोध",Me:"✅ मित्र — बुद्धि-भावना का संतुलन",Ju:"✅ मित्र — गजकेसरी सक्रिय",Ve:"✅ मित्र — प्रेम, सुख, संपत्ति",Sa:"⚠️ शत्रु — माता को कष्ट, तनाव",Ra:"⚠️ — मानसिक भ्रम, अस्थिरता",Ke:"⚠️ — वैराग्य, माता से दूरी"},
+  Ma:{Su:"✅ मित्र — साहस, सरकारी काम",Mo:"⚠️ — मन अशांत, क्रोध",Ma:"मध्यम — अत्यधिक ऊर्जा",Me:"⚠️ शत्रु — व्यापार में झगड़े",Ju:"✅ मित्र — भूमि, संपत्ति, संतान",Ve:"⚠️ शत्रु — प्रेम में तनाव",Sa:"⚠️ शत्रु — दुर्घटना, रोग",Ra:"⚠️ — अचानक दुर्घटना",Ke:"मध्यम — आध्यात्मिक साहस"},
+  Ra:{Su:"⚠️ — सरकार से टकराव",Mo:"⚠️ — मानसिक भ्रम",Ma:"⚠️ — अंगारक (यदि युति)",Me:"✅ — तकनीक, बुद्धि, व्यापार",Ju:"✅ — भाग्योदय, धन",Ve:"✅ — विलासिता, विदेश",Sa:"✅ — दीर्घकालिक लाभ (यदि बल हो)",Ra:"मध्यम — अत्यधिक राहु प्रभाव",Ke:"⚠️ — अचानक परिवर्तन, उथल-पुथल"},
+  Ju:{Su:"✅ मित्र — सरकारी, पिता",Mo:"✅ गजकेसरी — धन, जनता",Ma:"✅ मित्र — साहस, संपत्ति",Me:"मध्यम — ज्ञान vs व्यापार",Ju:"✅ — सर्वश्रेष्ठ! धर्म-ज्ञान",Ve:"⚠️ शत्रु — करियर vs प्रेम",Sa:"⚠️ शत्रु — देरी, कानूनी",Ra:"मध्यम — विदेश भाग्य",Ke:"मध्यम — आध्यात्म गहरा"},
+  Sa:{Su:"⚠️ शत्रु — सरकार से झगड़ा",Mo:"⚠️ शत्रु — माता को कष्ट",Ma:"⚠️ शत्रु — दुर्घटना, रोग",Me:"✅ मित्र — व्यापार, लेखन",Ju:"⚠️ शत्रु — कानूनी, देरी",Ve:"✅ मित्र — विवाह, वाहन",Sa:"✅ — कठोर परिश्रम का फल",Ra:"✅ — दीर्घकालिक, विदेश",Ke:"मध्यम — आध्यात्म, वैराग्य"},
+  Me:{Su:"✅ मित्र — सरकारी, पिता",Mo:"✅ मित्र — जनता, माता",Ma:"⚠️ शत्रु — व्यापार-साहस टकराव",Me:"✅ — बुद्धि शिखर पर",Ju:"मध्यम — ज्ञान vs व्यापार",Ve:"✅ मित्र — कला, व्यापार",Sa:"✅ मित्र — व्यापार, अनुशासन",Ra:"⚠️ — धोखा संभव",Ke:"मध्यम — तकनीक vs आध्यात्म"},
+  Ke:{Su:"⚠️ — पिता से दूरी, सरकार",Mo:"⚠️ — माता से दूरी, मन",Ma:"मध्यम — साहस + वैराग्य",Me:"मध्यम — बुद्धि + त्याग",Ju:"✅ — आध्यात्म + ज्ञान",Ve:"⚠️ — प्रेम में उदासीनता",Sa:"⚠️ — वैराग्य, अकेलापन",Ra:"⚠️ — अस्थिरता, भ्रम",Ke:"✅ — पूर्ण वैराग्य, मोक्ष"},
+  Ve:{Su:"⚠️ शत्रु — करियर vs प्रेम",Mo:"✅ मित्र — सुख, सौंदर्य",Ma:"⚠️ शत्रु — प्रेम में झगड़े",Me:"✅ मित्र — कला, व्यापार",Ju:"⚠️ शत्रु — विवाह vs धर्म",Ve:"✅ — सर्वश्रेष्ठ सुख!",Sa:"✅ मित्र — वाहन, संपत्ति",Ra:"✅ — विलासिता, विदेश",Ke:"⚠️ — प्रेम में उदासीनता"},
+};
+
+function DashaPredictions({ curMD, curAD, curMDCode, curADCode, chartMeta }) {
+  const [selMD, setSelMD] = useState(curMDCode || "Sa");
+  const [showAD, setShowAD] = useState(false);
+  const dd = MD_DATA[selMD];
+  const compat = AD_COMPAT[selMD] || {};
+  const PLANET_ORDER = ["Su","Mo","Ma","Ra","Ju","Sa","Me","Ke","Ve"];
+  const isCurMD = selMD === curMDCode;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-[10px] text-amber-400/60 uppercase tracking-widest mb-1 flex items-center gap-2">
+        <span className="flex-1 h-px bg-slate-800"/>
+        <span style={HI}>📖 दशा फलादेश — विस्तृत</span>
+        <span className="flex-1 h-px bg-slate-800"/>
+      </div>
+
+      {/* MD Selector */}
+      <div className="grid grid-cols-5 gap-1.5">
+        {PLANET_ORDER.map(c => {
+          const d = MD_DATA[c]; if(!d) return null;
+          const meta = PLANET_META[c]||{};
+          const isCur = c === curMDCode;
+          const isSel = c === selMD;
+          return <button key={c} onClick={() => setSelMD(c)}
+            className="py-2.5 rounded-xl flex flex-col items-center gap-0.5 transition-all"
+            style={{ background: isSel ? `${d.color}22` : isCur ? `${d.color}10` : "rgba(255,255,255,.04)",
+              color: isSel ? d.color : isCur ? d.color : "#475569",
+              border: isSel ? `2px solid ${d.color}55` : isCur ? `1px solid ${d.color}30` : "1px solid rgba(255,255,255,.08)" }}>
+            <span style={{ fontSize:16 }}>{d.icon}</span>
+            <span className="text-[10px] font-black" style={HI}>{d.years}yr</span>
+            {isCur && <span className="text-[8px] text-amber-400" style={HI}>चालू</span>}
+          </button>;
+        })}
+      </div>
+
+      {/* MD Detail Card */}
+      {dd && <motion.div key={selMD} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}>
+        <div className="p-4 rounded-2xl border" style={{ background:`${dd.color}0A`, borderColor:`${dd.color}35` }}>
+          <div className="flex items-center gap-3 mb-3">
+            <span style={{ fontSize:28 }}>{dd.icon}</span>
+            <div className="flex-1">
+              <div className="text-[15px] font-black" style={{color:dd.color,...HI}}>{dd.name}</div>
+              <div className="text-[11px] text-slate-400" style={HI}>अवधि: {dd.years} वर्ष</div>
+            </div>
+            {isCurMD && <span className="text-[10px] px-2.5 py-1 rounded-full font-black animate-pulse"
+              style={{ background:`${dd.color}22`, color:dd.color, border:`1px solid ${dd.color}40`,...HI }}>⚡ चालू</span>}
+          </div>
+
+          <div className="p-2.5 rounded-xl mb-3" style={{ background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.06)" }}>
+            <div className="text-[12px] text-slate-300" style={HI}>👤 {dd.personality}</div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="p-3 rounded-xl" style={{ background:"rgba(74,222,128,.07)", border:"1px solid rgba(74,222,128,.2)" }}>
+              <div className="text-[11px] font-black text-green-400 mb-2" style={HI}>✅ शुभ फल:</div>
+              {dd.good.map((g,i) => <div key={i} className="text-[11px] text-slate-200 mb-1" style={HI}>• {g}</div>)}
+            </div>
+            <div className="p-3 rounded-xl" style={{ background:"rgba(251,113,133,.07)", border:"1px solid rgba(251,113,133,.2)" }}>
+              <div className="text-[11px] font-black text-rose-400 mb-2" style={HI}>⚠️ सावधानी:</div>
+              {dd.bad.map((b,i) => <div key={i} className="text-[11px] text-slate-200 mb-1" style={HI}>• {b}</div>)}
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-xl mb-2" style={{ background:"rgba(245,158,11,.07)", border:"1px solid rgba(245,158,11,.2)" }}>
+            <div className="text-[11px] font-bold text-amber-400 mb-1" style={HI}>💼 करियर क्षेत्र:</div>
+            <div className="text-[12px] text-slate-200" style={HI}>{dd.career}</div>
+          </div>
+          <div className="p-2.5 rounded-xl mb-2" style={{ background:"rgba(34,211,238,.06)", border:"1px solid rgba(34,211,238,.2)" }}>
+            <div className="text-[11px] font-bold text-cyan-400 mb-1" style={HI}>💡 इस दशा में करें:</div>
+            <div className="text-[12px] text-slate-200" style={HI}>{dd.tip}</div>
+          </div>
+          <div className="p-2.5 rounded-xl" style={{ background:"rgba(192,132,252,.06)", border:"1px solid rgba(192,132,252,.2)" }}>
+            <div className="text-[11px] font-bold text-purple-400 mb-1" style={HI}>🛡️ उपाय:</div>
+            <div className="text-[12px] text-slate-300" style={HI}>{dd.remedy}</div>
+          </div>
+        </div>
+
+        {/* Antardasha compatibility */}
+        <button onClick={() => setShowAD(s => !s)}
+          className="w-full mt-2 py-2.5 rounded-xl text-[12px] font-black transition-all flex items-center justify-center gap-2"
+          style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.2)", color:C.amber }}>
+          <span style={HI}>⚡ {dd.name} में अंतर्दशा फल</span>
+          <span>{showAD ? "▲" : "▼"}</span>
+        </button>
+
+        <AnimatePresence>
+          {showAD && <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}}
+            exit={{height:0,opacity:0}} className="overflow-hidden mt-2">
+            <div className="p-3 rounded-2xl" style={{ background:"rgba(8,12,28,.9)", border:"1px solid rgba(255,255,255,.06)" }}>
+              <div className="text-[11px] font-bold text-amber-400 mb-3" style={HI}>
+                {dd.name} में सभी अंतर्दशाओं का फल:
+              </div>
+              {PLANET_ORDER.map(c => {
+                const adData = MD_DATA[c];
+                const compat_text = compat[c] || "—";
+                const meta = PLANET_META[c]||{};
+                const isCurAD2 = (selMD === curMDCode) && (c === curADCode);
+                const isGood = compat_text.includes("✅");
+                const isBad = compat_text.includes("⚠️");
+                const col = isGood ? C.green : isBad ? C.rose : C.amber;
+                return <div key={c} className="flex items-start gap-2 p-2 rounded-lg mb-1"
+                  style={{ background: isCurAD2 ? `${meta.color}15` : "rgba(255,255,255,.02)",
+                    border: isCurAD2 ? `1px solid ${meta.color}30` : "1px solid transparent" }}>
+                  <span style={{ color:meta.color, fontSize:14, flexShrink:0 }}>{meta.symbol}</span>
+                  <div className="flex-1">
+                    <span className="text-[11px] font-bold" style={{ color:meta.color,...HI }}>{adData?.name?.split(" ")[0] || c} </span>
+                    <span className="text-[11px]" style={{ color:col,...HI }}>{compat_text}</span>
+                  </div>
+                  {isCurAD2 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 flex-shrink-0" style={HI}>चालू</span>}
+                </div>;
+              })}
+            </div>
+          </motion.div>}
+        </AnimatePresence>
+      </motion.div>}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// MAIN EXPORT — DashaTimeline with inner tab navigation
+// Tabs: दशा क्रम | फलादेश | 🔢 AV विश्लेषण | वर्ष चयन | संरेखण खोज
+// ════════════════════════════════════════════════════════════
+
+// ── Inner Tab Bar ────────────────────────────────────────────
+const DASHA_TABS = [
+  { id: "timeline",    label: "📅 दशा क्रम" },
+  { id: "predictions", label: "📖 फलादेश" },
+  { id: "dasha_av",   label: "🔢 AV विश्लेषण" },   // ← NEW TAB
+  { id: "year",        label: "🔍 वर्ष चयन" },
+  { id: "alignment",   label: "🎯 संरेखण" },
+];
+
+function DashaInnerTabs({ active, onChange }) {
+  return (
+    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none mb-4">
+      {DASHA_TABS.map(t => (
+        <button key={t.id} onClick={() => onChange(t.id)}
+          className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all"
+          style={{
+            background: active === t.id ? "rgba(245,158,11,0.2)" : "rgba(255,255,255,0.05)",
+            color:      active === t.id ? "#F59E0B"              : "#64748B",
+            border:     active === t.id ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.07)",
+            fontFamily: "'Noto Sans Devanagari',sans-serif",
+          }}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export default function DashaTimeline({ dasha, chartMeta }) {
+  if (!dasha) return null;
+  const { current, sequence } = dasha;
+
+  const [activeTab, setActiveTab] = useState("timeline");
+
+  const curMD = current.mahadasha;
+  const curAD = current.antardasha;
+  const curPD = current.pratyantara;
+
+  const curMDCode = TO_CODE[curMD] || "Su";
+  const curADCode = TO_CODE[curAD] || "Su";
+  const curPDCode = TO_CODE[curPD] || "Su";
+  const m1 = PLANET_META[curMDCode]||{};
+  const m2 = PLANET_META[curADCode]||{};
+  const m3 = PLANET_META[curPDCode]||{};
+
+  return (
+    <div className="flex flex-col gap-5 pb-6">
+
+      {/* ── वर्तमान दशा card — always visible ───────────────── */}
+      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
+        className="p-5 rounded-2xl border border-amber-500/28 bg-gradient-to-br from-amber-500/8 via-slate-900/50 to-slate-950/70 ring-1 ring-amber-500/15 shadow-lg shadow-amber-500/5">
+        <div className="flex items-center gap-2 text-[10px] text-amber-400/70 uppercase tracking-widest mb-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block"/>
+          <span style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>वर्तमान दशा काल</span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          {[
+            {label:"महादशा",   lord:curMD, code:curMDCode, meta:m1},
+            {label:"अंतर्दशा", lord:curAD, code:curADCode, meta:m2},
+            {label:"प्रत्यंतर", lord:curPD, code:curPDCode, meta:m3},
+          ].map((d,i)=>{
+            const t = T(d.code);
+            return (
+              <div key={i} className="text-center p-3 rounded-xl border"
+                style={{background:t.glow, borderColor:t.border}}>
+                <div className="text-2xl mb-1" style={{color:d.meta.color,
+                  filter:`drop-shadow(0 0 8px ${d.meta.color}60)`}}>{d.meta.symbol}</div>
+                <div className="text-sm font-bold text-slate-100 mb-0.5"
+                  style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{d.lord}</div>
+                <div className="text-[10px] text-slate-500"
+                  style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{d.label}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div>
+          <div className="flex justify-between text-[10px] mb-1.5">
+            <span className="text-slate-500"
+              style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>महादशा प्रगति</span>
+            <span style={{color:m1.color}}>समाप्त: {current.endDate} · {current.progressPercent}%</span>
+          </div>
+          <ProgressBar pct={current.progressPercent} color={m1.color} delay={0.4}/>
+        </div>
+      </motion.div>
+
+      {/* ── Inner Tab Navigation ─────────────────────────────── */}
+      <DashaInnerTabs active={activeTab} onChange={setActiveTab} />
+
+      {/* ── Tab: दशा क्रम (Accordion MD → AD → PD) ──────────── */}
+      {activeTab === "timeline" && (
+        <div>
+          <div className="text-[10px] text-slate-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+            <span className="w-3 h-px bg-slate-700 inline-block"/>
+            <span style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>महादशा → अंतर्दशा → प्रत्यंतर्दशा</span>
+            <span className="flex-1 h-px bg-slate-800 inline-block"/>
+          </div>
+          <div className="flex flex-col gap-3">
+            {sequence.map((d,i) => (
+              <MDCard key={i} d={d} curMD={curMD} curAD={curAD} curPD={curPD} idx={i}/>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab: फलादेश (Predictions) ────────────────────────── */}
+      {activeTab === "predictions" && (
+        <DashaPredictions
+          curMD={curMD} curAD={curAD}
+          curMDCode={curMDCode} curADCode={curADCode}
+          chartMeta={chartMeta}
+        />
+      )}
+
+      {/* ── Tab: 🔢 AV विश्लेषण ← NEW ────────────────────────── */}
+      {activeTab === "dasha_av" && (
+        <DashaAVTab data={chartMeta?.enginesData?.dasha_shani} />
+      )}
+
+      {/* ── Tab: वर्ष चयन ─────────────────────────────────────── */}
+      {activeTab === "year" && (
+        <YearSelector meta={chartMeta}/>
+      )}
+
+      {/* ── Tab: संरेखण खोज ──────────────────────────────────── */}
+      {activeTab === "alignment" && (
+        <AlignmentSearch meta={chartMeta}/>
+      )}
+
+    </div>
+  );
+}
