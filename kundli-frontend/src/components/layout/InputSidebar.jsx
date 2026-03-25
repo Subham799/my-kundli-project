@@ -1,15 +1,18 @@
 // components/layout/InputSidebar.jsx
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { User, Calendar, Clock, MapPin, Layers, Zap } from "lucide-react";
 import useKundliStore from "../../store/useKundliStore";
 import { CHART_TYPES } from "../../constants";
 
+const STORAGE_KEY = "kundliFormData";
+
 // ── Field config ────────────────────────────────────────────
 const FIELDS = [
-  { label: "पूर्ण नाम",    key: "name", type: "text",  placeholder: "जैसे: अर्जुन शर्मा", Icon: User     },
-  { label: "जन्म तिथि",   key: "dob",  type: "date",  placeholder: "",                   Icon: Calendar },
-  { label: "जन्म समय",   key: "time", type: "time",  placeholder: "",                   Icon: Clock    },
-  { label: "जन्म शहर",   key: "city", type: "text",  placeholder: "जैसे: नई दिल्ली",      Icon: MapPin   },
+  { label: "पूर्ण नाम",  key: "name", type: "text", placeholder: "जैसे: अर्जुन शर्मा", Icon: User     },
+  { label: "जन्म तिथि", key: "dob",  type: "date", placeholder: "",                   Icon: Calendar },
+  { label: "जन्म समय",  key: "time", type: "time", placeholder: "",                   Icon: Clock    },
+  { label: "जन्म शहर",  key: "city", type: "text", placeholder: "जैसे: नई दिल्ली",    Icon: MapPin   },
 ];
 
 // ── Shared input className ──────────────────────────────────
@@ -24,6 +27,39 @@ const inputCls = [
 export default function InputSidebar() {
   const { formData, loading, error, sidebarCollapsed, setForm, fetchChart, loadDemo } =
     useKundliStore();
+
+  // ── On mount: localStorage se purana data restore karo ──
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Sirf string fields restore karo (city object nahi hai yahan)
+        const keys = ["name", "dob", "time", "city", "chartType"];
+        keys.forEach((k) => {
+          if (parsed[k] && typeof parsed[k] === "string") {
+            setForm(k, parsed[k]);
+          }
+        });
+      }
+    } catch {
+      // corrupt data ho toh quietly ignore karo
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, []); // sirf ek baar — page load pe
+
+  // ── Jab bhi formData badle, localStorage update karo ────
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        name:      formData.name      || "",
+        dob:       formData.dob       || "",
+        time:      formData.time      || "",
+        city:      typeof formData.city === "string" ? formData.city : "",
+        chartType: formData.chartType || "D1",
+      }));
+    } catch { /* storage full ho toh ignore */ }
+  }, [formData]);
 
   return (
     <motion.aside
@@ -60,7 +96,7 @@ export default function InputSidebar() {
               </label>
               <input
                 type={type}
-                value={formData[key]}
+                value={typeof formData[key] === "string" ? formData[key] : ""}
                 placeholder={placeholder}
                 onChange={(e) => setForm(key, e.target.value)}
                 className={inputCls}

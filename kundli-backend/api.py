@@ -1561,6 +1561,11 @@ def _build_chart_response(name, city, date_str, time_str, chart_type):
 
 
 # ── MAIN API ENDPOINT ────────────────────────────────────────────────────
+# api.py में अन्य @app.route के साथ इसे जोड़ें
+@app.route('/')
+def home():
+    # यह UptimeRobot को 200 OK का सिग्नल देगा
+    return {"status": "online", "message": "Vedic Kundli Server is Active"}, 200
 @app.route('/api/chart', methods=['POST'])
 def api_chart():
     """
@@ -1814,6 +1819,7 @@ def btr_endpoint():
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok', 'version': '2.0', 'engine': 'NadiJyotish'})
+
 
 
 # ── ENTRY POINT ──────────────────────────────────────────────────────────
