@@ -1348,7 +1348,11 @@ function MobileChartHeader({ chartData }) {
 }
 
 
-  // State for PDF Modal (Ab ye sahi jagah hai)
+// ─────────────────────────────────────────────────────────────
+// RIGHT PANEL (Tabbed)
+// ─────────────────────────────────────────────────────────────
+function RightPanel({ chartData }) {
+  // State for PDF Modal
   const [showPDFModal, setShowPDFModal] = useState(false);
 
   const { 
