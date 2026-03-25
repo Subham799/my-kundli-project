@@ -31,7 +31,7 @@ const GocharPanel       = lazy(() => import("../components/panels/GocharPanel"))
 const NadiJyotishPanel  = lazy(() => import("../components/panels/NadiJyotishPanel"));
 const AVSutrasPanel     = lazy(() => import("../components/panels/AVSutrasPanel"));
 const ChandraSuryaPanel = lazy(() => import("../components/panels/ChandraSuryaPanel"));
-const AdvancedYogasPanel= lazy(() => import("../components/panels/AdvancedYogasPanel"));
+const AdvancedYogasPanel= lazy(() => import("../components/panels/Advancedyogaspanel"));
 const KPBTRPanel        = lazy(() => import("../components/panels/KPBTRPanel"));
 const VivahPanel         = lazy(() => import("../components/panels/VivahPanel"));
 
