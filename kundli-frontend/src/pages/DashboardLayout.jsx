@@ -5,6 +5,8 @@ import { User, Moon, Zap, Download, FileText } from "lucide-react";
 import useKundliStore from "../store/useKundliStore";
 import { TABS } from "../constants";
 import { PLANET_META } from "../constants";
+import { useIsMobile } from "../hooks/useIsMobile";
+import MobileTabDrawer from "../components/shared/MobileTabDrawer";
 
 // ── Phase 1 panels — loaded immediately (needed on first render) ──────────
 import InputSidebar       from "../components/layout/InputSidebar";
@@ -1151,6 +1153,8 @@ function RightPanel({ chartData }) {
     enginesLoading 
   } = useKundliStore();
 
+  const isMobile = useIsMobile();
+
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* 1. PDF Export Button */}
@@ -1198,9 +1202,10 @@ function RightPanel({ chartData }) {
         <span className="ml-auto text-[10px] text-slate-600">समाप्त: {chartData.dasha.current.endDate}</span>
       </div>
 
-      {/* 5. Tab bar */}
-      <div className="flex gap-1 p-1 rounded-2xl bg-slate-800/40 border border-slate-700/30 mb-4 flex-shrink-0 overflow-x-auto"
-        style={{ scrollbarWidth:"none" }}>
+      {/* 5. Tab bar — desktop only (mobile uses MobileTabDrawer) */}
+      <div
+        className="main-tab-bar flex gap-1 p-1 rounded-2xl bg-slate-800/40 border border-slate-700/30 mb-4 flex-shrink-0 overflow-x-auto"
+        style={{ scrollbarWidth:"none", ...(isMobile && { display:"none" }) }}>
         {TABS.map((t) => {
           // KP BTR tab ke liye SSL badge
           const kpData   = t.id === "kp_btr" ? chartData?.enginesData?.kp_btr : null;
@@ -1213,7 +1218,7 @@ function RightPanel({ chartData }) {
             key={t.id}
             onClick={() => setActiveTab(t.id)}
             className={[
-              "flex-shrink-0 py-2 px-2.5 rounded-xl text-[10px] font-semibold transition-all duration-200 whitespace-nowrap relative",
+              "main-tab-btn flex-shrink-0 py-2 px-2.5 rounded-xl text-[10px] font-semibold transition-all duration-200 whitespace-nowrap relative",
               activeTab === t.id ? "bg-slate-700/70 text-slate-100 shadow-sm" : "text-slate-500 hover:text-slate-300",
             ].join(" ")}
           >
@@ -1283,6 +1288,16 @@ function RightPanel({ chartData }) {
         open={drawerOpen}
         onClose={closeDrawer}
       />
+
+      {/* 8. Mobile Tab Drawer — only renders on <768px */}
+      {isMobile && (
+        <MobileTabDrawer
+          tabs={TABS}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          enginesReady={chartData?._enginesReady}
+        />
+      )}
     </div>
   );
 }
@@ -1301,8 +1316,14 @@ function ChartColumn({ chartData }) {
 
   return (
     <div
-      className="flex-shrink-0 w-[480px] border-r border-slate-800/50 overflow-y-auto p-5 flex flex-col gap-5"
-      style={{ background: "rgba(2,11,24,0.5)", scrollbarWidth: "thin", scrollbarColor: "rgba(99,102,241,0.2) transparent" }}
+      className="flex-shrink-0 border-r border-slate-800/50 overflow-y-auto p-5 flex flex-col gap-5"
+      style={{
+        width: "100%",
+        maxWidth: "480px",
+        background: "rgba(2,11,24,0.5)",
+        scrollbarWidth: "thin",
+        scrollbarColor: "rgba(99,102,241,0.2) transparent"
+      }}
     >
       {/* Meta bar */}
       <div className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-700/40 bg-slate-800/30">
@@ -1362,10 +1383,11 @@ function ChartColumn({ chartData }) {
 // ─────────────────────────────────────────────────────────────
 export default function DashboardLayout() {
   const { chartData, loading } = useKundliStore();
+  const isMobile = useIsMobile();
 
   return (
     <div className="flex flex-1 min-h-0 overflow-auto">
-      {/* Left sidebar — form */}
+      {/* Left sidebar — form (hidden on mobile, shown via InputSidebar's own toggle) */}
       <InputSidebar />
 
       {/* Main area */}
@@ -1373,12 +1395,19 @@ export default function DashboardLayout() {
         {loading ? (
           <LoadingState />
         ) : chartData ? (
-          <div className="flex-1 flex min-h-0">
-            {/* Centre — chart */}
-            <ChartColumn chartData={chartData} />
+          <div className={`flex-1 flex min-h-0 ${isMobile ? "flex-col" : ""}`}>
+            {/* Centre — chart (full width on mobile, fixed width on desktop) */}
+            {!isMobile && <ChartColumn chartData={chartData} />}
+
+            {/* Mobile: chart above panels */}
+            {isMobile && (
+              <div className="flex-shrink-0 p-3 border-b border-slate-800/50">
+                <ChartColumn chartData={chartData} />
+              </div>
+            )}
 
             {/* Right — tabbed panels */}
-            <div className="flex-1 min-w-0 p-5 overflow-y-auto flex flex-col">
+            <div className={`flex-1 min-w-0 overflow-y-auto flex flex-col ${isMobile ? "p-3" : "p-5"}`}>
               <RightPanel chartData={chartData} />
             </div>
           </div>
