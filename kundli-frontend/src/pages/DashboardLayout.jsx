@@ -1,6 +1,6 @@
 // pages/DashboardLayout.jsx
 import { AnimatePresence, motion } from "framer-motion";
-import { useState, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { User, Moon, Zap, Download, FileText } from "lucide-react";
 import useKundliStore from "../store/useKundliStore";
 import { TABS } from "../constants";
@@ -31,7 +31,7 @@ const GocharPanel       = lazy(() => import("../components/panels/GocharPanel"))
 const NadiJyotishPanel  = lazy(() => import("../components/panels/NadiJyotishPanel"));
 const AVSutrasPanel     = lazy(() => import("../components/panels/AVSutrasPanel"));
 const ChandraSuryaPanel = lazy(() => import("../components/panels/ChandraSuryaPanel"));
-const AdvancedYogasPanel= lazy(() => import("../components/panels/Advancedyogaspanel"));
+const AdvancedYogasPanel= lazy(() => import("../components/panels/AdvancedYogasPanel"));
 const KPBTRPanel        = lazy(() => import("../components/panels/KPBTRPanel"));
 const VivahPanel         = lazy(() => import("../components/panels/VivahPanel"));
 
@@ -46,41 +46,199 @@ function TabSkeleton() {
   );
 }
 
+
 // ─────────────────────────────────────────────────────────────
-// LOADING
+// LOADING STATE — Dynamic tabs preview + jyotish facts
 // ─────────────────────────────────────────────────────────────
 function LoadingState() {
+  const [phase, setPhase]     = useState(0);   // which message
+  const [tabIdx, setTabIdx]   = useState(0);   // which tab preview
+  const [dots, setDots]       = useState("");  // "..." animation
+
+  // ── Phase messages — server cold start + computation steps ──
+  const PHASES = [
+    { icon:"🌌", text:"ब्रह्मांडीय ऊर्जाओं को अलाइन किया जा रहा है...",             sub:"Render सर्वर जाग रहा है (Cold Start)" },
+    { icon:"🪐", text:"Swiss Ephemeris से ग्रहों की सटीक डिग्री निकाली जा रही है...", sub:"9 ग्रह · 12 भाव · लग्न स्पष्ट" },
+    { icon:"📐", text:"अष्टकवर्ग और सर्वाष्टकवर्ग के 337 बिंदु जोड़े जा रहे हैं...",  sub:"8 ग्रहों के BAV + SAV गणना" },
+    { icon:"📜", text:"भृगु नंदी नाड़ी के 62 गुप्त सूत्रों का मिलान हो रहा है...",    sub:"नाड़ी AI Engine v2.0" },
+    { icon:"⚡", text:"13 विश्लेषण इंजन एक साथ चल रहे हैं...",                         sub:"योग · दशा · गोचर · विवाह · KP · AV सूत्र..." },
+    { icon:"🔮", text:"आपकी सम्पूर्ण वैदिक कुंडली लगभग तैयार है...",                 sub:"बस कुछ ही पल..." },
+  ];
+
+  // ── Tab preview data — what awaits them ─────────────────────
+  const TAB_PREVIEWS = [
+    { icon:"🪐", tab:"ग्रह",            desc:"9 ग्रहों की डिग्री, राशि, नक्षत्र, दिग्बल और फलादेश" },
+    { icon:"👁️", tab:"ग्रह दृष्टि",    desc:"कौन सा ग्रह किसको देख रहा है — पूर्ण दृष्टि चक्र" },
+    { icon:"📅", tab:"दशा",             desc:"विंशोत्तरी दशा · अंतर्दशा · 27-वर्ष चक्र विश्लेषण" },
+    { icon:"🔢", tab:"AV",              desc:"अष्टकवर्ग ग्रिड · बिंदु चार्ट · भाव बल" },
+    { icon:"🏠", tab:"भाव",             desc:"12 भावों का विस्तृत विश्लेषण · भावेश स्थिति" },
+    { icon:"🏆", tab:"निष्कर्ष",        desc:"मास्टर कुंडली रिपोर्ट · राजयोग · धनयोग · 8-page PDF" },
+    { icon:"✨", tab:"योग",             desc:"राजयोग · धनयोग · केंद्रत्रिकोण · 50+ योगों की पहचान" },
+    { icon:"📊", tab:"विस्तृत AV",      desc:"जीवन समृद्धि · संघर्ष मीटर · करियर टाइप · AV मैप" },
+    { icon:"💕", tab:"कामुकता",         desc:"प्रेम स्वभाव · आकर्षण · दांपत्य रसायन · कुंडली मिलान" },
+    { icon:"🌍", tab:"गोचर",            desc:"आज के ग्रहों का प्रभाव · 7/7 महामुहूर्त · दैनिक पूर्वानुमान" },
+    { icon:"🔮", tab:"नाड़ी ज्योतिष",   desc:"भृगु नंदी नाड़ी के 62 सूत्र · कर्म पैटर्न · पुनर्जन्म" },
+    { icon:"🔢", tab:"AV सूत्र",        desc:"27-वर्ष सौभाग्य चक्र · भाग्योदय वर्ष · ग्रह बल सूत्र" },
+    { icon:"🌙", tab:"चंद्र-सूर्य",     desc:"चंद्र उपचय · पक्ष बल · शुभ मास · मानसिक संतुलन" },
+    { icon:"⚡", tab:"उन्नत योग",       desc:"इन्दु लग्न · भावत भावम · पाप कर्तरी · मेगा रूल्स" },
+    { icon:"🔗", tab:"KP शुद्धि",       desc:"KP BTR इंजन · CIL चेक · D24 मातृकारक · जन्म समय शुद्धि" },
+    { icon:"💍", tab:"विवाह",           desc:"28 विवाह सूत्र · मांगलिक · प्रेम योग · वैधव्य · तलाक · दशा" },
+  ];
+
+  // ── Jyotish facts — shown as floating pills ─────────────────
+  const FACTS = [
+    "💡 नाड़ी ज्योतिष 5000 वर्ष पुरानी भविष्यवाणी पद्धति है",
+    "💡 अष्टकवर्ग में अधिकतम 337 बिंदु संभव हैं",
+    "💡 विंशोत्तरी दशा = 120 वर्ष का जीवन चक्र",
+    "💡 27 नक्षत्र × 4 पाद = 108 नवांश",
+    "💡 Swiss Ephemeris सटीकता: 0.001 आर्कसेकंड",
+    "💡 KP पद्धति में Sub-Lord विवाह का सबसे सटीक संकेत देता है",
+    "💡 भृगु नंदी नाड़ी में हर ग्रह युति एक 'सूत्र' बनाती है",
+  ];
+  const [factIdx, setFactIdx] = useState(0);
+
+  useEffect(() => {
+    // Phase: every 4.5s
+    const pt = setInterval(() => {
+      setPhase(p => p < PHASES.length - 1 ? p + 1 : p);
+    }, 4500);
+    // Tab preview: every 2.2s
+    const tt = setInterval(() => {
+      setTabIdx(i => (i + 1) % TAB_PREVIEWS.length);
+    }, 2200);
+    // Facts: every 6s
+    const ft = setInterval(() => {
+      setFactIdx(i => (i + 1) % FACTS.length);
+    }, 6000);
+    // Dots animation
+    const dt = setInterval(() => {
+      setDots(d => d.length >= 3 ? "" : d + ".");
+    }, 500);
+    return () => { clearInterval(pt); clearInterval(tt); clearInterval(ft); clearInterval(dt); };
+  }, []);
+
+  const cur  = PHASES[phase];
+  const tab  = TAB_PREVIEWS[tabIdx];
+
   return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8">
-      <div className="relative w-20 h-20">
-        <div className="absolute inset-0 rounded-full border-2 border-amber-500/20 animate-ping" />
-        <div className="absolute inset-0 rounded-full border-2 border-t-amber-500 border-amber-500/10 animate-spin" />
-        <div
-          className="absolute inset-3 rounded-full border border-t-cyan-400 border-cyan-400/10 animate-spin"
-          style={{ animationDirection: "reverse", animationDuration: "0.75s" }}
-        />
-        <Moon className="absolute inset-0 m-auto text-amber-400" size={20} />
+    <div className="flex-1 flex flex-col items-center justify-center gap-5 p-6"
+      style={{ background:"rgba(2,6,18,0.85)", minHeight:"100vh" }}>
+
+      {/* ── Orbit animation ── */}
+      <div className="relative w-24 h-24 flex-shrink-0">
+        <div className="absolute inset-0 rounded-full border-2 border-amber-500/15 animate-ping" />
+        <div className="absolute inset-0 rounded-full border-2 border-t-amber-500 border-amber-500/10 animate-spin"
+          style={{ animationDuration:"2s" }} />
+        <div className="absolute inset-3 rounded-full border border-t-cyan-400 border-cyan-400/10 animate-spin"
+          style={{ animationDirection:"reverse", animationDuration:"1.2s" }} />
+        <div className="absolute inset-6 rounded-full border border-t-purple-400 border-purple-400/10 animate-spin"
+          style={{ animationDuration:"3s" }} />
+        <Moon className="absolute inset-0 m-auto text-amber-400" size={26} />
       </div>
-      <div className="text-center">
-        <div className="text-sm font-semibold text-slate-300 mb-1">ग्रह स्थिति गणना जारी है…</div>
-        <div className="text-xs text-slate-600">स्विस एफेमेरिस · नाड़ी AI इंजन</div>
-      </div>
-      <div className="flex gap-2">
-        {["ग्रह","दशा","अष्टकवर्ग","योग"].map((s, i) => (
-          <motion.div
-            key={s}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: i * 0.25 }}
-            className="text-[10px] px-2.5 py-1 rounded-full bg-slate-800/60 border border-slate-700/40 text-slate-500"
-          >
-            {s}
+
+      {/* ── Dynamic phase text ── */}
+      <div className="text-center max-w-xs" style={{ minHeight:"60px" }}>
+        <AnimatePresence mode="wait">
+          <motion.div key={phase}
+            initial={{ opacity:0, y:12 }}
+            animate={{ opacity:1, y:0 }}
+            exit={{ opacity:0, y:-8 }}
+            transition={{ duration:0.45 }}>
+            <div className="text-[15px] font-bold mb-1"
+              style={{ background:"linear-gradient(90deg,#F59E0B,#22D3EE)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>
+              {cur.icon} {cur.text}
+            </div>
+            <div className="text-[11px] text-slate-500">{cur.sub}</div>
           </motion.div>
-        ))}
+        </AnimatePresence>
       </div>
+
+      {/* ── Progress bar ── */}
+      <div className="flex gap-1.5 items-center">
+        {PHASES.map((_, i) => (
+          <div key={i} className="rounded-full transition-all duration-700"
+            style={{
+              height:"4px",
+              width: i <= phase ? "24px" : "8px",
+              background: i <= phase
+                ? i === phase ? "#F59E0B" : "rgba(245,158,11,0.4)"
+                : "rgba(255,255,255,0.08)",
+            }} />
+        ))}
+        <span className="text-[10px] text-slate-600 ml-1"
+          style={{ minWidth:"24px" }}>{Math.round((phase/PHASES.length)*100)}%</span>
+      </div>
+
+      {/* ── Tab preview card — "aapko milega" ── */}
+      <div className="w-full max-w-sm">
+        <div className="text-[10px] text-slate-600 text-center mb-2 uppercase tracking-widest">
+          आपको मिलेगा
+        </div>
+        <AnimatePresence mode="wait">
+          <motion.div key={tabIdx}
+            initial={{ opacity:0, x:20 }}
+            animate={{ opacity:1, x:0 }}
+            exit={{ opacity:0, x:-20 }}
+            transition={{ duration:0.35 }}
+            className="rounded-2xl border px-4 py-3 flex items-center gap-3"
+            style={{ background:"rgba(245,158,11,0.04)", borderColor:"rgba(245,158,11,0.18)" }}>
+            <span style={{ fontSize:"22px", flexShrink:0 }}>{tab.icon}</span>
+            <div className="min-w-0">
+              <div className="text-sm font-bold text-amber-300/90 mb-0.5">{tab.tab}</div>
+              <div className="text-[11px] text-slate-500 leading-snug">{tab.desc}</div>
+            </div>
+            <div className="text-[9px] text-slate-700 flex-shrink-0 ml-auto">
+              {tabIdx + 1}/{TAB_PREVIEWS.length}
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* ── All tabs mini grid ── */}
+      <div className="w-full max-w-sm">
+        <div className="flex flex-wrap gap-1.5 justify-center">
+          {TAB_PREVIEWS.map((t, i) => (
+            <motion.div key={t.tab}
+              initial={{ opacity:0, scale:0.8 }}
+              animate={{ opacity:1, scale:1 }}
+              transition={{ delay: i * 0.06, duration:0.3 }}
+              className="text-[10px] px-2 py-1 rounded-full border transition-all duration-300"
+              style={{
+                background:  i === tabIdx ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.03)",
+                borderColor: i === tabIdx ? "rgba(245,158,11,0.5)"  : "rgba(255,255,255,0.07)",
+                color:       i === tabIdx ? "#F59E0B"               : "#475569",
+                fontWeight:  i === tabIdx ? 700 : 400,
+              }}>
+              {t.icon} {t.tab}
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Rotating jyotish fact ── */}
+      <div className="w-full max-w-sm">
+        <AnimatePresence mode="wait">
+          <motion.div key={factIdx}
+            initial={{ opacity:0 }}
+            animate={{ opacity:1 }}
+            exit={{ opacity:0 }}
+            transition={{ duration:0.6 }}
+            className="text-center text-[11px] text-slate-600 px-4 py-2 rounded-xl"
+            style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)" }}>
+            {FACTS[factIdx]}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* ── Bottom hint ── */}
+      <div className="text-[10px] text-slate-700 text-center">
+        सर्वर लोड हो रहा है{dots} · Nadi AI Jyotish Engine
+      </div>
+
     </div>
   );
 }
+
 
 // ─────────────────────────────────────────────────────────────
 // WELCOME / EMPTY
@@ -1139,7 +1297,57 @@ function PDFModal({ chartData, onClose }) {
 // ─────────────────────────────────────────────────────────────
 // RIGHT PANEL (Clean & Correct Version)
 // ─────────────────────────────────────────────────────────────
-function RightPanel({ chartData }) {
+// ─────────────────────────────────────────────────────────────
+// MOBILE CHART HEADER — Compact chart for mobile (collapsible)
+// ─────────────────────────────────────────────────────────────
+function MobileChartHeader({ chartData }) {
+  const [expanded, setExpanded] = useState(true);
+  const { selectedPlanet, hoverHouse } = useKundliStore();
+
+  return (
+    <div className="flex-shrink-0 border-b border-slate-800/50"
+      style={{ background: "rgba(2,11,24,0.7)" }}>
+      {/* Meta bar — always visible */}
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center flex-shrink-0">
+          <User size={14} className="text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold text-slate-200 truncate">
+            {chartData.meta.name}
+          </div>
+          <div className="text-[10px] text-slate-500 truncate">
+            {chartData.meta.dob} · {chartData.meta.city}
+          </div>
+        </div>
+        <Badge variant="gold" style={{ fontSize:"10px" }}>
+          {chartData.meta.lagnaSign}
+        </Badge>
+        {/* Toggle chart visibility */}
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="ml-1 p-1.5 rounded-lg text-slate-500 hover:text-slate-300 transition-colors"
+          style={{ fontSize:"18px", lineHeight:1, background:"rgba(255,255,255,0.05)" }}
+        >
+          {expanded ? "▲" : "▼"}
+        </button>
+      </div>
+
+      {/* Chart — collapsible */}
+      {expanded && (
+        <div className="px-2 pb-2">
+          <InteractiveKundli
+            houses={chartData.houses}
+            selectedPlanet={selectedPlanet}
+            onHouseHover={hoverHouse}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+
   // State for PDF Modal (Ab ye sahi jagah hai)
   const [showPDFModal, setShowPDFModal] = useState(false);
 
@@ -1156,7 +1364,7 @@ function RightPanel({ chartData }) {
   const isMobile = useIsMobile();
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col min-h-0">
       {/* 1. PDF Export Button */}
       <button
         onClick={() => setShowPDFModal(true)}
@@ -1244,7 +1452,7 @@ function RightPanel({ chartData }) {
       </div>
 
       {/* 6. Tab content */}
-      <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(99,102,241,0.3) transparent" }}>
+      <div className="flex-1 overflow-y-visible" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(99,102,241,0.3) transparent" }}>
         <Suspense fallback={<TabSkeleton />}>
           <AnimatePresence mode="wait">
             <motion.div
@@ -1395,22 +1603,27 @@ export default function DashboardLayout() {
         {loading ? (
           <LoadingState />
         ) : chartData ? (
-          <div className={`flex-1 flex min-h-0 ${isMobile ? "flex-col" : ""}`}>
-            {/* Centre — chart (full width on mobile, fixed width on desktop) */}
-            {!isMobile && <ChartColumn chartData={chartData} />}
-
-            {/* Mobile: chart above panels */}
-            {isMobile && (
-              <div className="flex-shrink-0 p-3 border-b border-slate-800/50">
-                <ChartColumn chartData={chartData} />
+          isMobile ? (
+            /* ── MOBILE LAYOUT: single scroll column ── */
+            <div className="flex-1 overflow-y-auto flex flex-col"
+              style={{ scrollbarWidth:"none" }}>
+              {/* Chart — compact, non-sticky */}
+              <MobileChartHeader chartData={chartData} />
+              {/* Panels — full width below chart */}
+              <div className="flex-1 p-3 pb-24">
+                {/* pb-24 = space so MobileTabDrawer button doesn't cover last panel */}
+                <RightPanel chartData={chartData} />
               </div>
-            )}
-
-            {/* Right — tabbed panels */}
-            <div className={`flex-1 min-w-0 overflow-y-auto flex flex-col ${isMobile ? "p-3" : "p-5"}`}>
-              <RightPanel chartData={chartData} />
             </div>
-          </div>
+          ) : (
+            /* ── DESKTOP LAYOUT: side by side (unchanged) ── */
+            <div className="flex-1 flex min-h-0">
+              <ChartColumn chartData={chartData} />
+              <div className="flex-1 min-w-0 p-5 overflow-y-auto flex flex-col">
+                <RightPanel chartData={chartData} />
+              </div>
+            </div>
+          )
         ) : (
           <WelcomeState />
         )}

@@ -89,6 +89,12 @@ export default function MobileTabDrawer({ tabs = [], activeTab, onTabChange, eng
     if (tab.phase === 2 && !enginesReady) return; // disabled
     onTabChange(tab.id);
     setOpen(false);
+    // Scroll page to top so panel is visible
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      // Also scroll main content area
+      document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
+    }, 100);
   }
 
   return (
