@@ -1185,8 +1185,8 @@ const PDF_PAGES = [
 function PDFModal({ chartData, onClose }) {
   const [sel, setSel] = useState(null); // null = all selected
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:"rgba(0,0,0,.75)"}}>
-      <div className="w-full max-w-md rounded-2xl border border-amber-500/30 overflow-hidden" style={{background:"#0C1128"}}>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4" style={{background:"rgba(0,0,0,.75)"}}>
+      <div className="w-full max-w-md max-h-[85vh] flex flex-col rounded-2xl border border-amber-500/30 overflow-hidden" style={{background:"#0C1128"}}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-amber-500/15" style={{background:"rgba(245,158,11,.06)"}}>
           <div>
@@ -1197,7 +1197,7 @@ function PDFModal({ chartData, onClose }) {
         </div>
 
         {/* All pages option */}
-        <div className="px-4 pt-4">
+        <div className="flex-1 overflow-y-auto px-4 pt-4" style={{scrollbarWidth:"thin", scrollbarColor:"rgba(245,158,11,.2) transparent"}}>
           <button
             onClick={()=>setSel(null)}
             className="w-full flex items-center gap-3 p-3 rounded-xl mb-2 transition-all"
@@ -1252,7 +1252,7 @@ function PDFModal({ chartData, onClose }) {
           </div>
 
           <div className="text-[10px] text-purple-400/70 mb-2 px-1 font-bold" style={HI}>🌟 नाड़ी ज्योतिष पेज (9–23):</div>
-          <div className="grid grid-cols-2 gap-2 pb-4 max-h-48 overflow-y-auto" style={{scrollbarWidth:"thin", scrollbarColor:"rgba(124,58,237,.3) transparent"}}>
+          <div className="grid grid-cols-2 gap-2 pb-4">
             {PDF_PAGES.filter(p=>p.nadi).map(p=>(
               <button
                 key={p.num}
@@ -1275,7 +1275,7 @@ function PDFModal({ chartData, onClose }) {
         </div>
 
         {/* Footer buttons */}
-        <div className="px-4 pb-4 flex gap-2">
+        <div className="px-4 pb-4 pt-3 flex gap-2 flex-shrink-0 border-t border-slate-800/50">
           <button
             onClick={()=>{ exportKundliPDF(chartData, sel===null?"all":sel); onClose(); }}
             className="flex-1 py-3 rounded-xl font-black text-[13px] transition-all active:scale-[.98]"
@@ -1316,9 +1316,19 @@ function MobileChartHeader({ chartData }) {
           <div className="text-sm font-bold text-slate-200 truncate">
             {chartData.meta.name}
           </div>
-          <div className="text-[10px] text-slate-500 truncate">
-            {chartData.meta.dob} · {chartData.meta.city}
+
+          {/* जन्म विवरण */}
+          <div className="text-[10px] text-slate-400 flex flex-wrap gap-x-1.5 mt-0.5">
+            <span className="whitespace-nowrap">{chartData.meta.dob}</span>
+            {chartData.meta.time && <span className="whitespace-nowrap">• {chartData.meta.time}</span>}
           </div>
+
+          {/* सूर्योदय */}
+          {chartData.meta.sunrise && (
+            <div className="text-[10px] text-amber-400/90 font-medium mt-1">
+              🌅 सूर्योदय: {chartData.meta.sunrise}
+            </div>
+          )}
         </div>
         <Badge variant="gold" style={{ fontSize:"10px" }}>
           {chartData.meta.lagnaSign}
@@ -1416,7 +1426,7 @@ function RightPanel({ chartData }) {
 
       {/* 5. Tab bar — desktop only (mobile uses MobileTabDrawer) */}
       <div
-        className="main-tab-bar flex gap-1 p-1 rounded-2xl bg-slate-800/40 border border-slate-700/30 mb-4 flex-shrink-0 overflow-x-auto"
+        className="main-tab-bar flex flex-wrap gap-1 p-1 rounded-2xl bg-slate-800/40 border border-slate-700/30 mb-4 flex-shrink-0"
         style={{ scrollbarWidth:"none", ...(isMobile && { display:"none" }) }}>
         {TABS.map((t) => {
           // KP BTR tab ke liye SSL badge
