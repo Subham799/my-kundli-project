@@ -337,14 +337,14 @@ export const DEMO_DATA = {
 // STORE
 // ═══════════════════════════════════════════════════════════════
 const useKundliStore = create((set,get) => ({
-  formData:{name:"",dob:"",time:"",city:"",chartType:"D1"},
+  formData:{name:"",dob:"",time:"",city:"",chartType:"D1",lat:null,lon:null},
   chartData:null, loading:false, error:null,
   enginesLoading:false,   // ← phase 2 loading indicator
   selectedPlanet:null, drawerOpen:false,
   activeTab:"planets", sidebarCollapsed:false, hoveredHouse:null,
 
   setForm:(key,value)=>set((s)=>({formData:{...s.formData,[key]:value}})),
-  resetForm:()=>set({formData:{name:"",dob:"",time:"",city:"",chartType:"D1"}}),
+  resetForm:()=>set({formData:{name:"",dob:"",time:"",city:"",chartType:"D1",lat:null,lon:null}}),
 
   fetchChart: async () => {
     const {formData}=get();
@@ -364,7 +364,7 @@ const useKundliStore = create((set,get) => ({
       try {
         const engResult = await fetchKundliEngines(formData);
         set((s) => ({
-          chartData: s.chartData ? { ...s.chartData, enginesData: engResult.enginesData || {}, _enginesReady: true } : s.chartData,
+          chartData: s.chartData ? { ...s.chartData, enginesData: engResult.enginesData || null, _enginesReady: !!engResult.enginesData } : s.chartData,
           enginesLoading: false,
         }));
       } catch {

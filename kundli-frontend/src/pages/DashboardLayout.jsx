@@ -1486,15 +1486,35 @@ function RightPanel({ chartData }) {
             {activeTab === "drishti" && <DrishtiGrid drishti={chartData.drishti} bhavDrishti={chartData.bhavDrishti || {}} planets={chartData.planets} houses={chartData.houses || []} />}
             {activeTab === "dasha" && <DashaTimeline dasha={chartData.dasha} chartMeta={chartData.meta} />}
             {activeTab === "av" && <AshtakavargaGrid sav={chartData.sav||[]} houses={chartData.houses||[]} ashtakavargaSpecial={chartData.ashtakavargaSpecial||""} />}
-            {activeTab === "yogas" && <YogaPanel data={chartData.enginesData?.yogas} chartData={chartData} />}
+            {activeTab === "yogas" && (
+              enginesLoading
+                ? <TabSkeleton />
+                : <YogaPanel data={chartData.enginesData?.yogas} chartData={chartData} />
+            )}
             {activeTab === "houses" && <HousePanel chartData={chartData} />}
-            {activeTab === "advanced" && <AdvancedAVPanel enginesData={chartData.enginesData} chartData={chartData} onExportPDF={() => exportKundliPDF(chartData)} />}
+            {activeTab === "advanced" && (
+              enginesLoading
+                ? <TabSkeleton />
+                : <AdvancedAVPanel enginesData={chartData.enginesData} chartData={chartData} onExportPDF={() => exportKundliPDF(chartData)} />
+            )}
             {activeTab === "kamukta" && <KamuktaPanel chartData={chartData} />}
             {activeTab === "gochar" && <GocharPanel chartData={chartData} />}
-            {activeTab === "nadi" && <NadiJyotishPanel chartData={chartData} />}
+            {activeTab === "nadi" && (
+              enginesLoading
+                ? <TabSkeleton />
+                : <NadiJyotishPanel chartData={chartData} />
+            )}
             {activeTab === "conclusion" && <MasterConclusion data={chartData.masterConclusion} />}
-            {activeTab === "av_sutras"      && <AVSutrasPanel data={chartData?.enginesData?.av_sutras} chartData={chartData} />}
-            {activeTab === "chandra_surya"  && <ChandraSuryaPanel data={chartData?.enginesData?.chandra_surya} />}
+            {activeTab === "av_sutras" && (
+              enginesLoading
+                ? <TabSkeleton />
+                : <AVSutrasPanel data={chartData?.enginesData?.av_sutras} chartData={chartData} />
+            )}
+            {activeTab === "chandra_surya" && (
+              enginesLoading
+                ? <TabSkeleton />
+                : <ChandraSuryaPanel data={chartData?.enginesData?.chandra_surya} />
+            )}
             {activeTab === "advanced_yogas" && <AdvancedYogasPanel />}
             {activeTab === "kp_btr"         && <KPBTRPanel />}
             {activeTab === "vivah"           && <VivahPanel />}

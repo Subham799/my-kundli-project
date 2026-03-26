@@ -1,5 +1,5 @@
 // components/layout/InputSidebar.jsx
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { User, Calendar, Clock, MapPin, Layers, Zap } from "lucide-react";
 import useKundliStore from "../../store/useKundliStore";
@@ -61,6 +61,45 @@ export default function InputSidebar() {
     } catch { /* storage full ho toh ignore */ }
   }, [formData]);
 
+  // ── [ADDED] Autocomplete state ───────────────────────────
+  const [suggestions, setSuggestions]   = useState([]);
+  const [loadingCity, setLoadingCity]   = useState(false);
+  const debounceTimer                   = useRef(null);
+
+  // ── [ADDED] Debounced Nominatim search ───────────────────
+  const fetchCities = (query) => {
+    if (!query || query.length < 2) { setSuggestions([]); return; }
+    clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(async () => {
+      try {
+        setLoadingCity(true);
+        const res  = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`
+        );
+        const data = await res.json();
+        setSuggestions(
+          data.map((item) => ({
+            name: item.display_name,
+            lat:  parseFloat(item.lat),
+            lon:  parseFloat(item.lon),
+          }))
+        );
+      } catch (err) {
+        console.error("City fetch error:", err);
+      } finally {
+        setLoadingCity(false);
+      }
+    }, 400);
+  };
+
+  // ── [ADDED] Called when user clicks a suggestion ─────────
+  const handleCitySelect = (cityObj) => {
+    setForm("city", cityObj.name);
+    setForm("lat",  cityObj.lat);
+    setForm("lon",  cityObj.lon);
+    setSuggestions([]);
+  };
+
   return (
     <motion.aside
       animate={{ width: sidebarCollapsed ? 0 : 320, opacity: sidebarCollapsed ? 0 : 1 }}
@@ -98,9 +137,42 @@ export default function InputSidebar() {
                 type={type}
                 value={typeof formData[key] === "string" ? formData[key] : ""}
                 placeholder={placeholder}
-                onChange={(e) => setForm(key, e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setForm(key, value);
+                  // [ADDED] Reset lat/lon whenever user edits city text manually
+                  if (key === "city") {
+                    setForm("lat", null);
+                    setForm("lon", null);
+                    fetchCities(value);
+                  }
+                }}
                 className={inputCls}
               />
+              {/* [ADDED] Loading indicator */}
+              {key === "city" && loadingCity && (
+                <p className="text-xs text-slate-500 mt-1">Searching...</p>
+              )}
+              {/* [ADDED] Suggestions dropdown */}
+              {key === "city" && suggestions.length > 0 && (
+                <div className="mt-2 bg-slate-900 border border-slate-700 rounded-xl max-h-40 overflow-y-auto z-50">
+                  {suggestions.map((s, i) => (
+                    <div
+                      key={i}
+                      onClick={() => handleCitySelect(s)}
+                      className="px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 cursor-pointer border-b border-slate-800/60 last:border-0"
+                    >
+                      {s.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* [ADDED] Confirmed coordinates badge */}
+              {key === "city" && formData.lat && formData.lon && (
+                <p className="mt-1.5 text-[10px] text-emerald-500/80 leading-relaxed">
+                  ✓ {formData.lat.toFixed(4)}, {formData.lon.toFixed(4)}
+                </p>
+              )}
             </div>
           ))}
 
@@ -129,9 +201,15 @@ export default function InputSidebar() {
           </div>
         </div>
 
-        {/* Submit */}
+        {/* Submit — [MODIFIED] validates lat/lon before calling fetchChart */}
         <button
-          onClick={fetchChart}
+          onClick={() => {
+            if (!formData.lat || !formData.lon) {
+              alert("Please select a valid city (location missing)");
+              return;
+            }
+            fetchChart();
+          }}
           disabled={loading}
           className={[
             "w-full py-3.5 rounded-xl font-bold text-sm tracking-wider transition-all active:scale-95",

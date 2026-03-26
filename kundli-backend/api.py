@@ -874,11 +874,21 @@ def check_disease_12th(astro, houses):
                 if p == "Sa": diseases.append("नसें/सायटिका")
     return diseases or ["कोई नहीं"]
 
+CITY_CACHE = {}
+
 def get_coordinates(city_name):
+    if not city_name:
+        return None, None
+    if city_name in CITY_CACHE:
+        return CITY_CACHE[city_name]
     url = f"https://nominatim.openstreetmap.org/search?q={city_name}&format=json&limit=1"
     try:
-        response = http_requests.get(url, headers={'User-Agent':'KundliApp/5.0'}).json()
-        return (float(response[0]['lat']), float(response[0]['lon'])) if response else (None, None)
+        response = http_requests.get(url, headers={'User-Agent':'KundliApp/5.0'}, timeout=8).json()
+        if response:
+            lat, lon = float(response[0]['lat']), float(response[0]['lon'])
+            CITY_CACHE[city_name] = (lat, lon)
+            return lat, lon
+        return (None, None)
     except:
         return None, None
 
@@ -1059,13 +1069,15 @@ def search_dasha_alignments(moon_degree, birth_date, search_criteria):
 # ██  SECTION 3 — JSON API ROUTES  (replaces render_template_string)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _build_chart_response(name, city, date_str, time_str, chart_type):
+def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, lon=None):
     """
     Core calculation pipeline — same as original home() POST handler,
     but returns a dict (not rendered HTML).
+    lat/lon: frontend se aaye to use karo, warna Nominatim fallback.
     """
-    lat, lon = get_coordinates(city)
-    if not lat:
+    if not lat or not lon:
+        lat, lon = get_coordinates(city)
+    if not lat or not lon:
         return None, f"शहर नहीं मिला: {city}"
 
     dt   = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
@@ -1579,11 +1591,13 @@ def api_chart():
     date_str   = body.get('dob', '')
     time_str   = body.get('time', '')
     chart_type = body.get('chart_type', 'D1')
+    lat        = body.get('lat')
+    lon        = body.get('lon')
 
     if not all([name, city, date_str, time_str]):
         return jsonify({'error': 'Missing required fields: name, dob, time, city'}), 400
 
-    result, err = _build_chart_response(name, city, date_str, time_str, chart_type)
+    result, err = _build_chart_response(name, city, date_str, time_str, chart_type, lat=lat, lon=lon)
     if err:
         return jsonify({'error': err}), 400
     return jsonify(result)
@@ -1605,11 +1619,13 @@ def api_chart_fast():
     date_str   = body.get('dob', '')
     time_str   = body.get('time', '')
     chart_type = body.get('chart_type', 'D1')
+    lat        = body.get('lat')
+    lon        = body.get('lon')
 
     if not all([name, city, date_str, time_str]):
         return jsonify({'error': 'Missing required fields: name, dob, time, city'}), 400
 
-    result, err = _build_chart_response(name, city, date_str, time_str, chart_type)
+    result, err = _build_chart_response(name, city, date_str, time_str, chart_type, lat=lat, lon=lon)
     if err:
         return jsonify({'error': err}), 400
 
@@ -1634,13 +1650,17 @@ def api_chart_engines():
     date_str   = body.get('dob', '')
     time_str   = body.get('time', '')
     chart_type = body.get('chart_type', 'D1')
+    lat        = body.get('lat')
+    lon        = body.get('lon')
 
     if not all([name, city, date_str, time_str]):
         return jsonify({'error': 'Missing fields'}), 400
 
     try:
-        lat, lon = get_coordinates(city)
-        if not lat:
+        # Frontend se lat/lon aaya? Use karo. Warna Nominatim fallback (cached)
+        if not lat or not lon:
+            lat, lon = get_coordinates(city)
+        if not lat or not lon:
             return jsonify({'error': f'शहर नहीं मिला: {city}'}), 400
 
         dt         = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")

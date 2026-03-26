@@ -6,18 +6,20 @@ const BASE_URL = import.meta.env.VITE_API_URL || "";
 // ── Utility: wait ────────────────────────────────────────────
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
-// ── Silent ping: form submit hote hi server ko jagao ─────────
+// ── Silent ping: sirf ek baar server ko jagao ───────────────
+let _hasWoken = false;
 const wakeUpServer = () => {
-  if (BASE_URL) fetch(`${BASE_URL}/api/cities?q=delhi`).catch(() => {});
+  if (!_hasWoken && BASE_URL) {
+    _hasWoken = true;
+    fetch(`${BASE_URL}/api/cities?q=delhi`).catch(() => {});
+  }
 };
 
 // ── Core retry logic ─────────────────────────────────────────
 // 400 = data error  → turant rok do, retry mat karo
 // 5xx / network     → retry karo (max 6 baar, har baar thoda zyada wait)
 async function fetchWithSmartRetry(endpoint, payload) {
-  wakeUpServer();
-
-  const MAX_ATTEMPTS = 6;
+  const MAX_ATTEMPTS = 3;
   let delay = 4000; // pehli retry ke baad 4s, phir 6s, 9s...
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -60,29 +62,41 @@ async function fetchWithSmartRetry(endpoint, payload) {
 // ── Exported functions ────────────────────────────────────────
 
 export async function fetchKundliChart(formData) {
+  wakeUpServer();
   return fetchWithSmartRetry("/api/chart", {
     name: formData.name, dob: formData.dob, time: formData.time,
     city: formData.city, chart_type: formData.chartType,
+    lat: formData.lat, lon: formData.lon,
   });
 }
 
 // FAST — sirf chart+dasha+AV, no engines (~0.5s)
 export async function fetchKundliChartFast(formData) {
+  wakeUpServer();
   return fetchWithSmartRetry("/api/chart/fast", {
     name: formData.name, dob: formData.dob, time: formData.time,
     city: formData.city, chart_type: formData.chartType,
+    lat: formData.lat, lon: formData.lon,
   });
 }
 
-// ENGINES — sirf 7 engines ka data, chart dobara nahi
+// ENGINES — sirf 7 engines ka data, direct fetch (no retry loop)
 export async function fetchKundliEngines(formData) {
   try {
-    return await fetchWithSmartRetry("/api/chart/engines", {
-      name: formData.name, dob: formData.dob, time: formData.time,
-      city: formData.city, chart_type: formData.chartType,
+    const res = await fetch(`${BASE_URL}/api/chart/engines`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: formData.name, dob: formData.dob, time: formData.time,
+        city: formData.city, chart_type: formData.chartType,
+        lat: formData.lat, lon: formData.lon,
+      }),
     });
-  } catch {
-    return { enginesData: {}, _enginesReady: false };
+    if (!res.ok) return { enginesData: null, _enginesReady: false };
+    return await res.json();
+  } catch (err) {
+    console.error("Engines fetch failed:", err);
+    return { enginesData: null, _enginesReady: false };
   }
 }
 
