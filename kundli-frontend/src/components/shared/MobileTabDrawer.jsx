@@ -107,31 +107,28 @@ export default function MobileTabDrawer({ tabs = [], activeTab, onTabChange, eng
         }} onClick={() => setOpen(false)} />
       )}
 
+      {/* Floating pill button — shows current tab */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => setOpen(true)}
         style={{
-          position: "fixed",
-          bottom: "16px",
-          left: "50%",
-          transform: "translateX(-50%)",
-          backgroundColor: "#1F2937",
-          color: "white",
-          border: "1px solid #374151",
-          borderRadius: "9999px",
-          padding: "8px 24px",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          zIndex: 50,
-          boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)"
+          position:"fixed", bottom:"72px", left:"50%", transform:"translateX(-50%)",
+          zIndex:997, display:"flex", alignItems:"center", gap:"8px",
+          padding:"10px 20px", borderRadius:"24px", border:"none",
+          background:"rgba(20,20,30,0.92)", backdropFilter:"blur(12px)",
+          WebkitBackdropFilter:"blur(12px)",
+          boxShadow:"0 4px 20px rgba(0,0,0,0.4)",
+          color:"#fff", fontSize:"13px", fontWeight:600, cursor:"pointer",
+          fontFamily:"inherit", minHeight:"44px", minWidth:"160px",
+          justifyContent:"center",
         }}
       >
-        <span style={{ fontSize:"16px" }}>☰</span>
-        <span style={{ maxWidth:"140px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontWeight: "bold" }}>
+        <span style={{ fontSize:"16px", color: "#EAB308" }}>☰</span>
+        <span style={{ maxWidth:"140px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontWeight:       "bold" }}>
           मेनू / फीचर्स
-        </span>
-        <span style={{ fontSize:"12px", opacity:0.6 }}>▲</span>
+         </span>
+         <span style={{ fontSize:"12px", opacity:0.6 }}>▲</span>
       </button>
+
       {/* Drawer */}
       <div
         ref={drawerRef}
