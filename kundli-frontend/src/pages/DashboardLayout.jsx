@@ -270,13 +270,22 @@ function WelcomeState() {
 // ─────────────────────────────────────────────────────────────
 // PDF EXPORT — Complete 8-Page Premium Report
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// PDF EXPORT — Complete 8-Page Premium Report + Nadi
+// ─────────────────────────────────────────────────────────────
 function buildPDFPage(pageNum, chartData) {
   const pd   = chartData || {};
   const pl   = pd.planets || {};
   const mcD  = pd.masterConclusion || {};
   const ed   = pd.enginesData || {};
   const meta = pd.meta || {};
-  const avD  = ed.ashtakvarga_complete?.analysis || {};
+
+  // ✅ FIX: दोनों engines अलग-अलग — कभी merge नहीं करना
+  // ashtakvarga_complete → modules (lp, sm, ct, aa, kb, etc.)
+  // av_sutras           → planet strength (planetStrength)
+  const avComplete = ed.ashtakvarga_complete?.analysis || {};
+  const avSutras   = ed.av_sutras || {};
+  const avD        = avComplete; // alias for backward compat (BAV grid helpers)
   const nav  = ed.navatara?.navatara_chakra || {};
   const cv   = ed.comprehensive_vedic || {};
   const advS = ed.advanced_sutras?.analysis || {};
@@ -322,8 +331,16 @@ function buildPDFPage(pageNum, chartData) {
   const ra  = advS.rajyoga_age || {};
   const ss  = sat.sade_sati || {};
   const dh  = sat.dhaiya || {};
-  const gems= nav.gemstone_recommendations || {};
-  const bn  = nav.taras || {};
+  
+  // नवतारा + रत्न Helpers
+  const gems = nav.gemstone_recommendations || {};
+  const taras = nav.taras || {};
+  const proh = nav.prohibited_items || {};
+  const pdfCard = (label, val, col="#F59E0B") => `
+    <div style="padding:8px; background:${col}08; border:1px solid ${col}25; border-radius:10px; margin-bottom:6px">
+      <div style="font-size:10px; font-weight:900; color:${col}">${label}</div>
+      <div style="font-size:11px; color:#CBD5E1; margin-top:2px">${val||"—"}</div>
+    </div>`;
 
   const allYogas = [
     ...(yog.raja_yogas||[]),
@@ -337,14 +354,9 @@ function buildPDFPage(pageNum, chartData) {
   const now   = new Date().getFullYear();
 
   // ── helpers ──
-  const sect = (t,c="#F59E0B") =>
-    `<div style="margin:12px 0 5px;padding:5px 10px;background:${c}12;border-left:3px solid ${c};font-size:12px;font-weight:900;color:${c}">${t}</div>`;
-  const card = (html,c="#F59E0B") =>
-    `<div style="padding:9px 11px;border-radius:9px;background:${c}07;border:1px solid ${c}25;margin:4px 0">${html}</div>`;
-  const badge = (t,c) =>
-    `<span style="display:inline-block;margin:2px;padding:2px 7px;border-radius:5px;background:${c}18;color:${c};border:1px solid ${c}30;font-size:10px;font-weight:700">${t}</span>`;
-  const foot = (n,total) =>
-    `<div style="text-align:center;font-size:9px;color:#334155;margin-top:14px;padding-top:7px;border-top:1px solid rgba(245,158,11,.12)">🪐 सम्पूर्ण वैदिक कुंडली — ${name} | पृष्ठ ${n}${total?" / "+total:""} | © Nadi AI Jyotish</div>`;
+  const sect = (t,c="#F59E0B") => `<div style="margin:12px 0 5px;padding:5px 10px;background:${c}12;border-left:3px solid ${c};font-size:12px;font-weight:900;color:${c}">${t}</div>`;
+  const badge = (t,c) => `<span style="display:inline-block;margin:2px;padding:2px 7px;border-radius:5px;background:${c}18;color:${c};border:1px solid ${c}30;font-size:10px;font-weight:700">${t}</span>`;
+  const foot = (n,total) => `<div style="text-align:center;font-size:9px;color:#334155;margin-top:14px;padding-top:7px;border-top:1px solid rgba(245,158,11,.12)">🪐 सम्पूर्ण वैदिक कुंडली — ${name} | पृष्ठ ${n}${total?" / "+total:""} | © Nadi AI Jyotish</div>`;
 
   // ── Planet Table ──
   const pRows = Object.entries(pl).map(([c,p])=>{
@@ -355,17 +367,17 @@ function buildPDFPage(pageNum, chartData) {
     return `<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
       <td style="padding:4px 6px;color:#F59E0B;font-weight:900;font-size:11px">${PH[c]||c} ${PS[c]||""} ${p.Retrograde?"⟲":""}</td>
       <td style="padding:4px 6px;color:#CBD5E1;font-size:11px">${p.hindi_sign||"—"}</td>
-      <td style="padding:4px 6px;color:#94A3B8;font-size:11px;text-align:center;font-weight:700">${p.house||"—"}</td>
+      <td style="padding:4px 6px;color:#94A3B8;font-size:10px;text-align:center;font-weight:700">${p.house||"—"} ${p.houseCategory ? `<br/><span style="font-size:8px;color:#64748B;font-weight:normal">${p.houseCategory}</span>` : ""}</td>
       <td style="padding:4px 6px;color:#64748B;font-size:10px">${p.degree||"—"}</td>
       <td style="padding:4px 6px;color:#64748B;font-size:10px">${p.nakshatra||"—"}</td>
-      <td style="padding:4px 6px;color:#64748B;font-size:10px">${p.lord?PH[p.lord]||p.lord:"—"}</td>
+      <td style="padding:4px 6px;color:#C084FC;font-size:10px;font-weight:700">${p.nakshatraLord || "—"}</td>
+      <td style="padding:4px 6px;color:#22D3EE;font-size:10px;font-weight:700">${p.rashiLord || p.lord || "—"}</td>
       <td style="padding:4px 6px;font-size:10px;font-weight:700;color:${dc}">${di} ${dh_}</td>
-      <td style="padding:4px 6px;font-size:10px;color:${fc}">${(p.functionalNature||"Neutral").slice(0,16)}</td>
+      <td style="padding:4px 6px;font-size:10px;color:${fc};white-space:nowrap">${p.functionalNature || "Neutral"}</td>
       <td style="padding:4px 6px;font-size:10px;color:#475569">${p.strength!=null?p.strength+"%":"—"}</td>
     </tr>`;
   }).join("");
 
-  // ── Houses ──
   const houses = pd.houses||[];
   const hRows = houses.map(h=>`<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
     <td style="padding:4px 6px;color:#F59E0B;font-weight:700;font-size:11px">${h.n||h.house||""}वाँ</td>
@@ -374,16 +386,11 @@ function buildPDFPage(pageNum, chartData) {
     <td style="padding:4px 6px;font-size:11px;color:${(h.av||0)>=30?"#22D3EE":(h.av||0)>=25?"#F59E0B":"#FB7185"};font-weight:700">${h.av||"—"}</td>
   </tr>`).join("");
 
-  // ── AV Grid ──
   const avGrid = avBhavas.length>0?avBhavas.map(({n,av})=>{
     const c=av>=30?"#22D3EE":av>=25?"#F59E0B":"#FB7185";
-    return `<div style="text-align:center;padding:5px 2px;border-radius:7px;background:${c}12;border:1px solid ${c}28">
-      <div style="font-size:8px;color:#475569">भाव ${n}</div>
-      <div style="font-size:17px;font-weight:900;color:${c}">${av}</div>
-    </div>`;
+    return `<div style="text-align:center;padding:5px 2px;border-radius:7px;background:${c}12;border:1px solid ${c}28"><div style="font-size:8px;color:#475569">भाव ${n}</div><div style="font-size:17px;font-weight:900;color:${c}">${av}</div></div>`;
   }).join(""):"";
 
-  // ── Turning Points ──
   const tpHTML = [...tp].sort((a,b)=>a.year-b.year).map(t=>{
     const near=t.year>=now-1&&t.year<=now+10, past=t.year<now-2;
     const c=near?"#F59E0B":past?"#334155":t.nature==="good"?"#4ADE80":"#FB7185";
@@ -398,7 +405,6 @@ function buildPDFPage(pageNum, chartData) {
     </div>`;
   }).join("");
 
-  // ── Dasha Table ──
   const dashaTable = dashaSeq.length>0?`<table style="width:100%;border-collapse:collapse">
     <tr><th>महादशा</th><th>आरंभ</th><th>समाप्त</th><th>वर्ष</th><th>फल</th></tr>
     ${dashaSeq.map(d=>{const cur=d.active||d.lord===dasha.mahadasha;return`<tr style="border-bottom:1px solid rgba(255,255,255,.04);${cur?"background:rgba(245,158,11,.06)":""}">
@@ -410,7 +416,6 @@ function buildPDFPage(pageNum, chartData) {
     </tr>`;}).join("")}
   </table>`:`<div style="color:#475569;text-align:center;padding:10px">दशा डेटा उपलब्ध नहीं</div>`;
 
-  // ── Trikona ──
   const getPlIn=(hs)=>Object.entries(pl).filter(([c,p])=>p&&hs.includes(p.house)).map(([c,p])=>{
     const d=p.dignityHindi||p.dignity||"";
     return {name:PH[c]||c,h:p.house,g:/उच्च|Uchcha|स्वराशि|Swa|मित्र|Mitra/i.test(d),b:/नीच|Neecha|शत्रु|Shatru/i.test(d)};
@@ -424,10 +429,8 @@ function buildPDFPage(pageNum, chartData) {
   ];
   const tkHTML=TK.map(t=>{const a=tkSc(t.h);const sc=a.s>=70?"#4ADE80":a.s>=45?"#F59E0B":"#FB7185";return`<div style="padding:9px;border-radius:9px;background:${t.c}07;border:1px solid ${t.c}22;margin-bottom:7px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-      <span style="font-size:13px">${t.i}</span>
-      <span style="font-size:12px;font-weight:900;color:${t.c};margin:0 6px">${t.t}</span>
-      <span style="font-size:9px;color:#475569">भाव ${t.h.join("-")}</span>
-      <span style="font-size:9px;padding:1px 6px;border-radius:4px;background:${sc}18;color:${sc};font-weight:700">${a.lbl}</span>
+      <span style="font-size:13px">${t.i}</span><span style="font-size:12px;font-weight:900;color:${t.c};margin:0 6px">${t.t}</span>
+      <span style="font-size:9px;color:#475569">भाव ${t.h.join("-")}</span><span style="font-size:9px;padding:1px 6px;border-radius:4px;background:${sc}18;color:${sc};font-weight:700">${a.lbl}</span>
     </div>
     <div style="font-size:9px;color:#475569;margin-bottom:5px">💡 ${t.lg}</div>
     ${a.ps.length>0?`<div style="margin-bottom:5px">${a.ps.map(p=>`${badge(p.name+" "+p.h+"वें"+(p.g?" ✅":p.b?" ⚠️":""),p.g?"#4ADE80":p.b?"#FB7185":"#F59E0B")}`).join("")}</div>`:""}
@@ -437,14 +440,12 @@ function buildPDFPage(pageNum, chartData) {
     </div>
   </div>`;}).join("");
 
-  // ── Afflicted planets ──
   const afflicted=Object.entries(pl).filter(([c,p])=>{
     if(!p)return false;
     const d=p.dignity||"";
     return /Neecha|नीच/i.test(d)||[6,8,12].includes(p.house)||/Shatru|शत्रु/i.test(d);
   });
 
-  // ── Spouse ──
   const SPOUSE_N={1:"आत्मनिर्भर",2:"धनी परिवार",3:"साहसी, यात्राप्रिय",4:"घरेलू, माँ से जुड़े",5:"रचनात्मक, प्रेमी",6:"मेहनती, सेवाभाव",7:"सुंदर, संतुलित",8:"रहस्यमय, गहरे",9:"धार्मिक, भाग्यशाली",10:"महत्वाकांक्षी",11:"सामाजिक, लाभकारी",12:"आध्यात्मिक, विदेशी"};
   const ve=pl.Ve,ma_p=pl.Ma;
   const veH=ve?.house;
@@ -452,11 +453,7 @@ function buildPDFPage(pageNum, chartData) {
   const planIn7=Object.entries(pl).filter(([c,p])=>p?.house===7);
   const malIn7=planIn7.filter(([c])=>["Sa","Ma","Ra","Ke","Su"].includes(c));
   const benIn7=planIn7.filter(([c])=>["Ju","Ve","Mo","Me"].includes(c));
-  const veDig=ve?.dignityHindi||ve?.dignity||"";
-  const veGood=/उच्च|स्वराशि|मित्र|Uchcha|Swa|Mitra/i.test(veDig);
-  const veBad=/नीच|शत्रु|Neecha|Shatru/i.test(veDig);
 
-  // ═══════════ SHARED CSS ═══════════
   const css=`
     *{box-sizing:border-box;margin:0;padding:0}
     body{background:#080C1C;color:#E2E8F0;font-family:'Noto Sans Devanagari',sans-serif;font-size:11px;line-height:1.5}
@@ -474,16 +471,11 @@ function buildPDFPage(pageNum, chartData) {
     .avg{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin:5px 0}
   `;
 
-  const head=(title)=>`<!DOCTYPE html><html lang="hi"><head><meta charset="UTF-8"/><title>${title} — ${name}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700;900&display=swap" rel="stylesheet"/>
-  <style>${css}</style></head><body>`;
+  const head=(title)=>`<!DOCTYPE html><html lang="hi"><head><meta charset="UTF-8"/><title>${title} — ${name}</title><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700;900&display=swap" rel="stylesheet"/><style>${css}</style></head><body>`;
   const close=`</body></html>`;
+  const TOTAL_PAGES = 23; 
 
-  // ═══ PAGE DEFINITIONS ═══
-  const TOTAL_PAGES = 23; // 8 standard + 15 Nadi pages
-
-  const headerBlock=`
-  <div class="hdr">
+  const headerBlock=`<div class="hdr">
     <div style="font-size:19px;font-weight:900;color:#F59E0B">🪐 सम्पूर्ण वैदिक कुंडली</div>
     <div style="font-size:11px;color:#94A3B8;margin-top:1px">Vedic Jyotish Report — Swiss Ephemeris + Nadi AI</div>
     <div class="igrid">
@@ -496,11 +488,77 @@ function buildPDFPage(pageNum, chartData) {
     </div>
   </div>`;
 
+  // 🔥 FIX 1: BULLETPROOF BAV Table (अब av_sutras से भी चेक करेगा)
+  const rawBav = ed.bav || ed.av_sutras?.bav || ed.av_sutras?.bav_charts || ed.ashtakvarga_complete?.bav || pd.bav || pd.ashtakavarga?.bav || {};
+  let bavTableHtml = "";
+  if (Object.keys(rawBav).length > 0) {
+    const pKeys = ["Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa"];
+    const bavRows = pKeys.map(k => {
+      const pts = rawBav[k] || rawBav[k.toLowerCase()] || rawBav[k.toUpperCase()];
+      if (!pts || !Array.isArray(pts) || pts.length < 12) return "";
+      let row = `<td style="color:#F59E0B;font-weight:900;background:rgba(245,158,11,0.05)">${PH[k] || k}</td>`;
+      let total = 0;
+      for (let i = 0; i < 12; i++) { row += `<td>${pts[i]}</td>`; total += pts[i]; }
+      row += `<td style="color:#22D3EE;font-weight:900;background:rgba(34,211,238,0.05)">${total}</td>`;
+      return `<tr>${row}</tr>`;
+    }).join("");
+    if (bavRows) {
+      bavTableHtml = `${sect("भिन्नाष्टकवर्ग (BAV) — ग्रहों के बिंदु", "#C084FC")}
+      <table style="font-size:10px;text-align:center;margin-bottom:15px"><tr style="background:rgba(255,255,255,0.05)"><th>ग्रह / भाव ➔</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th><th>कुल</th></tr>${bavRows}</table>`;
+    }
+  }
+
+  // ✅ FIX: planetStrength सिर्फ av_sutras engine से — avComplete (ashtakvarga) से नहीं
+  const planetStrength =
+    avSutras.planets ||
+    avSutras.planet_strength ||
+    avSutras.analysis?.planets ||
+    avSutras.analysis?.planet_strength ||
+    avSutras.grah_bal ||
+    {};
+  let avSutraHtml = "";
+  
+  if (Object.keys(planetStrength).length > 0) {
+    const avSutraRows = ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"].map(k => {
+      const s = planetStrength[k] || planetStrength[k.toLowerCase()] || planetStrength[k.toUpperCase()];
+      if (!s) return "";
+      
+      const statusText = s.strength || s.status || "सामान्य";
+      const isStrong = statusText.includes("बलवान");
+      const isWeak   = statusText.includes("निर्बल");
+      const statusCol = isStrong ? "#4ADE80" : isWeak ? "#FB7185" : "#94A3B8";
+      const infoNote  = k === "Ra" ? "ℹ️ शनिवत राहु" : k === "Ke" ? "ℹ️ कुजवत केतु" : "";
+      
+      // BAV और SAV की वैल्यू
+      const bavVal = s.bav != null ? s.bav : (s.bav_score != null ? s.bav_score : "—");
+      const savVal = s.sav != null ? s.sav : (s.sav_score != null ? s.sav_score : "—");
+      const dashaFx = s.dasha_effect || "—";
+      const dashaCol = dashaFx.includes("शुभ") ? "#4ADE80" : (dashaFx.includes("अशुभ") ? "#FB7185" : "#94A3B8");
+
+      return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+        <td style="padding:6px 8px;font-weight:900;color:#F59E0B">${PH[k]||k}</td>
+        <td style="padding:6px 8px;color:#CBD5E1">भाव ${s.house||"—"}</td>
+        <td style="padding:6px 8px;font-weight:900;color:${statusCol}">${statusText}</td>
+        <td style="padding:6px 8px;color:#94A3B8;font-size:10px"><b>BAV:</b> ${bavVal}/8 ${infoNote?`<br/><span style="font-size:9px">${infoNote}</span>`:""}</td>
+        <td style="padding:6px 8px;color:#CBD5E1;font-weight:700">${savVal}</td>
+        <td style="padding:6px 8px;font-size:10px;color:${dashaCol}">${dashaFx}</td>
+      </tr>`;
+    }).join("");
+
+    if (avSutraRows) {
+      avSutraHtml = `${sect("अष्टकवर्ग सूत्र विश्लेषण — ग्रह बल","#F59E0B")}
+      <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);padding:8px;border-radius:8px;margin-bottom:12px">
+        <div style="font-size:9px;color:#94A3B8;margin-bottom:8px">💡 <b>सिद्धांत:</b> BAV (व्यक्तिगत बल) + SAV (भाव बल) के योग से अंतिम निर्णय। SAV &gt; 28 हो तो निर्बल BAV ग्रह को भी सुरक्षा मिलती है।</div>
+        <table><tr style="background:rgba(255,255,255,.05)"><th>ग्रह</th><th>स्थिति</th><th>बल</th><th>BAV स्कोर</th><th>SAV अंक</th><th>दशा फल</th></tr>${avSutraRows}</table>
+      </div>`;
+    }
+  }
+
   const pages = {
     1: ()=>`${head("ग्रह + भाव")}<div class="page">
       ${headerBlock}
       ${sect("ग्रह स्थिति — नवग्रह (9 Planets)")}
-      <table><tr><th>ग्रह</th><th>राशि</th><th>भाव</th><th>डिग्री</th><th>नक्षत्र</th><th>नक्ष.स्वामी</th><th>अवस्था</th><th>स्वभाव</th><th>बल%</th></tr>${pRows}</table>
+      <table><tr><th>ग्रह</th><th>राशि</th><th>भाव</th><th>डिग्री</th><th>नक्षत्र</th><th>नक्ष.स्वामी</th><th>राशि स्वामी</th><th>अवस्था</th><th>स्वभाव</th><th>बल%</th></tr>${pRows}</table>
       <div style="margin-top:5px;padding:4px 8px;border-radius:5px;background:rgba(245,158,11,.05);font-size:8px;color:#475569">⬆️उच्च &nbsp;⬇️नीच &nbsp;🏠स्वराशि &nbsp;💜मित्र &nbsp;🔴शत्रु &nbsp;⭐योगकारक &nbsp;⟲वक्री</div>
       ${sect("भाव स्थिति — 12 भाव","#22D3EE")}
       <table><tr><th>भाव</th><th>राशि</th><th>ग्रह</th><th>AV अंक</th></tr>${hRows}</table>
@@ -510,127 +568,75 @@ function buildPDFPage(pageNum, chartData) {
       ${sect("विंशोत्तरी दशा — पूर्ण समयरेखा","#FB923C")}
       <div style="padding:6px 8px;border-radius:6px;background:rgba(251,146,60,.05);margin-bottom:7px;font-size:9px;color:#475569">💡 विंशोत्तरी पद्धति: जन्म नक्षत्र से 120 वर्ष का चक्र। वर्तमान: <b style="color:#F59E0B">${dasha.mahadasha||"—"} महादशा → ${dasha.antardasha||"—"} अंतर्दशा | समाप्त: ${dasha.endDate||"—"}</b></div>
       ${dashaTable}
-      ${allYogas.length>0?`${sect(`योग — ${allYogas.length} सक्रिय`,"#4ADE80")}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+      ${allYogas.length>0?`${sect(`योग — ${allYogas.length} सक्रिय`,"#4ADE80")}<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
         ${allYogas.slice(0,18).map(y=>{const yn=y.name||y.yoga_name||"";const yd=y.effect||y.description||"";const yc=yn.includes("राज")||yn.includes("Raja")?"#F59E0B":yn.includes("धन")||yn.includes("Dhana")?"#4ADE80":"#22D3EE";return`<div style="padding:5px 8px;border-radius:6px;background:${yc}07;border:1px solid ${yc}20"><div style="font-size:11px;color:${yc};font-weight:700">${yn}</div>${yd?`<div style="font-size:9px;color:#475569;margin-top:1px">${yd.slice(0,60)}${yd.length>60?"...":""}</div>`:""}</div>`;}).join("")}
       </div>`:""}
       ${foot(2,TOTAL_PAGES)}</div>${close}`,
 
     3: ()=>`${head("अष्टकवर्ग")}<div class="page">
-      ${sect("अष्टकवर्ग — 13 मॉड्यूल")}
-      <div style="font-size:10px;color:#22D3EE;font-weight:700;margin-bottom:3px">सर्वाष्टकवर्ग — 12 भाव</div>
+      ${sect("सर्वाष्टकवर्ग (SAV) — 12 भावों की कुल शक्ति", "#4ADE80")}
       <div class="avg">${avGrid}</div>
-      ${mcD.avTotal?`<div style="text-align:right;font-size:10px;color:#F59E0B;font-weight:700">कुल: ${mcD.avTotal} | औसत: ${(mcD.avTotal/12).toFixed(1)}/भाव</div>`:""}
+      ${mcD.avTotal?`<div style="text-align:right;font-size:10px;color:#F59E0B;font-weight:700;margin-top:3px">कुल: ${mcD.avTotal} | औसत: ${(mcD.avTotal/12).toFixed(1)}/भाव</div>`:""}
+      <div style="margin-top:12px"></div>
+      ${bavTableHtml}
+      ${avSutraHtml}
+      ${sect("अष्टकवर्ग — प्रमुख मॉड्यूल विश्लेषण", "#F472B6")}
+      ${avSutraHtml}
       <div class="two">
-        ${lp.total_score?`<div style="padding:9px;border-radius:9px;background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.22)">
-          <div style="font-size:9px;color:#64748B">MODULE 1 — जीवन समृद्धि</div>
-          <div style="font-size:26px;font-weight:900;color:${lp.is_prosperous?"#22D3EE":"#FB923C"}">${lp.total_score}</div>
-          <div style="font-size:8px;color:#475569">थ्रेशहोल्ड: 164 | ${lp.is_prosperous?"✅ समृद्ध":"⚠️ संघर्ष"}</div>
-          <div style="font-size:9px;color:#94A3B8;margin-top:2px">${lp.prediction_hindi||""}</div>
-          <div style="margin-top:3px;padding:3px 5px;border-radius:4px;background:rgba(255,255,255,.03);font-size:8px;color:#475569">💡 सर्वाष्टक ≥164 = समृद्ध। इस कुंडली: ${lp.total_score}</div>
-        </div>`:""}
-        ${kb.dominant?`<div style="padding:9px;border-radius:9px;background:rgba(192,132,252,.06);border:1px solid rgba(192,132,252,.22)">
-          <div style="font-size:9px;color:#64748B">MODULE 11 — कर्म vs भाग्य</div>
-          <div style="font-size:15px;font-weight:900;color:#C084FC">${kb.dominant}</div>
-          <div style="display:flex;gap:7px;margin-top:3px">
-            ${kb.house_9_points!=null?`<div style="text-align:center;padding:3px 7px;border-radius:5px;background:rgba(192,132,252,.1)"><div style="font-size:16px;font-weight:900;color:#C084FC">${kb.house_9_points}</div><div style="font-size:8px;color:#64748B">9वां भाग्य</div></div>`:""}
-            ${kb.house_10_points!=null?`<div style="text-align:center;padding:3px 7px;border-radius:5px;background:rgba(129,140,248,.1)"><div style="font-size:16px;font-weight:900;color:#818CF8">${kb.house_10_points}</div><div style="font-size:8px;color:#64748B">10वां कर्म</div></div>`:""}
-          </div>
-          <div style="font-size:9px;color:#94A3B8;margin-top:2px">${kb.prediction_hindi||""}</div>
-          <div style="margin-top:3px;padding:3px 5px;border-radius:4px;background:rgba(255,255,255,.03);font-size:8px;color:#475569">💡 9वां ≥ 10वां = भाग्य से धन।</div>
-        </div>`:""}
+        ${lp.total_score?`<div style="padding:9px;border-radius:9px;background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.22)"><div style="font-size:9px;color:#64748B">MODULE 1 — जीवन समृद्धि</div><div style="font-size:26px;font-weight:900;color:${lp.is_prosperous?"#22D3EE":"#FB923C"}">${lp.total_score}</div><div style="font-size:8px;color:#475569">थ्रेशहोल्ड: 164 | ${lp.is_prosperous?"✅ समृद्ध":"⚠️ संघर्ष"}</div><div style="font-size:9px;color:#94A3B8;margin-top:2px">${lp.prediction_hindi||""}</div></div>`:""}
+        ${kb.dominant?`<div style="padding:9px;border-radius:9px;background:rgba(192,132,252,.06);border:1px solid rgba(192,132,252,.22)"><div style="font-size:9px;color:#64748B">MODULE 11 — कर्म vs भाग्य</div><div style="font-size:15px;font-weight:900;color:#C084FC">${kb.dominant}</div><div style="display:flex;gap:7px;margin-top:3px">${kb.house_9_points!=null?`<div style="text-align:center;padding:3px 7px;border-radius:5px;background:rgba(192,132,252,.1)"><div style="font-size:16px;font-weight:900;color:#C084FC">${kb.house_9_points}</div><div style="font-size:8px;color:#64748B">9वां भाग्य</div></div>`:""}${kb.house_10_points!=null?`<div style="text-align:center;padding:3px 7px;border-radius:5px;background:rgba(129,140,248,.1)"><div style="font-size:16px;font-weight:900;color:#818CF8">${kb.house_10_points}</div><div style="font-size:8px;color:#64748B">10वां कर्म</div></div>`:""}</div><div style="font-size:9px;color:#94A3B8;margin-top:2px">${kb.prediction_hindi||""}</div></div>`:""}
       </div>
-      <div class="two">
-        <div style="padding:8px;border-radius:8px;background:${sm.has_extreme_struggle?"rgba(251,113,133,.06)":"rgba(74,222,128,.06)"};border:1px solid ${sm.has_extreme_struggle?"rgba(251,113,133,.2)":"rgba(74,222,128,.2)"}">
-          <div style="font-size:9px;color:#64748B;margin-bottom:2px">M2 — संघर्ष</div>
-          <div style="font-size:14px;font-weight:900;color:${sm.has_extreme_struggle?"#FB7185":"#4ADE80"}">${sm.has_extreme_struggle?"उच्च संघर्ष ⚠️":"सामान्य ✅"}</div>
-          <div style="font-size:9px;color:#64748B">${sm.prediction_hindi||"सामान्य जीवन संघर्ष"}</div>
-          <div style="margin-top:3px;font-size:8px;color:#475569">💡 6+8+12वें भाव के कम अंक = अधिक संघर्ष</div>
-        </div>
-        <div style="padding:8px;border-radius:8px;background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.2)">
-          <div style="font-size:9px;color:#64748B;margin-bottom:2px">M4 — करियर प्रकार</div>
-          <div style="font-size:13px;font-weight:900;color:#818CF8">${ct.recommended_type||"—"}</div>
-          <div style="font-size:9px;color:#64748B">${ct.description_hindi||""}</div>
-          <div style="margin-top:3px;font-size:8px;color:#475569">💡 10वें+6वें+7वें भाव की तुलना से तय</div>
-        </div>
+      <div class="two" style="margin-top:6px">
+        <div style="padding:8px;border-radius:8px;background:${sm.has_extreme_struggle?"rgba(251,113,133,.06)":"rgba(74,222,128,.06)"};border:1px solid ${sm.has_extreme_struggle?"rgba(251,113,133,.2)":"rgba(74,222,128,.2)"}"><div style="font-size:9px;color:#64748B;margin-bottom:2px">M2 — संघर्ष मीटर</div><div style="font-size:14px;font-weight:900;color:${sm.has_extreme_struggle?"#FB7185":"#4ADE80"}">${sm.has_extreme_struggle?"उच्च संघर्ष ⚠️":"सामान्य ✅"}</div><div style="font-size:9px;color:#64748B">${sm.prediction_hindi||"सामान्य जीवन संघर्ष"}</div></div>
+        <div style="padding:8px;border-radius:8px;background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.2)"><div style="font-size:9px;color:#64748B;margin-bottom:2px">M4 — करियर प्रकार</div><div style="font-size:13px;font-weight:900;color:#818CF8">${ct.recommended_type||"—"}</div><div style="font-size:9px;color:#64748B">${ct.description_hindi||""}</div></div>
       </div>
-      <div class="two">
-        ${bs.will_become_businessman!=null?`<div style="padding:8px;border-radius:8px;background:${bs.will_become_businessman?"rgba(74,222,128,.06)":"rgba(251,113,133,.06)"};border:1px solid ${bs.will_become_businessman?"rgba(74,222,128,.2)":"rgba(251,113,133,.2)"}">
-          <div style="font-size:9px;color:#64748B;margin-bottom:2px">MODULE 8 — व्यापार</div>
-          <div style="font-size:13px;font-weight:900;color:${bs.will_become_businessman?"#4ADE80":"#FB7185"}">${bs.will_become_businessman?"✅ व्यापार सफल":"❌ व्यापार कठिन"}</div>
-          <div style="font-size:9px;color:#64748B">${bs.prediction_hindi||""}</div>
-          <div style="margin-top:3px;font-size:8px;color:#475569">💡 7वां ≥28 + 10वां + 11वां = व्यापार योग${bs.house_7_points!=null?` | 7वें: ${bs.house_7_points}अंक`:""}</div>
-          ${(()=>{const planIn7_=Object.entries(pl).filter(([c,p])=>p?.house===7);return planIn7_.length?`<div style="margin-top:3px;font-size:9px;color:#94A3B8">7वें में: ${planIn7_.map(([c])=>PH[c]||c).join(", ")}</div>`:"";})()}
-          ${manglik?`<div style="margin-top:2px;font-size:9px;color:#FB7185">⚠️ मांगलिक दोष — मंगल ${ma_p.house}वें</div>`:`<div style="margin-top:2px;font-size:9px;color:#4ADE80">✅ मांगलिक दोष नहीं</div>`}
-          ${veH?`<div style="font-size:9px;color:#F472B6">💕 जीवनसाथी: ${SPOUSE_N[veH]||""} (शुक्र ${veH}वें)</div>`:""}
-        </div>`:""}
-        ${ld.ranked_directions?.length>0?`<div style="padding:8px;border-radius:8px;background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.2)">
-          <div style="font-size:9px;color:#64748B;margin-bottom:4px">MODULE 6 — शुभ दिशाएं</div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:3px">
-            ${ld.ranked_directions.map((d,i)=>`<div style="text-align:center;padding:3px;border-radius:4px;background:${i===0?"rgba(129,140,248,.18)":"rgba(255,255,255,.03)"}"><div style="font-size:14px;font-weight:900;color:${i===0?"#818CF8":"#475569"}">${d.rank}</div><div style="font-size:8px;color:${i===0?"#818CF8":"#475569"}">${d.direction}</div><div style="font-size:8px;color:#334155">${d.points}</div></div>`).join("")}
-          </div>
-        </div>`:""}
-      </div>
-      ${aa.happiness_ages?.length>0||aa.sorrow_ages?.length>0?`
-      ${sect("MODULE 7 — सुख-दुख की आयु ⏰","#FB923C")}
-      <div style="padding:4px 7px;border-radius:5px;background:rgba(251,146,60,.05);margin-bottom:5px;font-size:8px;color:#475569">💡 Σ(भाव 1→ग्रह भाव)×7÷27 = टर्निंग वर्ष | शुभ ग्रह=सुख, पाप ग्रह=कष्ट</div>
-      <div class="two">
-        ${aa.happiness_ages?.length>0?`<div style="padding:6px;border-radius:7px;background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.18)">
-          <div style="font-size:9px;font-weight:700;color:#4ADE80;margin-bottom:4px">✅ सुख की आयु</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px">${aa.happiness_ages.map(a=>`<div style="text-align:center;padding:3px 7px;border-radius:5px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.18)"><div style="font-size:18px;font-weight:900;color:#4ADE80">${a.age}</div><div style="font-size:8px;color:#86EFAC">${a.planet_hindi||a.planet}</div></div>`).join("")}</div>
-        </div>`:""}
-        ${aa.sorrow_ages?.length>0?`<div style="padding:6px;border-radius:7px;background:rgba(251,113,133,.06);border:1px solid rgba(251,113,133,.18)">
-          <div style="font-size:9px;font-weight:700;color:#FB7185;margin-bottom:4px">⚠️ कष्ट की आयु</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px">${aa.sorrow_ages.map(a=>`<div style="text-align:center;padding:3px 7px;border-radius:5px;background:rgba(251,113,133,.1);border:1px solid rgba(251,113,133,.18)"><div style="font-size:18px;font-weight:900;color:#FB7185">${a.age}</div><div style="font-size:8px;color:#FDA4AF">${a.planet_hindi||a.planet}</div></div>`).join("")}</div>
-        </div>`:""}
-      </div>`:""}
+      ${aa.happiness_ages?.length>0||aa.sorrow_ages?.length>0?`${sect("MODULE 7 — सुख-दुख की आयु ⏰","#FB923C")}<div class="two">${aa.happiness_ages?.length>0?`<div style="padding:6px;border-radius:7px;background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.18)"><div style="font-size:9px;font-weight:700;color:#4ADE80;margin-bottom:4px">✅ सुख की आयु</div><div style="display:flex;flex-wrap:wrap;gap:4px">${aa.happiness_ages.map(a=>`<div style="text-align:center;padding:3px 7px;border-radius:5px;background:rgba(74,222,128,.1)"><div style="font-size:18px;font-weight:900;color:#4ADE80">${a.age}</div><div style="font-size:8px;color:#86EFAC">${a.planet_hindi||a.planet}</div></div>`).join("")}</div></div>`:""}${aa.sorrow_ages?.length>0?`<div style="padding:6px;border-radius:7px;background:rgba(251,113,133,.06);border:1px solid rgba(251,113,133,.18)"><div style="font-size:9px;font-weight:700;color:#FB7185;margin-bottom:4px">⚠️ कष्ट की आयु</div><div style="display:flex;flex-wrap:wrap;gap:4px">${aa.sorrow_ages.map(a=>`<div style="text-align:center;padding:3px 7px;border-radius:5px;background:rgba(251,113,133,.1)"><div style="font-size:18px;font-weight:900;color:#FB7185">${a.age}</div><div style="font-size:8px;color:#FDA4AF">${a.planet_hindi||a.planet}</div></div>`).join("")}</div></div>`:""}</div>`:""}
       ${foot(3,TOTAL_PAGES)}</div>${close}`,
 
     4: ()=>`${head("टर्निंग पॉइंट")}<div class="page">
       ${sect("अष्टकवर्ग टर्निंग पॉइंट — आयु सूत्र ⏳","#4ADE80")}
-      <div style="padding:5px 8px;border-radius:5px;background:rgba(74,222,128,.05);margin-bottom:7px;font-size:9px;color:#475569">
-        📐 आयु सूत्र: Σ(भाव 1→ग्रह भाव) × 7 ÷ 27 = टर्निंग वर्ष &nbsp;|&nbsp;
-        <span style="color:#F59E0B">● = अभी (${now-1}–${now+10})</span>
-        <span style="color:#4ADE80"> ✅ शुभ</span>
-        <span style="color:#FB7185"> ⚠️ कष्ट</span>
-      </div>
+      <div style="padding:5px 8px;border-radius:5px;background:rgba(74,222,128,.05);margin-bottom:7px;font-size:9px;color:#475569">📐 आयु सूत्र: Σ(भाव 1→ग्रह भाव) × 7 ÷ 27 = टर्निंग वर्ष &nbsp;|&nbsp;<span style="color:#F59E0B">● = अभी (${now-1}–${now+10})</span><span style="color:#4ADE80"> ✅ शुभ</span><span style="color:#FB7185"> ⚠️ कष्ट</span></div>
       ${tpHTML||`<div style="color:#475569;text-align:center;padding:14px">टर्निंग पॉइंट डेटा नहीं</div>`}
       ${foot(4,TOTAL_PAGES)}</div>${close}`,
 
+    // 🔥 FIX 3: BULLETPROOF PREMIUM NAVATARA 🔥
     5: ()=>`${head("त्रिकोण + राहु-केतु + नवतारा")}<div class="page">
       ${sect("चतुर्विध त्रिकोण — जीवन दिशा","#C084FC")}
       ${tkHTML}
-      <div style="padding:7px 9px;border-radius:8px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.18);margin-top:4px">
-        <div style="font-size:10px;font-weight:700;color:#F59E0B;margin-bottom:4px">💼 करियर फोकस</div>
-        <div class="two">
-          <div style="padding:4px 7px;border-radius:5px;background:rgba(74,222,128,.07)"><div style="font-size:10px;font-weight:900;color:#4ADE80">अर्थ &gt; काम</div><div style="font-size:8px;color:#64748B">कम मेहनत, भाग्य से धन | 9/10वें बलवान</div></div>
-          <div style="padding:4px 7px;border-radius:5px;background:rgba(251,113,133,.07)"><div style="font-size:10px;font-weight:900;color:#FB7185">काम &gt; अर्थ</div><div style="font-size:8px;color:#64748B">श्रम से धन | 6वें बलवान ग्रह</div></div>
-        </div>
-        <div style="margin-top:4px;padding:4px 7px;border-radius:5px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.18)">
-          <div style="font-size:9px;font-weight:700;color:#EF4444">🔴 अर्थ + मोक्ष = विरोधाभास! पैसा + त्याग एक साथ नहीं। एक मार्ग चुनें।</div>
-        </div>
-      </div>
       <div class="two" style="margin-top:8px">
         ${rahuH?`<div style="padding:9px;border-radius:9px;background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.22)">
-          <div style="font-size:11px;font-weight:900;color:#818CF8;margin-bottom:4px">🐍 राहु — ${rahuH}वें भाव में</div>
-          <div style="font-size:10px;color:#CBD5E1">${RAHU_T[rahuH]||"—"}</div>
+          <div style="font-size:11px;font-weight:900;color:#818CF8;margin-bottom:4px">🐍 राहु — ${rahuH}वें भाव में</div><div style="font-size:10px;color:#CBD5E1">${RAHU_T[rahuH]||"—"}</div>
         </div>`:""}
         ${ketuH?`<div style="padding:9px;border-radius:9px;background:rgba(45,212,191,.06);border:1px solid rgba(45,212,191,.22)">
-          <div style="font-size:11px;font-weight:900;color:#2DD4BF;margin-bottom:4px">🪐 केतु — ${ketuH}वें भाव में</div>
-          <div style="font-size:10px;color:#CBD5E1">${KETU_T[ketuH]||"—"}</div>
+          <div style="font-size:11px;font-weight:900;color:#2DD4BF;margin-bottom:4px">🪐 केतु — ${ketuH}वें भाव में</div><div style="font-size:10px;color:#CBD5E1">${KETU_T[ketuH]||"—"}</div>
         </div>`:""}
       </div>
-      ${sect("नवतारा — जन्म नक्षत्र + रत्न","#FB923C")}
-      ${bn.birth_nakshatra?`<div style="padding:6px 9px;border-radius:7px;background:rgba(251,146,60,.09);border:1px solid rgba(251,146,60,.22);margin-bottom:6px;font-size:12px;font-weight:900;color:#FB923C">⭐ जन्म नक्षत्र: ${bn.birth_nakshatra.name_hindi||""} (${bn.birth_nakshatra.name_english||""}) — #${bn.birth_nakshatra.number||""}</div>`:""}
-      <div class="two">
-        ${gems.highly_beneficial?.length>0?`<div style="padding:7px;border-radius:7px;background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.18)">
-          <div style="font-size:9px;font-weight:700;color:#4ADE80;margin-bottom:4px">💎 पहनें:</div>
-          ${gems.highly_beneficial.map(g=>`<div style="padding:2px 6px;border-radius:4px;background:rgba(74,222,128,.09);margin-bottom:3px"><span style="font-size:11px;font-weight:700;color:#4ADE80">${g.gemstone_hindi}</span> <span style="font-size:9px;color:#475569">${g.gemstone_english}</span></div>`).join("")}
-        </div>`:""}
-        ${gems.avoid?.length>0?`<div style="padding:7px;border-radius:7px;background:rgba(251,113,133,.06);border:1px solid rgba(251,113,133,.18)">
-          <div style="font-size:9px;font-weight:700;color:#FB7185;margin-bottom:4px">🚫 वर्जित:</div>
-          ${gems.avoid.map(g=>`<div style="padding:2px 6px;border-radius:4px;background:rgba(251,113,133,.09);margin-bottom:3px"><span style="font-size:11px;font-weight:700;color:#FB7185">${g.gemstone_hindi}</span> <span style="font-size:9px;color:#475569">${g.gemstone_english}</span></div>`).join("")}
-        </div>`:""}
+      ${sect("नवतारा — जन्म नक्षत्र एवं तारा चक्र", "#FB923C")}
+      ${taras.birth_nakshatra ? `<div style="padding:10px; border-radius:10px; background:rgba(34,211,238,0.1); border:1px solid rgba(34,211,238,0.3); margin-bottom:10px; text-align:center"><div style="font-size:14px; font-weight:900; color:#22D3EE">⭐ जन्म नक्षत्र: ${taras.birth_nakshatra.name_hindi||""} (#${taras.birth_nakshatra.number||""})</div></div>` : ""}
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px">
+        <div>
+          ${taras.sampat_tara ? pdfCard("💰 संपत् (Wealth)", taras.sampat_tara.nakshatra_names?.join(", "), "#4ADE80") : ""}
+          ${taras.kshema_tara ? pdfCard("🛡️ क्षेम (Prosperity)", taras.kshema_tara.nakshatra_names?.join(", "), "#2DD4BF") : ""}
+          ${taras.sadhana_tara ? pdfCard("✨ साधन (Achievement)", taras.sadhana_tara.nakshatra_names?.join(", "), "#818CF8") : ""}
+          ${taras.mitra_tara ? pdfCard("🤝 मित्र (Friend)", taras.mitra_tara.nakshatra_names?.join(", "), "#F59E0B") : ""}
+        </div>
+        <div>
+          ${taras.vipat_tara ? pdfCard("⚠️ विपत् (Danger)", taras.vipat_tara.nakshatra_names?.join(", "), "#FB7185") : ""}
+          ${taras.pratyari_tara ? pdfCard("🔥 प्रत्यारी (Obstacles)", taras.pratyari_tara.nakshatra_names?.join(", "), "#F472B6") : ""}
+          ${taras.vadha_tara ? pdfCard("💀 वध (Severe)", taras.vadha_tara.nakshatra_names?.join(", "), "#EF4444") : ""}
+        </div>
+      </div>
+      ${sect("💎 रत्न एवं वर्जित निर्देश", "#22D3EE")}
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px">
+         <div style="padding:10px; background:rgba(74,222,128,0.05); border:1px solid rgba(74,222,128,0.2); border-radius:10px">
+            <div style="font-size:11px; font-weight:900; color:#4ADE80; margin-bottom:6px">✅ शुभ रत्न (Gemstones)</div>
+            ${(gems.highly_beneficial || []).map(g => `<div style="font-size:10px; color:#CBD5E1; margin-bottom:4px">• ${g.gemstone_hindi}</div>`).join("")}
+         </div>
+         <div style="padding:10px; background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.2); border-radius:10px">
+            <div style="font-size:11px; font-weight:900; color:#FB7185; margin-bottom:6px">❌ वर्जित (Avoid)</div>
+            <div style="font-size:10px; color:#CBD5E1">रंग: ${(proh.prohibited_colors || []).join(", ")}</div>
+            <div style="font-size:10px; color:#CBD5E1; margin-top:2px">दिन: ${(proh.prohibited_days || []).join(", ")}</div>
+         </div>
       </div>
       ${foot(5,TOTAL_PAGES)}</div>${close}`,
 
@@ -745,10 +751,8 @@ function buildPDFPage(pageNum, chartData) {
   };
 
   // ── Nadi Data Extract ──
-  // full_nadi_analysis() returns these exact keys (from nadi_jyotish_engine.py)
   const nadiEd = ed.nadi_jyotish || ed.nadi || ed.nadiResults || ed.nadi_results || {};
 
-  // ── Generic fallback renderer (for any unexpected shape) ──
   const renderMsgList = (msgs, color="#a78bfa") => {
     if (!msgs || msgs.length === 0) return `<div style="color:#475569;font-size:10px;padding:6px">कोई संदेश नहीं</div>`;
     return msgs.map(m => `<div style="padding:5px 9px;border-radius:6px;background:${color}10;border-left:3px solid ${color};margin-bottom:4px;font-size:10px;color:#CBD5E1;line-height:1.6">${m}</div>`).join("");
@@ -761,7 +765,6 @@ function buildPDFPage(pageNum, chartData) {
     </div>`;
   const noData = () => `<div style="color:#475569;text-align:center;padding:20px;border:1px dashed rgba(124,58,237,.3);border-radius:8px;font-size:11px">नाड़ी इंजन डेटा उपलब्ध नहीं<br/><span style="font-size:9px;color:#334155">chartData.enginesData.nadi_jyotish → सुनिश्चित करें कि backend इसे भेज रहा है</span></div>`;
 
-  // ── PAGE 9: ग्रह पीड़ा (planet_afflictions) ──
   pages[9] = () => {
     const aff = nadiEd.planet_afflictions || {};
     const PH2={SUN:"सूर्य",MOON:"चंद्र",MARS:"मंगल",MERCURY:"बुध",JUPITER:"गुरु",VENUS:"शुक्र",SATURN:"शनि",RAHU:"राहु",KETU:"केतु"};
@@ -780,7 +783,7 @@ function buildPDFPage(pageNum, chartData) {
           ${d.messages?.length>0 ? renderMsgList(d.messages, c) : ""}
         </div>`;
       }).join("");
-    return `${head("नाड़ी — ग्रह पीड़ा")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — ग्रह पीड़ा")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(239,68,68,.1);border:1.5px solid rgba(239,68,68,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">💥</span>
         <div><div style="font-size:14px;font-weight:900;color:#EF4444">ग्रह पीड़ा विश्लेषण</div>
@@ -789,7 +792,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(9,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 10: रोग (disease) ──
   pages[10] = () => {
     const dis = nadiEd.disease || {};
     const body = !dis || Object.keys(dis).length===0 ? noData() : `
@@ -803,7 +805,7 @@ function buildPDFPage(pageNum, chartData) {
       ${dis.messages?.length>0 ? `${sect("विश्लेषण","#EF4444")}${renderMsgList(dis.messages,"#FB7185")}` : ""}
       ${dis.remedies?.length>0 ? `${sect("उपाय","#4ADE80")}${dis.remedies.map(r=>`<div style="padding:5px 9px;border-radius:6px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);margin-bottom:4px;font-size:10px;color:#CBD5E1">🙏 ${r}</div>`).join("")}` : ""}
     `;
-    return `${head("नाड़ी — रोग")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — रोग")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(220,38,38,.1);border:1.5px solid rgba(220,38,38,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">🏥</span>
         <div><div style="font-size:14px;font-weight:900;color:#DC2626">रोग विश्लेषण</div>
@@ -812,7 +814,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(10,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 11: आयु (lifespan) ──
   pages[11] = () => {
     const ls = nadiEd.lifespan || {};
     const lc = ls.lifespan_category;
@@ -824,7 +825,7 @@ function buildPDFPage(pageNum, chartData) {
       </div>
       ${ls.messages?.length>0 ? `${sect("आयु विश्लेषण","#D97706")}${renderMsgList(ls.messages,"#D97706")}` : ""}
     `;
-    return `${head("नाड़ी — आयु")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — आयु")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(217,119,6,.1);border:1.5px solid rgba(217,119,6,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">⏳</span>
         <div><div style="font-size:14px;font-weight:900;color:#D97706">आयु विश्लेषण</div>
@@ -833,7 +834,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(11,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 12: विवाह (marriage) ──
   pages[12] = () => {
     const mar = nadiEd.marriage || {};
     const body = !mar || Object.keys(mar).length===0 ? noData() : `
@@ -852,7 +852,7 @@ function buildPDFPage(pageNum, chartData) {
       ${mar.messages?.length>0?`${sect("विवाह विश्लेषण","#EC4899")}${renderMsgList(mar.messages,"#EC4899")}`:""}
       ${mar.remedies?.length>0?`${sect("उपाय","#4ADE80")}${mar.remedies.map(r=>`<div style="padding:5px 9px;border-radius:6px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);margin-bottom:4px;font-size:10px;color:#CBD5E1">🙏 ${r}</div>`).join("")}`:""}
     `;
-    return `${head("नाड़ी — विवाह")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — विवाह")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(236,72,153,.1);border:1.5px solid rgba(236,72,153,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">💍</span>
         <div><div style="font-size:14px;font-weight:900;color:#EC4899">विवाह विश्लेषण</div>
@@ -861,7 +861,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(12,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 13: दुर्घटना (accident) ──
   pages[13] = () => {
     const acc = nadiEd.accident || {};
     const body = !acc || Object.keys(acc).length===0 ? noData() : `
@@ -873,7 +872,7 @@ function buildPDFPage(pageNum, chartData) {
       ${acc.coma_risk?`<div style="padding:8px;border-radius:7px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);margin:6px 0;font-size:11px;font-weight:700;color:#EF4444">⚠️ कोमा / गहरी चोट का योग</div>`:""}
       ${acc.remedies?.length>0?`${sect("सावधानी व उपाय","#4ADE80")}${acc.remedies.map(r=>`<div style="padding:5px 9px;border-radius:6px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);margin-bottom:4px;font-size:10px;color:#CBD5E1">🙏 ${r}</div>`).join("")}`:""}
     `;
-    return `${head("नाड़ी — दुर्घटना")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — दुर्घटना")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(249,115,22,.1);border:1.5px solid rgba(249,115,22,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">⚠️</span>
         <div><div style="font-size:14px;font-weight:900;color:#F97316">दुर्घटना विश्लेषण</div>
@@ -882,7 +881,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(13,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 14: संतान (child) ──
   pages[14] = () => {
     const ch = nadiEd.child || {};
     const body = !ch || Object.keys(ch).length===0 ? noData() : `
@@ -895,7 +893,7 @@ function buildPDFPage(pageNum, chartData) {
       ${ch.messages?.length>0?`${sect("संतान विश्लेषण","#10B981")}${renderMsgList(ch.messages,"#10B981")}`:""}
       ${ch.remedies?.length>0?`${sect("उपाय","#4ADE80")}${ch.remedies.map(r=>`<div style="padding:5px 9px;border-radius:6px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);margin-bottom:4px;font-size:10px;color:#CBD5E1">🙏 ${r}</div>`).join("")}`:""}
     `;
-    return `${head("नाड़ी — संतान")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — संतान")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(16,185,129,.1);border:1.5px solid rgba(16,185,129,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">👶</span>
         <div><div style="font-size:14px;font-weight:900;color:#10B981">संतान विश्लेषण</div>
@@ -904,7 +902,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(14,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 15: मानसिक शांति (mental_peace) ──
   pages[15] = () => {
     const mp = nadiEd.mental_peace || {};
     const sc = mp.stress_score ?? mp.score ?? null;
@@ -919,7 +916,7 @@ function buildPDFPage(pageNum, chartData) {
       ${mp.messages?.length>0?`${sect("मानसिक विश्लेषण","#8B5CF6")}${renderMsgList(mp.messages,"#8B5CF6")}`:""}
       ${mp.remedies?.length>0?`${sect("मन की शांति के उपाय","#4ADE80")}${mp.remedies.map(r=>`<div style="padding:5px 9px;border-radius:6px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);margin-bottom:4px;font-size:10px;color:#CBD5E1">🙏 ${r}</div>`).join("")}`:""}
     `;
-    return `${head("नाड़ी — मानसिक शांति")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — मानसिक शांति")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(139,92,246,.1);border:1.5px solid rgba(139,92,246,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">🧠</span>
         <div><div style="font-size:14px;font-weight:900;color:#8B5CF6">मानसिक शांति मीटर</div>
@@ -928,7 +925,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(15,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 16: करियर - धन (career) ──
   pages[16] = () => {
     const car = nadiEd.career || {};
     const body = !car || Object.keys(car).length===0 ? noData() : `
@@ -942,7 +938,7 @@ function buildPDFPage(pageNum, chartData) {
       ${car.messages?.length>0?`${sect("करियर विश्लेषण","#22D3EE")}${renderMsgList(car.messages,"#22D3EE")}`:""}
       ${car.remedies?.length>0?`${sect("उपाय","#4ADE80")}${car.remedies.map(r=>`<div style="padding:5px 9px;border-radius:6px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);margin-bottom:4px;font-size:10px;color:#CBD5E1">🙏 ${r}</div>`).join("")}`:""}
     `;
-    return `${head("नाड़ी — करियर-धन")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — करियर-धन")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(34,211,238,.1);border:1.5px solid rgba(34,211,238,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">💼</span>
         <div><div style="font-size:14px;font-weight:900;color:#22D3EE">करियर - धन विश्लेषण</div>
@@ -951,7 +947,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(16,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 17: पूर्व जन्म (past_life + curses) ──
   pages[17] = () => {
     const pl2 = nadiEd.past_life || {};
     const cur = nadiEd.curses || [];
@@ -965,7 +960,7 @@ function buildPDFPage(pageNum, chartData) {
           ${c.remedies?.length>0?c.remedies.map(r=>`<div style="font-size:9px;color:#4ADE80;margin-top:2px">🙏 ${r}</div>`).join(""):""}
         </div>`).join("")}`:""}
     `;
-    return `${head("नाड़ी — पूर्व जन्म")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — पूर्व जन्म")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(45,212,191,.1);border:1.5px solid rgba(45,212,191,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">🔮</span>
         <div><div style="font-size:14px;font-weight:900;color:#2DD4BF">पूर्व जन्म विश्लेषण</div>
@@ -974,7 +969,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(17,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 18: वक्री ग्रह (retrograde) ──
   pages[18] = () => {
     const ret = nadiEd.retrograde || {};
     const PH2={SUN:"सूर्य",MOON:"चंद्र",MARS:"मंगल",MERCURY:"बुध",JUPITER:"गुरु",VENUS:"शुक्र",SATURN:"शनि",RAHU:"राहु",KETU:"केतु"};
@@ -984,7 +978,7 @@ function buildPDFPage(pageNum, chartData) {
       ${ret.messages?.length>0?`${sect("वक्री विश्लेषण","#818CF8")}${renderMsgList(ret.messages,"#818CF8")}`:""}
       ${ret.effects?.length>0?`${sect("प्रभाव","#6366F1")}${renderMsgList(ret.effects,"#6366F1")}`:""}
     `;
-    return `${head("नाड़ी — वक्री ग्रह")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — वक्री ग्रह")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(129,140,248,.1);border:1.5px solid rgba(129,140,248,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">⟲</span>
         <div><div style="font-size:14px;font-weight:900;color:#818CF8">वक्री ग्रह विश्लेषण</div>
@@ -993,7 +987,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(18,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 19: अष्टम भाव (eighth_house) ──
   pages[19] = () => {
     const eh = nadiEd.eighth_house || {};
     const dt = nadiEd.death_timing || {};
@@ -1002,7 +995,7 @@ function buildPDFPage(pageNum, chartData) {
       ${eh.messages?.length>0?`${sect("अष्टम भाव विश्लेषण","#6366F1")}${renderMsgList(eh.messages,"#6366F1")}`:""}
       ${dt && Object.keys(dt).length>0?`${sect("मृत्यु काल संकेत","#475569")}<div style="padding:8px;border-radius:7px;background:rgba(71,85,105,.08);border:1px solid rgba(71,85,105,.25);font-size:10px;color:#94A3B8">${renderMsgList(dt.messages||[],"#475569")}</div>`:""}
     `;
-    return `${head("नाड़ी — अष्टम भाव")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — अष्टम भाव")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(99,102,241,.1);border:1.5px solid rgba(99,102,241,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">🌑</span>
         <div><div style="font-size:14px;font-weight:900;color:#6366F1">अष्टम भाव विश्लेषण</div>
@@ -1011,7 +1004,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(19,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 20: रत्न (gemstones) ──
   pages[20] = () => {
     const gems2 = nadiEd.gemstones || {};
     const GEM_H={SUN:"माणिक",MOON:"मोती",MARS:"मूंगा",MERCURY:"पन्ना",JUPITER:"पुखराज",VENUS:"हीरा",SATURN:"नीलम",RAHU:"गोमेद",KETU:"लहसुनिया"};
@@ -1034,7 +1026,7 @@ function buildPDFPage(pageNum, chartData) {
         }).join("")}
       </div>
     `;
-    return `${head("नाड़ी — रत्न")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — रत्न")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(20,184,166,.1);border:1.5px solid rgba(20,184,166,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">💎</span>
         <div><div style="font-size:14px;font-weight:900;color:#14B8A6">नाड़ी रत्न विश्लेषण</div>
@@ -1043,7 +1035,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(20,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 21: विष नवमांश (vish_navamsha) ──
   pages[21] = () => {
     const vn = nadiEd.vish_navamsha || {};
     const body = !vn || Object.keys(vn).length===0 ? noData() : `
@@ -1052,7 +1043,7 @@ function buildPDFPage(pageNum, chartData) {
       ${vn.venus_vish_warning?`<div style="padding:9px;border-radius:8px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);margin-bottom:7px;font-size:11px;font-weight:700;color:#FB7185">⚠️ शुक्र विष नवमांश — विवाह में विशेष सावधानी</div>`:""}
       ${vn.messages?.length>0?`${sect("विष नवमांश विश्लेषण","#A855F7")}${renderMsgList(vn.messages,"#a78bfa")}`:""}
     `;
-    return `${head("नाड़ी — विष नवमांश")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — विष नवमांश")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(168,85,247,.1);border:1.5px solid rgba(168,85,247,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">☠️</span>
         <div><div style="font-size:14px;font-weight:900;color:#A855F7">विष नवमांश विश्लेषण</div>
@@ -1061,7 +1052,6 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(21,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 22: विशेष योग (special_yogas) ──
   pages[22] = () => {
     const sy = nadiEd.special_yogas || [];
     const body = !sy || sy.length===0 ? noData() : `
@@ -1076,7 +1066,7 @@ function buildPDFPage(pageNum, chartData) {
         </div>`;
       }).join("")}
     `;
-    return `${head("नाड़ी — विशेष योग")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — विशेष योग")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(245,158,11,.1);border:1.5px solid rgba(245,158,11,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">✨</span>
         <div><div style="font-size:14px;font-weight:900;color:#F59E0B">विशेष नाड़ी योग</div>
@@ -1085,12 +1075,10 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(22,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── PAGE 23: शारीरिक बनावट (appearance / degree_control) ──
   pages[23] = () => {
     const dc2 = nadiEd.degree_control || {};
     const comb = nadiEd.combustion || {};
     const PH2={SUN:"सूर्य",MOON:"चंद्र",MARS:"मंगल",MERCURY:"बुध",JUPITER:"गुरु",VENUS:"शुक्र",SATURN:"शनि",RAHU:"राहु",KETU:"केतु"};
-    // Appearance hints from degree control dominant planets
     const domPlanets = dc2.dominant_planets || [];
     const BODY_MAP={SUN:"हड्डियां, हृदय, आंखें (दाईं), रीढ़",MOON:"मन, रक्त, छाती, गोल चेहरा",MARS:"मांसपेशियां, रक्त, तीखे नाक-नक्श",MERCURY:"त्वचा, नसें, पतला, लंबा",JUPITER:"मोटापा, गोल, चमकता चेहरा",VENUS:"सुंदर, गोल, कोमल रंग-रूप",SATURN:"दुबला, काला, हड्डीदार",RAHU:"रहस्यमय रूप",KETU:"असामान्य, आध्यात्मिक दिखावट"};
     const body = `
@@ -1102,7 +1090,7 @@ function buildPDFPage(pageNum, chartData) {
       ${dc2.messages?.length>0?`${sect("अंश विश्लेषण","#FB923C")}${renderMsgList(dc2.messages,"#FB923C")}`:""}
       ${Object.keys(comb).length>0?`${sect("अस्त ग्रह","#F97316")}<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px">${Object.entries(comb).filter(([,v])=>v).map(([p])=>`<span style="padding:2px 8px;border-radius:5px;background:rgba(249,115,22,.15);color:#FB923C;font-size:10px;font-weight:700;border:1px solid rgba(249,115,22,.3)">🔥 ${PH2[p]||p} अस्त</span>`).join("")}</div>`:""}
     `;
-    return `${head("नाड़ी — शारीरिक बनावट")}<div class="page">${headerBlock}
+    return `${head("नाड़ी — शारीरिक बनावट")}<div class="page">
       <div style="padding:9px 14px;border-radius:9px;background:rgba(251,146,60,.1);border:1.5px solid rgba(251,146,60,.3);margin-bottom:10px;display:flex;align-items:center;gap:10px">
         <span style="font-size:20px">🧍</span>
         <div><div style="font-size:14px;font-weight:900;color:#FB923C">शारीरिक बनावट विश्लेषण</div>
@@ -1111,13 +1099,9 @@ function buildPDFPage(pageNum, chartData) {
       ${body}${foot(23,TOTAL_PAGES)}</div>${close}`;
   };
 
-  // ── Helper: strip HTML wrapper, keep only body content ──
   const bodyOnly = (html) => {
-    // Remove everything up to and including <body> (any attrs)
     let s = html.replace(/[\s\S]*?<body[^>]*>/i, "");
-    // Remove closing </body></html>
     s = s.replace(/<\/body>[\s\S]*$/i, "");
-    // Add print page-break before each page div (except first)
     return s;
   };
 
@@ -1127,7 +1111,6 @@ function buildPDFPage(pageNum, chartData) {
   if(pageNum==="all"){
     const combined = ALL_PAGE_NUMS.map((n, i) => {
       const pageHtml = bodyOnly(pages[n]());
-      // Add page-break before every page after the first
       return i === 0 ? pageHtml : `<div class="pb"></div>${pageHtml}`;
     }).join("\n");
     return `${head("सम्पूर्ण कुंडली + नाड़ी ज्योतिष")}${combined}</body></html>`;
@@ -1141,6 +1124,9 @@ function buildPDFPage(pageNum, chartData) {
   }
   return pages[pageNum]?pages[pageNum]():`<h1>Page not found</h1>`;
 }
+
+
+
 
 function exportKundliPDF(chartData, pageNum="all") {
   const html = buildPDFPage(pageNum, chartData);

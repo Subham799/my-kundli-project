@@ -1249,7 +1249,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             "av":         sav_points[si],
         })
 
-    # ── Planet details for React ────────────────────────────────────
+    # ── Planet details for React (100% Safe & Complete) ──────────────────────
     DIGNITY_MAP = {
         "⬆️ उच्च (Exalted)":   {"key":"Uchcha",  "hindi":"उच्च"},
         "⬇️ नीच (Debilitated)": {"key":"Neecha",  "hindi":"नीच"},
@@ -1258,23 +1258,61 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         "⚔️ शत्रु (Enemy)":    {"key":"Shatru",  "hindi":"शत्रु"},
         "😐 सम (Neutral)":     {"key":"Sama",    "hindi":"सम"},
     }
+
     RASHI_HI = ["मेष","वृषभ","मिथुन","कर्क","सिंह","कन्या","तुला","वृश्चिक","धनु","मकर","कुंभ","मीन"]
     RASHI_EN = ["Mesha","Vrishabha","Mithuna","Karka","Simha","Kanya","Tula","Vrischika","Dhanu","Makara","Kumbha","Meena"]
     NAK_LORDS = ["Ke","Ve","Su","Mo","Ma","Ra","Ju","Sa","Me"]
     PLANET_HINDI = {"Su":"सूर्य","Mo":"चंद्र","Ma":"मंगल","Me":"बुध","Ju":"गुरु","Ve":"शुक्र","Sa":"शनि","Ra":"राहु","Ke":"केतु"}
 
+    # 🔥 मास्टर भाव वर्गीकरण फंक्शन
+    def get_house_categories(house, lagna_idx):
+        categories = []
+        if house in [1,4,7,10]: categories.append("केंद्र")
+        if house in [1,5,9]:    categories.append("त्रिकोण")
+        if house in [6,8,12]:   categories.append("त्रिक")
+        if house in [2,7]:      categories.append("मारक")
+        if house in [3,6,10,11]:categories.append("उपचय")
+        if house in [2,5,8,11]: categories.append("पणफर")
+        if house in [3,6,9,12]: categories.append("आपोक्लिम")
+        if house in [3,6,11]:   categories.append("त्रिशडाय")
+        
+        # बाधक भाव
+        if lagna_idx in [0, 3, 6, 9] and house == 11: categories.append("बाधक")
+        elif lagna_idx in [1, 4, 7, 10] and house == 9: categories.append("बाधक")
+        elif lagna_idx in [2, 5, 8, 11] and house == 7: categories.append("बाधक")
+        
+        return " | ".join(categories)
+
     planets_out = {}
+    
+    # लग्न का इंडेक्स निकालना (ताकि बाधक भाव सही से काम करे)
+    lagna_rashi_idx = 0
+    if "La" in astro and "Vargas" in astro["La"] and "D1" in astro["La"]["Vargas"]:
+        lagna_rashi_idx = astro["La"]["Vargas"]["D1"]["Idx"]
+
     for p_code in ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"]:
         if p_code not in astro: continue
         p = astro[p_code]
+        
         sign_idx   = p["Vargas"]["D1"]["Idx"]
         nak_idx    = int(p["Degree"] / (360/27))
-        dignity_raw = p.get("Dignity", "-")
+        dignity_raw = p.get("Dignity", "-") 
         dm = DIGNITY_MAP.get(dignity_raw, {"key":"Sama","hindi":"सम"})
+        
         evaluation  = jyotish_evaluation["planets"].get(p_code, {})
         strength    = evaluation.get("strength", {})
         functional  = evaluation.get("functional", {})
+        
+        # 1. बेस स्वभाव
         fn = "Yogakaraka" if functional.get("yogakaraka") else ("Malefic" if functional.get("malefic") else ("Functional Benefic" if functional.get("benefic") else "Neutral"))
+        
+        # 2. बाधकेश लॉजिक
+        if functional.get("badhakesh"):
+            fn = f"{fn} + बाधकेश"
+            
+        real_nak_lord_code = NAK_LORDS[nak_idx % 9]
+        planet_house_num = planet_house_map.get(p_code, 0)
+
         planets_out[p_code] = {
             "name":           PLANET_HINDI.get(p_code, p_code),
             "hindi":          PLANET_HINDI.get(p_code, p_code),
@@ -1283,14 +1321,27 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             "degree":         f"{round(p['Degree'] % 30, 2)}°",
             "fullDegree":     round(p['Degree'], 2),
             "nakshatraPada":  int((p['Degree'] % (360/27)) / (360/108)) + 1,
-            "house":          planet_house_map.get(p_code, 0),
+            "house":          planet_house_num,
+            "houseCategory":  get_house_categories(planet_house_num, lagna_rashi_idx),
             "dignity":        dm["key"],
             "dignityHindi":   dm["hindi"],
             "nakshatra":      NAKSHATRA[nak_idx] if nak_idx < 27 else "",
-            "lord":           SIGN_LORDS[sign_idx],
+            "lord":           SIGN_LORDS[sign_idx], 
+            "rashiLord":      PLANET_HINDI.get(SIGN_LORDS[sign_idx], ""),
+            "nakshatraLord":  PLANET_HINDI.get(real_nak_lord_code, ""),
             "strength":       min(100, max(0, int(strength.get("score", 50) * 100 / 150))),
             "riskScore":      int(evaluation.get("risk_score", 0)),
             "functionalNature": fn,
+            "dispositor":     SIGN_LORDS[sign_idx],
+            "dispositorSign": RASHI_EN[astro.get(SIGN_LORDS[sign_idx], {}).get("Vargas", {}).get("D1", {}).get("Idx", 0)] if SIGN_LORDS[sign_idx] in astro else "",
+            "maleficInfluence": evaluation.get("malefic_influence", {}).get("score", 0) > 20,
+            "aspects":        [a["target_house"] for a in jyotish_evaluation.get("drishti_matrix", {}).get(p_code, {}).get("aspects", [])],
+            "notes":          " | ".join(strength.get("strength_factors", []) + strength.get("weakness_factors", [])),
+            "keyYogas":       strength.get("special_yogas", []),
+            "riskFactors":    evaluation.get("risk_factors", []),
+        
+            
+            # 👇 तुम्हारी ओरिजिनल 5 लाइनें जो मैंने वापस डाल दी हैं
             "dispositor":     SIGN_LORDS[sign_idx],
             "dispositorSign": RASHI_EN[astro.get(SIGN_LORDS[sign_idx], {}).get("Vargas", {}).get("D1", {}).get("Idx", 0)] if SIGN_LORDS[sign_idx] in astro else "",
             "maleficInfluence": evaluation.get("malefic_influence", {}).get("score", 0) > 20,
@@ -1310,6 +1361,28 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
     PLANET_CODE_MAP = {v:k for k,v in {"Su":"सूर्य","Mo":"चंद्र","Ma":"मंगल","Me":"बुध","Ju":"गुरु","Ve":"शुक्र","Sa":"शनि","Ra":"राहु","Ke":"केतु"}.items()}
     dasha_sequence = []
     for d in dashas:
+        # ── Get full antardashas for this mahadasha ──
+        ads_raw = get_antardashas(d["idx"], d["start"])
+        antardashas = []
+        
+        for ad in ads_raw:
+            # ── Get pratyantardashas for each antardasha ──
+            pds_raw = get_pratyantardashas(d["idx"], ad["idx"], ad["start"])
+            
+            antardashas.append({
+                "lord": ad["planet"],
+                "start": ad["start"],
+                "end": ad["end"],
+                "pratyantardashas": [
+                    {
+                        "lord": pd["planet"],
+                        "start": pd["start"],
+                        "end": pd["end"]
+                    }
+                    for pd in pds_raw
+                ]
+            })
+        
         dasha_sequence.append({
             "lord": d["planet"],
             "code": PLANET_CODE_MAP.get(d["planet"], ""),
@@ -1318,6 +1391,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             "years": DASHA_YEARS[d["idx"]],
             "active": d["planet"] == current_md["planet"],
             "pct":  md_pct if d["planet"] == current_md["planet"] else 0,
+            "antardashas": antardashas  # ← NEW FIELD
         })
 
     # ── Drishti for React ─────────────────────────────────────────
@@ -1696,7 +1770,31 @@ def api_chart_engines():
                 current_md = d; break
 
         # ── dasha inject करो astro में — engines_bridge को चाहिए ──
-        astro["dasha"] = {"sequence": dashas, "timeline": dashas}
+        # MD + AD + PD sab ke saath full sequence build karo
+        _PC_MAP = {v:k for k,v in {"Su":"सूर्य","Mo":"चंद्र","Ma":"मंगल","Me":"बुध",
+                                    "Ju":"गुरु","Ve":"शुक्र","Sa":"शनि","Ra":"राहु","Ke":"केतु"}.items()}
+        _dasha_seq_full = []
+        for _d in dashas:
+            _ads_raw = get_antardashas(_d["idx"], _d["start"])
+            _antardashas = []
+            for _ad in _ads_raw:
+                _pds_raw = get_pratyantardashas(_d["idx"], _ad["idx"], _ad["start"])
+                _antardashas.append({
+                    "lord":  _ad["planet"],
+                    "start": _ad["start"],
+                    "end":   _ad["end"],
+                    "pratyantardashas": [
+                        {"lord": _pd["planet"], "start": _pd["start"], "end": _pd["end"]}
+                        for _pd in _pds_raw
+                    ],
+                })
+            _dasha_seq_full.append({
+                "lord":        _d["planet"],
+                "start":       _d["start"],
+                "end":         _d["end"],
+                "antardashas": _antardashas,
+            })
+        astro["dasha"] = {"sequence": _dasha_seq_full, "timeline": _dasha_seq_full}
 
         jyotish_evaluation = generate_planet_evaluation_report(astro, houses, lagna_rashi)
 
@@ -1809,32 +1907,6 @@ def cities_autocomplete():
         return jsonify([{'name':r.get('display_name',''),'lat':r['lat'],'lon':r['lon']} for r in resp])
     except Exception:
         return jsonify([])
-
-@app.route('/api/chart/btr', methods=['POST'])
-def btr_endpoint():
-    from btr_engine import compute_btr
-    data = request.get_json(force=True)
-    try:
-        # String booleans → Python booleans
-        def _to_bool(val):
-            if val is None: return None
-            if isinstance(val, bool): return val
-            if isinstance(val, str):
-                if val.lower() in ("true","1","yes"): return True
-                if val.lower() in ("false","0","no"): return False
-            return None
-
-        for field in ["is_ceo","has_savings","dominance_self","marriage_delayed",
-                      "is_energetic","kroor_dasha_win","dreams_fulfilled","less_work_more_profit"]:
-            if field in data:
-                data[field] = _to_bool(data[field])
-
-        result = compute_btr(**data)
-        return jsonify({"success": True, "btr_result": result})
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 400
-
 
 @app.route('/api/health', methods=['GET'])
 def health():

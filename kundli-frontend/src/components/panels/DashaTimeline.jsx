@@ -71,7 +71,7 @@ function PlanetChip({code, hindi, small=false}) {
 }
 
 // ── Level 3: Pratyantardasha Grid ────────────────────────────
-function PDGrid({adLord, curPD, isCurrentAD}) {
+function PDGrid({adLord, pdData, curPD, isCurrentAD}) {
   const list = getPDs(adLord);
   return (
     <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}}
@@ -95,7 +95,7 @@ function PDGrid({adLord, curPD, isCurrentAD}) {
                   <span className="text-[10px] font-semibold text-slate-300 truncate"
                     style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</span>
                 </div>
-                <div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>
+                {(()=>{const e=pdData?.find(p=>p.lord===lord);return e?<div className="text-[9px] text-slate-500">{e.start}–{e.end}</div>:<div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>})()}
                 {isCur && (
                   <span className="absolute -top-1 -right-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-200 border border-amber-500/50"
                     style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>चालू</span>
@@ -110,7 +110,7 @@ function PDGrid({adLord, curPD, isCurrentAD}) {
 }
 
 // ── Level 2: Antardasha Row ───────────────────────────────────
-function ADRow({lord, isCurrentMD, curAD, curPD}) {
+function ADRow({lord, adData, isCurrentMD, curAD, curPD}) {
   const [open, setOpen] = useState(false);
   const code = TO_CODE[lord]||"Su";
   const meta = PLANET_META[code]||{};
@@ -125,7 +125,7 @@ function ADRow({lord, isCurrentMD, curAD, curPD}) {
           style={{background:t.bg, color:meta.color, borderColor:t.border}}>{meta.symbol}</div>
         <span className="text-xs font-semibold text-slate-300 flex-1"
           style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</span>
-        <span className="text-[10px] text-slate-600">{YEARS[lord]} वर्ष</span>
+        {adData ? <span className="text-[10px] text-slate-500">{adData.start} – {adData.end}</span> : <span className="text-[10px] text-slate-600">{YEARS[lord]} वर्ष</span>}
         {isCur && (
           <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
             style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>वर्तमान</span>
@@ -134,7 +134,7 @@ function ADRow({lord, isCurrentMD, curAD, curPD}) {
              :<ChevronRight size={11} className="text-slate-700 flex-shrink-0"/>}
       </button>
       <AnimatePresence>
-        {open && <PDGrid adLord={lord} curPD={curPD} isCurrentAD={isCur}/>}
+        {open && <PDGrid adLord={lord} pdData={adData?.pratyantardashas||[]} curPD={curPD} isCurrentAD={isCur}/>}
       </AnimatePresence>
     </div>
   );
@@ -150,6 +150,8 @@ function MDCard({d, curMD, curAD, curPD, idx}) {
   const pct = isCur ? (d.pct||calcPct(d.start,d.end)) : 0;
   const [open, setOpen] = useState(isCur);
   const adList = getADs(lord);
+  const adDataMap = {};
+  (d.antardashas||[]).forEach(ad => { adDataMap[ad.lord] = ad; });
 
   return (
     <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:idx*0.05}}
@@ -205,7 +207,7 @@ function MDCard({d, curMD, curAD, curPD, idx}) {
               <div className="px-10 py-1.5 text-[9px] text-slate-600 uppercase tracking-widest"
                 style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>अंतर्दशा</div>
               {adList.map((adLord,ai) => (
-                <ADRow key={ai} lord={adLord} isCurrentMD={isCur} curAD={curAD} curPD={curPD}/>
+                <ADRow key={ai} lord={adLord} adData={adDataMap[adLord]} isCurrentMD={isCur} curAD={curAD} curPD={curPD}/>
               ))}
             </div>
           </motion.div>
@@ -216,19 +218,23 @@ function MDCard({d, curMD, curAD, curPD, idx}) {
 }
 
 // ── Year Selector (API-powered) ───────────────────────────────
-function YearSelector({meta}) {
+function YearSelector({sequence}) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [results, setResults] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  const search = async () => {
-    setLoading(true);
-    const data = await fetchDashasForYear(meta?.dob, meta?.moonDegree, year);
-    setLoading(false);
-    if (data?.dashas) setResults(data.dashas);
-    else {
-      setResults([{mahadasha:"—", antardasha:"—", pratyantara:"—"}]);
-    }
+  const search = () => {
+    let found = [];
+    sequence?.forEach(md => {
+      md.antardashas?.forEach(ad => {
+        ad.pratyantardashas?.forEach(pd => {
+          const startYear = parseInt(pd.start?.split("-")[2]) || 0;
+          const endYear = parseInt(pd.end?.split("-")[2]) || 0;
+          if (startYear <= year && year <= endYear) {
+            found.push({mahadasha:md.lord, antardasha:ad.lord, pratyantara:pd.lord, start:pd.start, end:pd.end});
+          }
+        });
+      });
+    });
+    setResults(found.length > 0 ? found : [{mahadasha:"—", antardasha:"—", pratyantara:"कोई डेटा नहीं"}]);
   };
 
   return (
@@ -246,10 +252,9 @@ function YearSelector({meta}) {
           onChange={e=>setYear(parseInt(e.target.value)||new Date().getFullYear())}
           className="flex-1 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-200 text-sm focus:outline-none focus:border-amber-500/50"
           placeholder="वर्ष"/>
-        <button onClick={search} disabled={loading}
-          className="px-4 py-2 rounded-xl bg-amber-500/18 border border-amber-500/30 text-amber-300 text-sm font-semibold hover:bg-amber-500/28 transition-all disabled:opacity-60 flex items-center gap-1.5"
+        <button onClick={search}
+          className="px-4 py-2 rounded-xl bg-amber-500/18 border border-amber-500/30 text-amber-300 text-sm font-semibold hover:bg-amber-500/28 transition-all flex items-center gap-1.5"
           style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
-          {loading ? <Loader2 size={13} className="animate-spin"/> : null}
           दशा देखें
         </button>
       </div>
@@ -289,17 +294,24 @@ function YearSelector({meta}) {
 }
 
 // ── Alignment Search (API-powered) ───────────────────────────
-function AlignmentSearch({meta}) {
+function AlignmentSearch({sequence}) {
   const [f, setF] = useState({md:"",ad:"",pd:""});
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const doSearch = async () => {
-    setLoading(true);
-    const data = await fetchDashaAlignment(meta?.dob, meta?.moonDegree, {mahadasha:f.md||undefined, antardasha:f.ad||undefined, pratyantara:f.pd||undefined});
-    setLoading(false);
-    if (data?.results) setResults(data.results);
-    else setResults([]);
+  const doSearch = () => {
+    let found = [];
+    sequence?.forEach(md => {
+      if (f.md && md.lord !== f.md) return;
+      md.antardashas?.forEach(ad => {
+        if (f.ad && ad.lord !== f.ad) return;
+        ad.pratyantardashas?.forEach(pd => {
+          if (f.pd && pd.lord !== f.pd) return;
+          found.push({mahadasha:md.lord, antardasha:ad.lord, pratyantara:pd.lord, start:pd.start, end:pd.end});
+        });
+      });
+    });
+    setResults(found);
   };
 
   const Sel = ({label, val, onChange}) => (
@@ -718,12 +730,12 @@ export default function DashaTimeline({ dasha, chartMeta }) {
 
       {/* ── Tab: वर्ष चयन ─────────────────────────────────────── */}
       {activeTab === "year" && (
-        <YearSelector meta={chartMeta}/>
+        <YearSelector sequence={sequence}/>
       )}
 
       {/* ── Tab: संरेखण खोज ──────────────────────────────────── */}
       {activeTab === "alignment" && (
-        <AlignmentSearch meta={chartMeta}/>
+        <AlignmentSearch sequence={sequence}/>
       )}
 
     </div>

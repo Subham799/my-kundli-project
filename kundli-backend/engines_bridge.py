@@ -545,6 +545,7 @@ def run_all_engines(
     except Exception as e:
         results["yogas"] = {"error": str(e)}
 
+
     # ENGINE 2: Planetary Sutras
     try:
         from planetary_sutras_system import analyze_planetary_sutras
@@ -582,7 +583,7 @@ def run_all_engines(
     # ENGINE 4: Ashtakvarga Complete
     try:
         from ashtakvarga_complete_system import complete_ashtakvarga_analysis
-        results["ashtakvarga_complete"] = complete_ashtakvarga_analysis(
+        _av_result = complete_ashtakvarga_analysis(
             ashtakvarga_points = av,
             sign_wise_points   = sp,
             planet_positions   = cd["planet_positions"],
@@ -592,15 +593,19 @@ def run_all_engines(
             current_dasha      = cd["current_dasha"],
             gender             = cd["gender"]
         )
+        # 🔥 KEY FIX: bav_charts ko result mein inject karo
+        # Frontend: ed.ashtakavarga_complete.bav → BAV grid milega
+        _av_result["bav"] = bav_charts
+        results["ashtakvarga_complete"] = _av_result
     except Exception as e:
-        results["ashtakvarga_complete"] = {"error": str(e)}
-
+        results["ashtakvarga_complete"] = {"error": str(e), "bav": bav_charts}
     # ENGINE 5: Comprehensive Vedic
     try:
         from comprehensive_vedic_engine import comprehensive_vedic_analysis
         results["comprehensive_vedic"] = comprehensive_vedic_analysis(cd)
     except Exception as e:
         results["comprehensive_vedic"] = {"error": str(e)}
+    
 
     # ENGINE 6: Navatara Chakra
     try:
@@ -688,8 +693,10 @@ def run_all_engines(
         _raw_ad = current_dasha_dict.get("antardasha", "") if current_dasha_dict else ""
         cd_str = _PLANET_REV.get(_raw_md, _raw_md)
         ad_str = _PLANET_REV.get(_raw_ad, _raw_ad)
+        # ... (तुम्हारा पुराना कोड जहाँ ashtakvarga_complete कॉल हो रहा है) ...
 
-        # ── Dasha timeline — MD + AD + PD सब preserve ────────────
+    
+      # ── Dasha timeline — MD + AD + PD सब preserve ────────────
         _dasha_seq = []
         try:
             _PMAP = {
@@ -704,34 +711,47 @@ def run_all_engines(
                        dasha_root.get("periods") or astro.get("dasha_timeline") or [])
 
             def _cvt(raw): return _PMAP.get(raw, raw) if raw else ""
+            
             def _dates(d):
                 s = d.get("start") or d.get("start_date") or d.get("from") or ""
                 e = d.get("end")   or d.get("end_date")   or d.get("to")   or ""
+                # अगर तारीखें न भी हों तो कम से कम स्ट्रिंग पास करें ताकि लॉजिक ब्रेक न हो
                 return str(s), str(e)
+                
             def _lord(d): return d.get("lord") or d.get("planet") or d.get("lord_hi") or d.get("name") or ""
-
+            print("\n--- RAW FIRST MD DATA ---")
+            print(raw_seq[0] if raw_seq else "No Data")
+            print("-------------------------\n")
             for md in raw_seq:
                 if not isinstance(md, dict): continue
                 ml = _cvt(_lord(md)); ms, me = _dates(md)
-                if not (ml and ms and me): continue
+                if not ml: continue
+                
                 ads = []
-                for ad in md.get("antardashas", []):
+                # 🟢 FIX: API के अलग-अलग keys को चेक करें
+                raw_ads = md.get("antardashas") or md.get("antardasha") or md.get("sub_periods") or md.get("periods") or []
+                for ad in raw_ads:
                     if not isinstance(ad, dict): continue
                     al = _cvt(_lord(ad)); as_, ae = _dates(ad)
-                    if not (al and as_ and ae): continue
+                    if not al: continue
+                    
                     pds = []
-                    for pd in ad.get("pratyantardashas", []):
+                    # 🟢 FIX: Pratyantardasha के लिए भी अलग keys चेक करें
+                    raw_pds = ad.get("pratyantardashas") or ad.get("pratyantardasha") or ad.get("sub_sub_periods") or ad.get("periods") or []
+                    for pd in raw_pds:
                         if not isinstance(pd, dict): continue
                         pl_ = _cvt(_lord(pd)); ps, pe = _dates(pd)
-                        if pl_ and ps and pe:
+                        if pl_:
                             pds.append({"lord":pl_,"start":ps,"end":pe})
+                    
                     ads.append({"lord":al,"start":as_,"end":ae,"pratyantardashas":pds})
                 _dasha_seq.append({"lord":ml,"start":ms,"end":me,"antardashas":ads})
-        except Exception:
+                
+        except Exception as e:
+            print(f"Dasha Parse Error: {e}")
             _dasha_seq = []
 
-        print(f"[BRIDGE] dasha count={len(_dasha_seq)}, ADs={len(_dasha_seq[0]['antardashas']) if _dasha_seq else 0}")
-
+        print(f"[BRIDGE] dasha count={len(_dasha_seq)}, ADs={len(_dasha_seq[0].get('antardashas', [])) if _dasha_seq else 0}")
         # ── Safe planet degree extraction ─────────────────────────
         def _safe_full_deg(p_code):
             """Returns full ecliptic degree or None — never fake 0"""
