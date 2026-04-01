@@ -62,12 +62,16 @@ def _calc_sunrise(dt, lat, lon, tz_offset=5.5):
 
 app = Flask(__name__)
 app.secret_key = "kundli_super_secret_key_123"
+
+# यहाँ हमने kundalimaker.com को लिस्ट में जोड़ दिया है
 CORS(app, origins=[
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",   # Vite dev server
     "http://127.0.0.1:5173",
     r"https://.*\.vercel\.app",  # Any Vercel deployment
+    "https://kundalimaker.com",       # 👉 तुम्हारा नया डोमेन (बिना www के)
+    "https://www.kundalimaker.com",   # 👉 तुम्हारा नया डोमेन (www के साथ)
     os.environ.get("FRONTEND_URL", ""),  # Custom domain from env
 ], supports_credentials=False)
 
