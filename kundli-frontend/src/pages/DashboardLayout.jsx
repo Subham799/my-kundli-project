@@ -379,18 +379,20 @@ function buildPDFPage(pageNum, chartData) {
   }).join("");
 
   const houses = pd.houses||[];
-  const hRows = houses.map(h=>`<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
-    <td style="padding:4px 6px;color:#F59E0B;font-weight:700;font-size:11px">${h.n||h.house||""}वाँ</td>
+  const hRows = houses.map((h, i)=>`<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
+    <td style="padding:4px 6px;color:#F59E0B;font-weight:700;font-size:11px">${h.n||h.house||h.number||h.bhava||(i+1)}</td>
     <td style="padding:4px 6px;color:#CBD5E1;font-size:11px">${h.sign||h.rashi||"—"}</td>
     <td style="padding:4px 6px;color:#94A3B8;font-size:11px">${h.planets||"—"}</td>
     <td style="padding:4px 6px;font-size:11px;color:${(h.av||0)>=30?"#22D3EE":(h.av||0)>=25?"#F59E0B":"#FB7185"};font-weight:700">${h.av||"—"}</td>
   </tr>`).join("");
 
-  const avGrid = avBhavas.length>0?avBhavas.map(({n,av})=>{
+  // 🔥 FIX: SAV grid should use houses array (lagna-based) not avBhavas
+  // avBhavas has wrong bhav numbers (Kaalpurush order), houses has correct lagna-based order
+  const avGrid = houses.length>0 ? houses.map((h,i)=>{
+    const av = h.av || 0;
     const c=av>=30?"#22D3EE":av>=25?"#F59E0B":"#FB7185";
-    return `<div style="text-align:center;padding:5px 2px;border-radius:7px;background:${c}12;border:1px solid ${c}28"><div style="font-size:8px;color:#475569">भाव ${n}</div><div style="font-size:17px;font-weight:900;color:${c}">${av}</div></div>`;
-  }).join(""):"";
-
+    return `<div style="text-align:center;padding:5px 2px;border-radius:7px;background:${c}12;border:1px solid ${c}28"><div style="font-size:8px;color:#475569">भाव ${i+1}</div><div style="font-size:17px;font-weight:900;color:${c}">${av}</div></div>`;
+  }).join("") : "";
   const tpHTML = [...tp].sort((a,b)=>a.year-b.year).map(t=>{
     const near=t.year>=now-1&&t.year<=now+10, past=t.year<now-2;
     const c=near?"#F59E0B":past?"#334155":t.nature==="good"?"#4ADE80":"#FB7185";
