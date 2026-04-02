@@ -1326,39 +1326,39 @@ function buildPDFPage(pageNum, chartData) {
     const currentPD = currentDasha.pratyantar || "—";
     const endDate = currentDasha.endDate || "—";
 
+    // Find current MD object to get ALL its antardashas
+    const currentMDObj = dashaSeqData.find(md => {
+      const pName = md.planet || md.lord || md.name;
+      return pName === currentMD;
+    });
+    
+    const antardashas = currentMDObj?.antardashas || currentMDObj?.subperiods || [];
+
     return `${head("वशोत्तरी दशा — पूर्ण समयरेखा")}<div class="page">
-      <div style="margin:20px 0;padding:15px;background:rgba(245,158,11,.06);border-radius:8px;border:1px solid rgba(245,158,11,.2)">
-        <div style="font-size:13px;color:#475569;margin-bottom:8px">💡 <strong>वशोत्तरी पद्धति:</strong> जन्म नक्षत्र से 120 वर्ष का चक्र।</div>
-        <div style="font-size:13px;color:#0f766e"><strong>वर्तमान:</strong> ${currentMD} महादशा → ${currentAD} अंतर्दशा → ${currentPD} प्रत्यंतर | समाप्ति: ${endDate}</div>
+      <div style="margin:12px 0;padding:10px;background:rgba(245,158,11,.06);border-radius:8px;border:1px solid rgba(245,158,11,.2)">
+        <div style="font-size:11px;color:#475569;margin-bottom:5px">💡 <strong>वशोत्तरी पद्धति:</strong> जन्म नक्षत्र से 120 वर्ष का चक्र।</div>
+        <div style="font-size:11px;color:#0f766e"><strong>वर्तमान:</strong> ${currentMD} महादशा → ${currentAD} अंतर्दशा → ${currentPD} प्रत्यंतर | समाप्ति: ${endDate}</div>
       </div>
 
-      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:15px;background:white">
+      ${sect("महादशा — 120 वर्ष चक्र","#F59E0B")}
+      <table style="width:100%;border-collapse:collapse;font-size:9px;margin-bottom:10px;background:white">
         <thead>
           <tr style="background:#1e293b;color:white">
-            <th style="padding:10px 8px;text-align:left;border:1px solid #cbd5e1;font-weight:700">महादशा</th>
-            <th style="padding:10px 8px;text-align:center;border:1px solid #cbd5e1;font-weight:700">आरंभ</th>
-            <th style="padding:10px 8px;text-align:center;border:1px solid #cbd5e1;font-weight:700">समाप्ति</th>
-            <th style="padding:10px 8px;text-align:center;border:1px solid #cbd5e1;font-weight:700">वर्ष</th>
-            <th style="padding:10px 8px;text-align:left;border:1px solid #cbd5e1;font-weight:700">फल</th>
+            <th style="padding:5px 4px;text-align:left;border:1px solid #cbd5e1;font-weight:700">महादशा</th>
+            <th style="padding:5px 4px;text-align:center;border:1px solid #cbd5e1;font-weight:700">आरंभ</th>
+            <th style="padding:5px 4px;text-align:center;border:1px solid #cbd5e1;font-weight:700">समाप्ति</th>
+            <th style="padding:5px 4px;text-align:center;border:1px solid #cbd5e1;font-weight:700">वर्ष</th>
+            <th style="padding:5px 4px;text-align:left;border:1px solid #cbd5e1;font-weight:700">फल</th>
           </tr>
         </thead>
         <tbody>
           ${dashaSeqData.map((md, i) => {
-            // Extract planet name
             const planetName = md.planet || md.lord || md.name || "—";
             const mdLord = PH[planetName] || planetName;
-            
-            // Get start and end dates
             const startDate = md.start || md.startDate || md.from || "—";
             const endDateMD = md.end || md.endDate || md.to || "—";
-            
-            // Calculate years
             const durationYears = md.years || md.duration || md.durationYears || "—";
-            
-            // Get effect from DASHA_FX
             const effect = DASHA_FX[planetName] || "—";
-            
-            // Check if current
             const isCurrent = planetName === currentMD;
             const bgColor = isCurrent ? 'rgba(245,158,11,.15)' : (i % 2 === 0 ? '#f8fafc' : 'white');
             const textWeight = isCurrent ? '900' : '600';
@@ -1366,15 +1366,58 @@ function buildPDFPage(pageNum, chartData) {
             
             return `
             <tr style="background:${bgColor}">
-              <td style="padding:10px 8px;border:1px solid #e2e8f0;font-weight:${textWeight};color:${textColor};white-space:nowrap">${isCurrent?'▶ ':''}${mdLord}</td>
-              <td style="padding:10px 8px;border:1px solid #e2e8f0;text-align:center;color:#475569">${startDate}</td>
-              <td style="padding:10px 8px;border:1px solid #e2e8f0;text-align:center;color:#475569">${endDateMD}</td>
-              <td style="padding:10px 8px;border:1px solid #e2e8f0;text-align:center;font-weight:700;color:#64748B">${durationYears}</td>
-              <td style="padding:10px 8px;border:1px solid #e2e8f0;font-size:10px;color:#64748B;line-height:1.4">${effect}</td>
+              <td style="padding:5px 4px;border:1px solid #e2e8f0;font-weight:${textWeight};color:${textColor};white-space:nowrap">${isCurrent?'▶ ':''}${mdLord}</td>
+              <td style="padding:5px 4px;border:1px solid #e2e8f0;text-align:center;color:#475569;font-size:8px">${startDate}</td>
+              <td style="padding:5px 4px;border:1px solid #e2e8f0;text-align:center;color:#475569;font-size:8px">${endDateMD}</td>
+              <td style="padding:5px 4px;border:1px solid #e2e8f0;text-align:center;font-weight:700;color:#64748B">${durationYears}</td>
+              <td style="padding:5px 4px;border:1px solid #e2e8f0;font-size:8px;color:#64748B;line-height:1.3">${effect}</td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>
+
+      ${antardashas.length > 0 ? `
+      ${sect("अंतर्दशा — "+currentMD+" महादशा के सभी 9 अंतर्दशा","#22D3EE")}
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:10px">
+        ${antardashas.map((ad, i) => {
+          const planetName = ad.planet || ad.lord || ad.name || "—";
+          const adLord = PH[planetName] || planetName;
+          const startDate = ad.start || ad.startDate || ad.from || "—";
+          const endDateAD = ad.end || ad.endDate || ad.to || "—";
+          const isCurrent = planetName === currentAD;
+          
+          // Get pratyantars for THIS antardasha
+          const pratyantars = ad.pratyantardashas || ad.subperiods || [];
+          
+          const bgColor = isCurrent ? 'rgba(34,211,238,.12)' : 'rgba(255,255,255,.02)';
+          const borderColor = isCurrent ? '#22D3EE' : 'rgba(255,255,255,.1)';
+          const textWeight = isCurrent ? '900' : '700';
+          const textColor = isCurrent ? '#22D3EE' : '#94A3B8';
+          
+          return `
+          <div style="padding:6px;border-radius:6px;background:${bgColor};border:1px solid ${borderColor}">
+            <div style="font-weight:${textWeight};color:${textColor};font-size:10px;margin-bottom:3px">${isCurrent?'● ':''}${adLord}</div>
+            <div style="color:#64748B;font-size:7px;margin-bottom:4px">${startDate}<br/>–<br/>${endDateAD}</div>
+            ${pratyantars.length > 0 ? `
+            <div style="padding:3px;background:rgba(192,132,252,.06);border-radius:4px;border:1px solid rgba(192,132,252,.15)">
+              <div style="font-size:6px;color:#94A3B8;margin-bottom:2px;font-weight:700">प्रत्यंतर (${pratyantars.length}):</div>
+              ${pratyantars.map((pd, j) => {
+                const pdPlanet = pd.planet || pd.lord || pd.name || "—";
+                const pdLord = PH[pdPlanet] || pdPlanet;
+                const pdStart = pd.start || pd.startDate || pd.from || "—";
+                const pdEnd = pd.end || pd.endDate || pd.to || "—";
+                const isPDCurrent = isCurrent && pdPlanet === currentPD;
+                const pdColor = isPDCurrent ? '#C084FC' : '#64748B';
+                const pdWeight = isPDCurrent ? '900' : '600';
+                
+                return `<div style="font-size:6px;color:${pdColor};font-weight:${pdWeight};padding:1px 2px;margin-bottom:1px;background:${isPDCurrent?'rgba(192,132,252,.15)':'transparent'};border-radius:2px">${isPDCurrent?'◆ ':''}${pdLord} ${pdStart}–${pdEnd}</div>`;
+              }).join('')}
+            </div>
+            ` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      ` : ''}
 
       ${foot(26, TOTAL_PAGES)}
     </div>${close}`;
