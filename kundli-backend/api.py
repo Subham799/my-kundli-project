@@ -29,6 +29,7 @@ from nadi_ai.core.nakshatra_engine import NakshatraEngine
 from nadi_ai.core.tara_milan_engine import TaraMilanEngine
 from nadi_ai.core.ashtakavarga_engine import AshtakavargaEngine
 from nadi_ai.events.career_module import CareerModule
+from chalit_engine import get_bhav_chalit
 
 
 # ── Sunrise calculator ────────────────────────────────────────────────────
@@ -62,6 +63,8 @@ def _calc_sunrise(dt, lat, lon, tz_offset=5.5):
 
 app = Flask(__name__)
 app.secret_key = "kundli_super_secret_key_123"
+from prashna_route import prashna_bp
+app.register_blueprint(prashna_bp)
 
 # यहाँ हमने kundalimaker.com को लिस्ट में जोड़ दिया है
 CORS(app, origins=[
@@ -1090,6 +1093,27 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
     dashas     = calculate_vimshottari(astro["Mo"]["Degree"], dt)
     now        = datetime.now()
 
+    # ── Bhav Chalit (Sri Pati Paddhati) ──────────────────────────
+    try:
+        _utc_dt = dt - timedelta(hours=5, minutes=30)
+        _jd = swe.julday(_utc_dt.year, _utc_dt.month, _utc_dt.day,
+                         _utc_dt.hour + _utc_dt.minute / 60.0)
+        _asc_idx_d1 = astro["La"]["Vargas"]["D1"]["Idx"]
+        _planets_d1_for_chalit = {}
+        for _pc in ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"]:
+            if _pc in astro:
+                _p     = astro[_pc]
+                _p_idx = _p["Vargas"]["D1"]["Idx"]
+                _h     = (_p_idx - _asc_idx_d1 + 12) % 12 + 1
+                # ✅ FIX: "Degree" = 0-360 absolute — already correct in astro dict
+                # astro[pc]["Degree"] = swe.calc_ut output = 0-360 ✔️
+                _planets_d1_for_chalit[_pc] = {"Degree": _p["Degree"], "house": _h}
+        # engine returns: {"Su": {"house": X, "d1_house": Y, "is_changed": bool}}
+        chalit_data = get_bhav_chalit(_jd, lat, lon, _planets_d1_for_chalit)
+    except Exception as _ce:
+        print(f"[Chalit Engine] Error: {_ce}")
+        chalit_data = {}
+
     # ── Active dasha ──────────────────────────────────────────────
     current_md = dashas[0]
     for d in dashas:
@@ -1132,8 +1156,10 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
     else:                     houses[1]["planets"] = "ल"
 
     # Assign AV scores to houses
+    # 🔥 FIX: Rotate SAV to lagna-based bhav order
+    rotated_sav = sav_points[asc_idx:] + sav_points[:asc_idx]
     for i in range(12):
-        houses[i+1]["av"] = sav_points[i]
+        houses[i+1]["av"] = rotated_sav[i]
 
     planet_house_map = {}
     for p_code, p_hi in short_names.items():
@@ -1250,7 +1276,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             "sign_index": si,
             "planets":    planet_codes,
             "category":   get_house_category(h_num),
-            "av":         sav_points[si],
+            "av":         h["av"],  # Already rotated in houses dict
         })
 
     # ── Planet details for React (100% Safe & Complete) ──────────────────────
@@ -1518,7 +1544,8 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
     for pc in ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"]:
         h = planet_house_map.get(pc, 0)
         if h < 1: continue
-        av_sum = sum(sav_points[i] for i in range(h))   # bhav 1→h (0-indexed)
+        # 🔥 FIX: Sum bhav 1 to h using houses[]["av"] (already rotated)
+        av_sum = sum(houses[i]["av"] for i in range(1, h+1))
         year   = int(av_sum * 7 / 27)
         formula_str = f"Σ(1→{h})={av_sum} | {av_sum}×7={av_sum*7} | {av_sum*7}÷27 = {year}वर्ष"
         av_turning.append({
@@ -1534,7 +1561,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
     # ── AV Bhavas (12 houses) ────────────────────────────────────
     RASHI_HI_MC = ["मेष","वृषभ","मिथुन","कर्क","सिंह","कन्या","तुला","वृश्चिक","धनु","मकर","कुंभ","मीन"]
     av_bhavas = [
-        {"n": i+1, "rashi": RASHI_HI_MC[houses[i+1]["sign_index"]], "av": sav_points[i]}
+        {"n": i+1, "rashi": RASHI_HI_MC[houses[i+1]["sign_index"]], "av": houses[i+1]["av"]}
         for i in range(12)
     ]
 
@@ -1647,6 +1674,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         "disease12th":       disease_12th,
         "badhakHouse":       badhak_house_num,
         "enginesData":       {**engines_data, "nadi_jyotish": nadi_jyotish_output},
+        "chalit":            chalit_data,
     }, None
 
 
@@ -1759,7 +1787,12 @@ def api_chart_engines():
             if houses[h_num]["planets"]: houses[h_num]["planets"] += f", {p_hi}"
             else: houses[h_num]["planets"] = p_hi
             astro[p_code]["Dignity"] = get_dignity(p_code, p_idx)
-        for i in range(12): houses[i+1]["av"] = sav_points[i]
+        # 🔥 FIX: Rotate SAV to lagna-based bhav order
+        # sav_points is rashi-wise (index 0 = Mesh, 1 = Vrishabh, etc.)
+        # But houses are lagna-based (bhav 1 = lagna rashi)
+        # So rotate: if Tula lagna (idx=6), rotate array by 6 positions
+        rotated_sav = sav_points[asc_idx:] + sav_points[:asc_idx]
+        for i in range(12): houses[i+1]["av"] = rotated_sav[i]
 
         planet_house_map = {}
         for p_code, p_hi in short_names.items():
@@ -1911,6 +1944,7 @@ def cities_autocomplete():
         return jsonify([{'name':r.get('display_name',''),'lat':r['lat'],'lon':r['lon']} for r in resp])
     except Exception:
         return jsonify([])
+    
 
 @app.route('/api/health', methods=['GET'])
 def health():

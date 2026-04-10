@@ -33,7 +33,8 @@ const AVSutrasPanel     = lazy(() => import("../components/panels/AVSutrasPanel"
 const ChandraSuryaPanel = lazy(() => import("../components/panels/ChandraSuryaPanel"));
 const AdvancedYogasPanel= lazy(() => import("../components/panels/Advancedyogaspanel"));
 const KPBTRPanel        = lazy(() => import("../components/panels/KPBTRPanel"));
-const VivahPanel         = lazy(() => import("../components/panels/VivahPanel"));
+const VivahPanel        = lazy(() => import("../components/panels/VivahPanel"));
+const PrashnaKundli = lazy(() => import("../components/panels/PrashnaKundli"));
 
 // ── Suspense fallback — shown while a lazy panel is loading ──────────────
 function TabSkeleton() {
@@ -475,7 +476,7 @@ function buildPDFPage(pageNum, chartData) {
 
   const head=(title)=>`<!DOCTYPE html><html lang="hi"><head><meta charset="UTF-8"/><title>${title} — ${name}</title><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700;900&display=swap" rel="stylesheet"/><style>${css}</style></head><body>`;
   const close=`</body></html>`;
-  const TOTAL_PAGES = 26;
+  const TOTAL_PAGES = 27;
 
   const headerBlock=`<div class="hdr">
     <div style="font-size:19px;font-weight:900;color:#F59E0B">🪐 सम्पूर्ण वैदिक कुंडली</div>
@@ -1435,13 +1436,202 @@ function buildPDFPage(pageNum, chartData) {
     </div>${close}`;
   };
 
+  // 🆕 PAGE 27 — चलित कुंडली (Bhav Chalit Chart — Sri Pati Paddhati)
+  pages[27] = () => {
+    const chalit        = pd.chalit || {};
+    // engine se aate hain: _comparison (sandhi_risk, summary) aur _planets
+    const chalitCmp     = chalit._comparison || {};
+    const chalitSummary = chalitCmp.summary  || {};
+    const sandhiRisk    = chalitCmp.sandhi_risk || [];
+    const chalitEntries = Object.entries(chalit).filter(([k]) => !k.startsWith("_"));
+    const changedCount  = chalitSummary.changed_count
+                          ?? chalitEntries.filter(([,d]) => d.is_changed).length;
+    const sandhiCount   = chalitSummary.sandhi_count ?? sandhiRisk.length;
+    const stability     = chalitSummary.chart_stability || "";
+
+    const PLANET_ORDER  = ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
+    const BHAV_KARAKA   = {
+      1:"लग्न",2:"धन",3:"पराक्रम",4:"सुख",5:"संतान",6:"रोग",
+      7:"विवाह",8:"आयु",9:"भाग्य",10:"कर्म",11:"लाभ",12:"व्यय"
+    };
+
+    // ── Main table rows ───────────────────────────────────────────
+    const chalitRows = PLANET_ORDER
+      .filter(pc => chalit[pc])
+      .map(pc => {
+        const data    = chalit[pc];
+        const pInfo   = pl[pc] || {};
+        const changed = data.is_changed;
+        const isBhavS = data.is_bhav_sandhi  || false;
+        const isRashiS= data.is_rashi_sandhi || false;
+        const bsDist  = data.bhav_sandhi_dist != null ? Number(data.bhav_sandhi_dist).toFixed(2) : null;
+        const madhyaDist = data.dist_from_madhya != null ? Number(data.dist_from_madhya).toFixed(2) : null;
+        const bsNear  = data.bhav_sandhi_near;
+
+        const d1H  = data.d1_house || "—";
+        const chH  = data.house    || "—";
+
+        const statusCol = changed  ? "#F59E0B" : "#4ADE80";
+        const chHCol    = changed  ? "#F59E0B" : "#CBD5E1";
+        const bsCol     = isBhavS  ? "#FB7185" : isRashiS ? "#FB923C" : "#334155";
+
+        const rashi     = pInfo.hindi_sign || pInfo.sign || "—";
+        const deg       = pInfo.degree || (data.degree ? Number(data.degree).toFixed(2)+"°" : "—");
+        const nakshatra = pInfo.nakshatra    || "—";
+        const nakLord   = pInfo.nakshatraLord|| "—";
+        const dignity   = pInfo.dignityHindi || pInfo.dignity || "—";
+        const digCol    = DC[pInfo.dignity]  || DC[pInfo.dignityHindi] || "#64748B";
+        const digIcon   = DI[pInfo.dignity]  || DI[pInfo.dignityHindi] || "⚪";
+
+        const sandhiTag = isBhavS && isRashiS
+          ? `<span style="font-size:7px;padding:1px 4px;border-radius:3px;background:rgba(251,113,133,.2);color:#FB7185;font-weight:700">⚠️ भाव+राशि सन्धि</span>`
+          : isBhavS
+          ? `<span style="font-size:7px;padding:1px 4px;border-radius:3px;background:rgba(251,113,133,.15);color:#FB7185;font-weight:700">⚠️ भाव सन्धि ${bsDist ? bsDist+"°" : ""}</span>`
+          : isRashiS
+          ? `<span style="font-size:7px;padding:1px 4px;border-radius:3px;background:rgba(251,146,60,.15);color:#FB923C;font-weight:700">⚠️ राशि सन्धि</span>`
+          : `<span style="font-size:7px;color:#334155">मध्य ${madhyaDist ? madhyaDist+"°" : "—"}</span>`;
+
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,.04);${changed?"background:rgba(245,158,11,.03)":isBhavS?"background:rgba(251,113,133,.02)":""}">
+          <td style="padding:5px 7px">
+            <div style="color:#F59E0B;font-weight:900;font-size:12px">${PH[pc]||pc} ${PS[pc]||""}</div>
+            <div style="font-size:8px;color:#475569;margin-top:1px">${rashi} | ${deg}</div>
+          </td>
+          <td style="padding:5px 7px;font-size:9px;color:#64748B">
+            ${nakshatra}<br/><span style="color:#475569;font-size:8px">${nakLord}</span>
+          </td>
+          <td style="padding:5px 7px;font-size:9px;font-weight:700;color:${digCol}">${digIcon} ${dignity}</td>
+          <td style="padding:5px 7px;text-align:center">
+            <div style="font-size:13px;font-weight:900;color:#94A3B8">${d1H}</div>
+            <div style="font-size:7px;color:#334155">${typeof d1H==="number"?BHAV_KARAKA[d1H]||"":""}</div>
+          </td>
+          <td style="padding:5px 7px;text-align:center">
+            <div style="font-size:13px;font-weight:900;color:${chHCol}">${chH}</div>
+            <div style="font-size:7px;color:${changed?"#92400E":"#334155"}">${typeof chH==="number"?BHAV_KARAKA[chH]||"":""}</div>
+          </td>
+          <td style="padding:5px 7px">
+            <span style="font-size:10px;font-weight:700;color:${statusCol};padding:2px 6px;border-radius:4px;background:${statusCol}12;border:1px solid ${statusCol}25">${changed?"🔄 बदला":"✅ समान"}</span>
+            ${changed?`<div style="font-size:8px;color:#92400E;margin-top:1px">भाव ${d1H}→${chH}</div>`:""}
+          </td>
+          <td style="padding:5px 7px">${sandhiTag}</td>
+        </tr>`;
+      }).join("") ||
+      `<tr><td colspan="7" style="padding:16px;text-align:center;color:#475569">चलित डेटा उपलब्ध नहीं</td></tr>`;
+
+    // ── Bhav grid ────────────────────────────────────────────────
+    const bhavGrid = Array.from({length:12},(_,i)=>{
+      const n  = i+1;
+      const ps = PLANET_ORDER.filter(pc => chalit[pc] && chalit[pc].house === n);
+      const hasChanged = ps.some(pc => chalit[pc]?.is_changed);
+      const hasSandhi  = ps.some(pc => chalit[pc]?.is_bhav_sandhi || chalit[pc]?.is_rashi_sandhi);
+      const bdr = hasChanged ? "rgba(245,158,11,.3)" : hasSandhi ? "rgba(251,113,133,.3)" : "rgba(255,255,255,.06)";
+      const bg  = hasChanged ? "rgba(245,158,11,.07)" : hasSandhi ? "rgba(251,113,133,.05)" : "rgba(255,255,255,.02)";
+      const inner = ps.map(pc => {
+        const ch = chalit[pc];
+        const c  = ch.is_bhav_sandhi ? "#FB7185" : ch.is_changed ? "#F59E0B" : "#94A3B8";
+        return `<span style="font-size:8px;font-weight:700;color:${c}">${PS[pc]||pc}${ch.is_bhav_sandhi?"⚠":ch.is_changed?"*":""}</span>`;
+      }).join(" ");
+      return `<div style="text-align:center;padding:5px 2px;border-radius:6px;background:${bg};border:1px solid ${bdr}">
+        <div style="font-size:7px;color:#334155;margin-bottom:2px">भाव ${n}</div>
+        <div style="min-height:14px;line-height:1.4">${inner||'<span style="color:#1e293b;font-size:8px">—</span>'}</div>
+      </div>`;
+    }).join("");
+
+    // ── Sandhi risk section ───────────────────────────────────────
+    const sandhiHTML = sandhiRisk.length > 0 ? `
+      ${sect(`⚠️ सन्धि ग्रह — ${sandhiCount} ग्रह कमजोर स्थिति में`,"#FB7185")}
+      <div style="margin-bottom:10px">
+        <div style="font-size:9px;color:#64748B;margin-bottom:6px;padding:4px 8px;background:rgba(251,113,133,.05);border-radius:5px;border:1px solid rgba(251,113,133,.15)">
+          💡 <b style="color:#FB7185">सन्धि का अर्थ:</b>
+          <b>भाव सन्धि</b> = ग्रह दो भावों की सीमा पर है (±1°) — दोनों भावों का अनिश्चित फल।
+          <b>राशि सन्धि</b> = ग्रह राशि के अंत/आरंभ पर है (0°/30° के पास) — अगली राशि का भी प्रभाव।
+        </div>
+        ${sandhiRisk.map(sp => {
+          const typeCol = sp.sandhi_type?.includes("Bhav") ? "#FB7185" : "#FB923C";
+          const pInfo = pl[sp.code] || {};
+          const fn = pInfo.functionalNature || "";
+          const fnCol = FC[fn] || "#64748B";
+          return `<div style="padding:6px 10px;border-radius:7px;background:rgba(251,113,133,.05);border:1px solid rgba(251,113,133,.2);margin-bottom:5px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+              <span style="color:#F59E0B;font-weight:900;font-size:11px">${PH[sp.code]||sp.code} ${PS[sp.code]||""}</span>
+              <span style="font-size:9px;padding:1px 6px;border-radius:3px;background:${typeCol}20;color:${typeCol};font-weight:700">${sp.sandhi_type||"सन्धि"}</span>
+              ${fn?`<span style="font-size:8px;color:${fnCol}">${fn}</span>`:""}
+            </div>
+            <div style="font-size:9px;color:#94A3B8">${sp.sandhi_note||""}</div>
+            <div style="font-size:8px;color:#475569;margin-top:1px">D1: भाव ${sp.d1_house} → चलित: भाव ${sp.chalit_house} ${sp.is_changed?"🔄":""}</div>
+          </div>`;
+        }).join("")}
+      </div>` : "";
+
+    // ── Changed planets summary ───────────────────────────────────
+    const changedHTML = PLANET_ORDER
+      .filter(pc => chalit[pc]?.is_changed)
+      .map(pc => {
+        const d   = chalit[pc];
+        const fn  = pl[pc]?.functionalNature || "";
+        const fnCol = FC[fn] || "#64748B";
+        const isSandhi = d.is_bhav_sandhi || d.is_rashi_sandhi;
+        return `<div style="padding:6px 10px;border-radius:7px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.18);display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="color:#F59E0B;font-weight:900;font-size:11px">${PH[pc]||pc} ${PS[pc]||""}</span>
+          <span style="font-size:11px;color:#94A3B8">भाव <b style="color:#CBD5E1">${d.d1_house}</b> → <b style="color:#F59E0B">${d.house}</b></span>
+          <div style="display:flex;gap:4px;align-items:center">
+            ${isSandhi?`<span style="font-size:7px;color:#FB7185;padding:1px 4px;border-radius:3px;background:rgba(251,113,133,.15)">⚠️ सन्धि</span>`:""}
+            ${fn?`<span style="font-size:8px;color:${fnCol};padding:1px 5px;border-radius:3px;background:${fnCol}15">${fn}</span>`:""}
+          </div>
+        </div>`;
+      }).join("");
+
+    return `${head("चलित कुंडली")}<div class="page">
+      ${headerBlock}
+      ${sect("चलित कुंडली (Bhav Chalit Chart) — श्री पति पद्धति", "#22D3EE")}
+
+      <div style="padding:8px 12px;border-radius:7px;background:rgba(34,211,238,.04);border:1px solid rgba(34,211,238,.15);margin-bottom:10px;font-size:9px;color:#64748B;line-height:1.8">
+        💡 <b style="color:#22D3EE">चलित कुंडली:</b> D1 राशि-मध्य से भाव गिनता है।
+        चलित में <b>श्री पति पद्धति</b> से exact भाव-सन्धि (cusp) निकाली जाती है।
+        ग्रह यदि boundary पार करे → भाव बदलता है।
+        <b style="color:#FB7185">⚠️ भाव सन्धि</b> = boundary ±1° पर (अनिश्चित फल) &nbsp;|&nbsp;
+        <b style="color:#FB923C">⚠️ राशि सन्धि</b> = 0°/30° पर (दोनों राशि का प्रभाव)
+      </div>
+
+      ${sect("ग्रह-वार चलित स्थिति + सन्धि विश्लेषण","#22D3EE")}
+      <table style="margin-bottom:10px;font-size:10px">
+        <tr style="background:rgba(255,255,255,.05)">
+          <th>ग्रह / राशि</th><th>नक्षत्र</th><th>अवस्था</th>
+          <th style="text-align:center">D1</th>
+          <th style="text-align:center">चलित</th>
+          <th>स्थिति</th>
+          <th>सन्धि</th>
+        </tr>
+        ${chalitRows}
+      </table>
+
+      ${sect("चलित भाव ग्रिड  (* बदला  ⚠ सन्धि)","#C084FC")}
+      <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-bottom:10px">${bhavGrid}</div>
+
+      ${sandhiHTML}
+
+      ${changedCount > 0 ? `
+      ${sect(`🔄 बदले हुए ग्रह — ${changedCount}`, "#F59E0B")}
+      <div style="margin-bottom:8px">${changedHTML}</div>
+      <div style="padding:6px 10px;border-radius:6px;background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.15);font-size:9px;color:#94A3B8">
+        <b style="color:#F59E0B">फलादेश नियम:</b> shifted ग्रह का फल → <b>चलित भाव</b> से।
+        Sign/Dignity → <b>D1</b> से। सन्धि ग्रह का फल दोनों भावों से मिलाकर देखें।
+      </div>` : `
+      <div style="padding:8px 12px;border-radius:7px;background:rgba(74,222,128,.04);border:1px solid rgba(74,222,128,.18);font-size:10px;color:#CBD5E1;margin-bottom:8px">
+        ✅ सभी ग्रह D1 और चलित में <b>समान भाव</b> — कुंडली अत्यंत स्थिर।
+      </div>`}
+
+      ${stability ? `<div style="text-align:right;font-size:9px;color:#475569;margin-top:4px">कुंडली स्थिरता: <b style="color:#22D3EE">${stability}</b></div>` : ""}
+
+      ${foot(27, TOTAL_PAGES)}</div>${close}`;
+  };
+
   const bodyOnly = (html) => {
     let s = html.replace(/[\s\S]*?<body[^>]*>/i, "");
     s = s.replace(/<\/body>[\s\S]*$/i, "");
     return s;
   };
 
-  const ALL_PAGE_NUMS  = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26];
+  const ALL_PAGE_NUMS  = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27];
   const NADI_PAGE_NUMS = [9,10,11,12,13,14,15,16,17,18,19,20,21,22,23];
 
   if(pageNum==="all"){
@@ -1507,6 +1697,8 @@ const PDF_PAGES = [
   {num:25, icon:"💍", label:"विवाह — भाग 2",           desc:"स्वभाव, विष नवमांश, सहम, ससुराल दिशा, उपाय"},
   // ── दशा ──
   {num:26, icon:"⏳", label:"वशोत्तरी दशा",             desc:"महा, अंतर, प्रत्यंतर — 120 वर्ष चक्र"},
+  // ── चलित ──
+  {num:27, icon:"🔄", label:"चलित कुंडली",              desc:"श्री पति पद्धति — वास्तविक भाव स्थिति"},
 ];
 
 function PDFModal({ chartData, onClose }) {
@@ -1534,7 +1726,7 @@ function PDFModal({ chartData, onClose }) {
             }}>
             <span className="text-xl">📚</span>
             <div className="flex-1 text-left">
-              <div className="text-[13px] font-black text-amber-400" style={HI}>सम्पूर्ण कुंडली — सभी 26 पेज</div>
+              <div className="text-[13px] font-black text-amber-400" style={HI}>सम्पूर्ण कुंडली — सभी 27 पेज</div>
               <div className="text-[10px] text-slate-500 mt-0.5" style={HI}>Complete report — ग्रह से नाड़ी ज्योतिष तक</div>
             </div>
             {sel===null && <span className="text-amber-400 text-lg">✓</span>}
@@ -1845,6 +2037,7 @@ function RightPanel({ chartData }) {
             {activeTab === "advanced_yogas" && <AdvancedYogasPanel />}
             {activeTab === "kp_btr"         && <KPBTRPanel />}
             {activeTab === "vivah"           && <VivahPanel />}
+            {activeTab === "prashna"         && <PrashnaKundli />}  {/* 🔥 PRASHNA KUNDLI TAB */}
           </motion.div>
           </AnimatePresence>
         </Suspense>

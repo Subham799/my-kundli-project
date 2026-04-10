@@ -657,20 +657,29 @@ def complete_ashtakvarga_analysis(ashtakvarga_points: Dict[int, int],
                                   current_dasha: str = "Jupiter",
                                   gender: str = "male") -> Dict[str, Any]:
     """
-    Complete Ashtakvarga analysis with all modules
-    
+    Complete Ashtakvarga analysis with all 13 modules.
+
+    ✅ ROTATION NOTE (important):
+        ashtakvarga_points MUST already be lagna-rotated before calling this function.
+        i.e. key 1 = Lagna ka score, key 2 = 2nd house score, etc.
+        Rotation is done in engines_bridge.py → sav_to_house_dict(sav_points, lagna_rashi)
+        Is function ke andar koi rotation nahi hoti — data as-is use hota hai.
+
+        sign_wise_points (0-11) = rashi-wise (rotation nahi, lagna-independent)
+        LuckyDirectionFinder isi se direction nikalta hai — sahi hai.
+
     Args:
-        ashtakvarga_points: House-wise points (1-12)
-        sign_wise_points: Sign-wise points (0-11)
-        planet_positions: Planet house positions
-        has_rajyoga: D1 chart has rajyoga?
-        has_d1_dosha: D1 chart has dosha?
-        house_8_lord_strong: Is 8th house lord strong?
-        current_dasha: Current mahadasha planet
-        gender: "male" or "female"
-    
+        ashtakvarga_points : Lagna-rotated house-wise SAV points {1: score, 2: score, ...}
+        sign_wise_points   : Rashi-wise SAV points {0: score (Mesha), ..., 11: score (Meena)}
+        planet_positions   : Planet house positions {"Jupiter": {"house": 5}, ...}
+        has_rajyoga        : D1 chart mein rajyoga hai?
+        has_d1_dosha       : D1 chart mein dosha hai?
+        house_8_lord_strong: 8th house ka lord strong hai?
+        current_dasha      : Current mahadasha planet (English name)
+        gender             : "male" or "female"
+
     Returns:
-        Complete analysis dictionary
+        Complete analysis dictionary with all 13 modules
     """
     results = {}
     
@@ -707,7 +716,12 @@ def complete_ashtakvarga_analysis(ashtakvarga_points: Dict[int, int],
     results['business_success'] = BusinessSuccessPredictor.predict_business_success(has_rajyoga, ashtakvarga_points)
     
     # Module 9: Jupiter Override
-    jupiter_strength = ashtakvarga_points.get(5, 0)  # Simplified - would need Jupiter's house
+    # ✅ FIX: Jupiter ka actual house nikalo planet_positions se
+    # Pehle "Jupiter" key try karo, phir "Ju" fallback
+    _ju_data = planet_positions.get("Jupiter") or planet_positions.get("Ju") or {}
+    _ju_house = _ju_data.get("house", 0)
+    # Jupiter ke bhav ka SAV score = uski actual strength
+    jupiter_strength = ashtakvarga_points.get(_ju_house, 0) if _ju_house else 0
     results['jupiter_override'] = JupiterOverrideChecker.check_jupiter_override(has_d1_dosha, jupiter_strength)
     
     # Module 10: Reverse Logic Houses

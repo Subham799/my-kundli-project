@@ -97,7 +97,8 @@ export const TABS = [
   { id: "advanced_yogas", label: "⚡ उन्नत योग",    phase: 2 },
   { id: "kp_btr",         label: "🔗 KP शुद्धि",      phase: 2 },
   { id: "vivah",           label: "💍 विवाह",           phase: 2 },
-
+  { id: "prashna",           label: "🔯 प्रश्न कुण्डली",           phase: 2 },
+   
 ];
 
 // ─────────────────────────────────────────────────────────────

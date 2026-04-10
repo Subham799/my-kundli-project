@@ -48,11 +48,20 @@ OUR_TO_ENGINE = {
 ENGINE_TO_OUR = {v: k for k, v in OUR_TO_ENGINE.items()}
 
 # ── SAV helpers ─────────────────────────────────────────────────
-def sav_to_house_dict(sav_points: list) -> Dict[int, int]:
-    """[35,24,28,...] → {1:35, 2:24, 3:28, ...}"""
-    return {i+1: sav_points[i] for i in range(12)}
+def sav_to_house_dict(sav_points: list, lagna_rashi: int = 0) -> Dict[int, int]:
+    """
+    [35,24,28,...] → {1:35, 2:24, 3:28, ...}
+
+    ✅ FIX: sav_points rashi-wise hote hain (index 0 = Mesha hamesha).
+    Bhav 1 = Lagna ki rashi. Isliye rotate karo:
+    Agar lagna Tula (idx=6) hai → sav_points[6] = bhav 1 ka score.
+    rotate = sav_points[lagna_rashi:] + sav_points[:lagna_rashi]
+    """
+    rotated = sav_points[lagna_rashi:] + sav_points[:lagna_rashi]
+    return {i+1: rotated[i] for i in range(12)}
 
 def sav_to_sign_dict(sav_points: list) -> Dict[int, int]:
+    """Rashi-wise dict — rotation nahi (sign = sign, lagna-independent)"""
     return {i: sav_points[i] for i in range(12)}
 
 
@@ -257,7 +266,6 @@ def _build_bav_charts_from_astro(astro: Dict, sav_points: list = None,
         for code, points in computed.items():
             if code not in bav_charts:
                 bav_charts[code] = points
-        return bav_charts
 
     # ── Priority 4: SAV se approximate (last resort) ─────────────
     if sav_points and len(sav_points) == 12:
@@ -265,6 +273,18 @@ def _build_bav_charts_from_astro(astro: Dict, sav_points: list = None,
             if code not in bav_charts:
                 approx = [max(0, min(8, round(v / 7))) for v in sav_points]
                 bav_charts[code] = approx
+
+    # ✅ FIX: BAV bhi rashi-wise hoti hai (index 0 = Mesha).
+    # Lagna-based bhav order mein rotate karo.
+    # Agar lagna_rashi = 0 (Mesha), rotation koi effect nahi karti.
+    if lagna_rashi and lagna_rashi > 0:
+        rotated_bav = {}
+        for code, pts in bav_charts.items():
+            if len(pts) == 12:
+                rotated_bav[code] = pts[lagna_rashi:] + pts[:lagna_rashi]
+            else:
+                rotated_bav[code] = pts
+        return rotated_bav
 
     return bav_charts
 
@@ -489,8 +509,8 @@ def build_unified_chart_data(
 
     return {
         "chart_data":          chart_data,
-        "ashtakvarga_points":  sav_to_house_dict(sav_points),
-        "sign_points":         sav_to_sign_dict(sav_points),
+        "ashtakvarga_points":  sav_to_house_dict(sav_points, lagna_rashi),  # ✅ lagna-rotated
+        "sign_points":         sav_to_sign_dict(sav_points),                # rashi-wise (unchanged)
         "moon_nak":            moon_nak,
     }
 
@@ -762,8 +782,8 @@ def run_all_engines(
         results["av_sutras"] = compute_av_sutras(
             planets         = planets_dict,
             houses          = [],
-            sav             = sav_points,
-            bav_charts      = bav_charts,
+            sav             = sav_points[lagna_rashi:] + sav_points[:lagna_rashi],  # ✅ lagna-rotated
+            bav_charts      = bav_charts,   # already rotated from _build_bav_charts_from_astro
             birth_year      = dob.year if dob else 0,
             current_dasha   = cd_str,
             transit_planets = transit_planets,
@@ -780,8 +800,8 @@ def run_all_engines(
     try:
         results["dasha_shani"] = compute_dasha_shani(
             planets             = planets_dict,
-            sav                 = sav_points,
-            bav_charts          = bav_charts,
+            sav                 = sav_points[lagna_rashi:] + sav_points[:lagna_rashi],  # ✅ rotated
+            bav_charts          = bav_charts,   # already rotated
             current_dasha       = current_dasha_dict,
             shani_transit_rashi = shani_transit_rashi,
             moon_rashi          = moon_rashi,
@@ -795,8 +815,8 @@ def run_all_engines(
         meta = astro.get("meta", {})
         results["chandra_surya"] = compute_chandra_surya(
             planets        = planets_dict,
-            sav            = sav_points,
-            bav_charts     = bav_charts,
+            sav            = sav_points[lagna_rashi:] + sav_points[:lagna_rashi],  # ✅ rotated
+            bav_charts     = bav_charts,   # already rotated
             birth_tithi    = int(meta.get("tithi", 15)),
             janm_nakshatra = int(meta.get("nakshatra_index",
                              int(moon_degree / (360/27)) % 27)),
@@ -808,13 +828,17 @@ def run_all_engines(
 
     # ENGINE 13: Advanced Yogas (Batch 4)
     try:
-        # ── Chandra Lagna SAV: SAV rotate karke Moon's sign ko lagna maano ──
-        # Moon jis sign mein hai, ussse rotate karo 12 values
+        # ── Chandra Lagna SAV: Moon ki rashi se rotate ──────────────────────
+        # ✅ Already lagna-rotated sav se aur rotate karna wrong hoga.
+        # Chandra lagna = Moon's rashi from Mesha (rashi-wise), fresh se rotate karo
         chandra_sav = sav_points[moon_rashi:] + sav_points[:moon_rashi]
 
-        # ── Surya Lagna SAV: Sun's sign se rotate karo ──────────────────────
+        # ── Surya Lagna SAV: Sun ki rashi se rotate ──────────────────────────
         sun_rashi    = planets_dict.get("Su", {}).get("rashi_index", 0)
         surya_sav    = sav_points[sun_rashi:] + sav_points[:sun_rashi]
+
+        # ── Lagna-rotated SAV (vivah + advanced_yogas ke liye) ───────────────
+        lagna_sav = sav_points[lagna_rashi:] + sav_points[:lagna_rashi]
 
         # ── Vivah Engine ──────────────────────────────────────────────
         try:
@@ -823,8 +847,8 @@ def run_all_engines(
             _tithi = int(astro.get("meta", {}).get("tithi", 15))
             results["vivah"] = compute_vivah(
                 planets       = planets_dict,
-                sav           = sav_points,
-                bav_charts    = bav_charts,
+                sav           = lagna_sav,       # ✅ lagna-rotated
+                bav_charts    = bav_charts,       # already rotated
                 lagna_rashi   = lagna_rashi,
                 gender        = _gender,
                 current_dasha = current_dasha,
@@ -837,12 +861,12 @@ def run_all_engines(
 
         results["advanced_yogas"] = compute_advanced_yogas(
             planets              = planets_dict,
-            sav                  = sav_points,
-            bav_charts           = bav_charts,
+            sav                  = lagna_sav,          # ✅ lagna-rotated
+            bav_charts           = bav_charts,          # already rotated
             lagna_index          = lagna_rashi,
             moon_rashi           = moon_rashi,
-            chandra_lagna_sav    = chandra_sav,   # ← NEW: Chandra Lagna SAV
-            surya_lagna_sav      = surya_sav,     # ← NEW: Surya Lagna SAV
+            chandra_lagna_sav    = chandra_sav,
+            surya_lagna_sav      = surya_sav,
         )
     except Exception as e:
         results["advanced_yogas"] = {"computed": False, "error": str(e)}
