@@ -1656,11 +1656,30 @@ function buildPDFPage(pageNum, chartData) {
 
 function exportKundliPDF(chartData, pageNum="all") {
   const html = buildPDFPage(pageNum, chartData);
+  
+  // ✅ Mobile Detection (iPhone/iPad/Android)
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  
+  // ✅ Mobile users को पहले ही बता दें कि क्या होगा
+  if (isMobile) {
+    alert("✅ कुंडली तैयार है!\n\nअगली स्क्रीन पर 'Save as PDF' (PDF के रूप में सहेजें) का विकल्प चुनें। फाइल सीधे आपके 'Downloads' फोल्डर में सेव हो जाएगी।");
+  }
+
   const win = window.open("", "_blank", "width=1000,height=750");
-  if(!win){ alert("पॉप-अप ब्लॉक है — allow करें"); return; }
+  
+  if(!win){ 
+    alert("⚠️ पॉप-अप ब्लॉक है! कृपया ब्राउज़र में पॉप-अप को Allow करें।"); 
+    return; 
+  }
+  
   win.document.write(html);
   win.document.close();
-  win.onload = () => { setTimeout(()=>{ win.print(); }, 900); };
+  
+  win.onload = () => { 
+    setTimeout(() => { 
+      win.print(); 
+    }, 900); 
+  };
 }
 
 
