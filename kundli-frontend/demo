@@ -213,7 +213,7 @@
 //       <div style="flex:1">
 //         <div style="font-size:11px;font-weight:900;color:${c}">${t.hindi||t.code||""} — भाव ${t.house} ${t.nature==="good"?"✅":"⚠️"}</div>
 //         <div style="font-size:9px;color:#64748B;margin-top:1px">${t.ageGroup||""}${t.planetaryReason?" | "+t.planetaryReason:""}</div>
-//         ${t.avSum?`<div style="font-size:8px;color:#334155;font-family:monospace">Σ(1→${t.house})=${t.avSum}×7÷27=${t.year}</div>`:""}
+//         ${t.avSum?`<div style="font-size:8px;color:#334155;font-family:monospace">Σ(1→${t.house})=${t.avSum}×7%27=${t.year}</div>`:""}
 //       </div>
 //       ${near?`<span style="font-size:8px;padding:1px 5px;border-radius:4px;background:rgba(245,158,11,.2);color:#F59E0B;white-space:nowrap;align-self:center">← अभी</span>`:""}
 //     </div>`;
@@ -534,7 +534,7 @@
 //       </div>
 //       ${aa.happiness_ages?.length>0||aa.sorrow_ages?.length>0?`
 //       ${sect("MODULE 7 — सुख-दुख की आयु ⏰","#FB923C")}
-//       <div style="padding:4px 7px;border-radius:5px;background:rgba(251,146,60,.05);margin-bottom:5px;font-size:8px;color:#475569">💡 Σ(भाव 1→ग्रह भाव)×7÷27 = टर्निंग वर्ष | शुभ ग्रह=सुख, पाप ग्रह=कष्ट</div>
+//       <div style="padding:4px 7px;border-radius:5px;background:rgba(251,146,60,.05);margin-bottom:5px;font-size:8px;color:#475569">💡 Σ(भाव 1→ग्रह भाव)×7%27 = टर्निंग वर्ष | शुभ ग्रह=सुख, पाप ग्रह=कष्ट</div>
 //       <div class="two">
 //         ${aa.happiness_ages?.length>0?`<div style="padding:6px;border-radius:7px;background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.18)">
 //           <div style="font-size:9px;font-weight:700;color:#4ADE80;margin-bottom:4px">✅ सुख की आयु</div>

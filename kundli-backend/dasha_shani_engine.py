@@ -303,7 +303,7 @@ def compute_shani_kast_varsh(
     sav: List[int]
 ) -> Dict:
     """
-    Direct formula (no ×7÷27):
+    Direct formula (no ×7%27):
 
     Method 1 (Lagna → Shani):
       Sum of SAV from House 1 up to AND INCLUDING House where Shani sits.

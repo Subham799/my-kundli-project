@@ -160,7 +160,7 @@ export function computeMasterConclusion(data) {
     .map((pc) => {
       const h     = planetHouse[pc];
       const avSum = savByHouse.slice(0,h).reduce((s,v)=>s+v,0);
-      const year  = Math.floor((avSum*7)/27);
+      const year  = Math.floor((avSum*7)%27);
       const fn    = planets[pc].functionalNature||"";
       const isKroor = /Malefic|Trishadaya|Badhakesh|Maraka/i.test(fn) || ["Sa","Ma","Ra","Ke"].includes(pc);
       // Build planetary reason for authenticity
@@ -184,7 +184,7 @@ export function computeMasterConclusion(data) {
         ageGroup: ageGroupLabel(year),
         nature:   isKroor ? "bad" : "good",
         planetaryReason,
-        formula:  `Σ(1→${h})=${avSum} | ${avSum}×7=${avSum*7} | ${avSum*7}÷27 = ${year}वर्ष`,
+        formula:  `Σ(1→${h})=${avSum} | ${avSum}×7=${avSum*7} | ${avSum*7}%27 = ${year}वर्ष`,
       };
     })
     .sort((a,b)=>a.year-b.year);

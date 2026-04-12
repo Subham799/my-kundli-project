@@ -30,6 +30,9 @@ from nadi_ai.core.tara_milan_engine import TaraMilanEngine
 from nadi_ai.core.ashtakavarga_engine import AshtakavargaEngine
 from nadi_ai.events.career_module import CareerModule
 from chalit_engine import get_bhav_chalit
+from sudarshan_engine import get_sudarshan_data
+from yearly_engine import get_yearly_prediction
+from maitri_engine import compute_maitri
 
 
 # ── Sunrise calculator ────────────────────────────────────────────────────
@@ -1107,12 +1110,46 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
                 _h     = (_p_idx - _asc_idx_d1 + 12) % 12 + 1
                 # ✅ FIX: "Degree" = 0-360 absolute — already correct in astro dict
                 # astro[pc]["Degree"] = swe.calc_ut output = 0-360 ✔️
-                _planets_d1_for_chalit[_pc] = {"Degree": _p["Degree"], "house": _h}
+                _sign = (_p_idx % 12) + 1   # 1-based rashi
+                _planets_d1_for_chalit[_pc] = {"Degree": _p["Degree"], "house": _h, "sign": _sign}
         # engine returns: {"Su": {"house": X, "d1_house": Y, "is_changed": bool}}
-        chalit_data = get_bhav_chalit(_jd, lat, lon, _planets_d1_for_chalit)
+        chalit_data = get_bhav_chalit(_jd, lat, lon, _planets_d1_for_chalit, include_house_data=True)
     except Exception as _ce:
         print(f"[Chalit Engine] Error: {_ce}")
         chalit_data = {}
+
+    # ── Maitri (Panchadha) ───────────────────────────────────────────
+    try:
+        _maitri_input = {}
+        for _pc in ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"]:
+            if _pc in astro:
+                _p     = astro[_pc]
+                _p_idx = _p["Vargas"]["D1"]["Idx"]
+                _h     = (_p_idx - astro["La"]["Vargas"]["D1"]["Idx"] + 12) % 12 + 1
+                _sign  = (_p_idx % 12) + 1
+                _maitri_input[_pc] = {"house": _h, "sign": _sign}
+        maitri_data = compute_maitri(_maitri_input)
+    except Exception as _me:
+        print(f"[Maitri Engine] Error: {_me}")
+        maitri_data = {}
+
+    # ── Sudarshan Chakra ──────────────────────────────────────────
+    try:
+        sudarshan_data = get_sudarshan_data(astro, sav_points)
+    except Exception as _se:
+        print(f"[Sudarshan Engine] Error: {_se}")
+        sudarshan_data = {}
+
+    # ── Yearly Prediction (Sudarshan-based) ─────────────────────
+    try:
+        _age = int((request.get_json(silent=True) or {}).get("age", 0) or 0)
+        if _age > 0 and sudarshan_data:
+            yearly_data = get_yearly_prediction(_age, sudarshan_data, houses)
+        else:
+            yearly_data = {}
+    except Exception as _ye:
+        print(f"[Yearly Engine] Error: {_ye}")
+        yearly_data = {}
 
     # ── Active dasha ──────────────────────────────────────────────
     current_md = dashas[0]
@@ -1548,14 +1585,17 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         av_sum = sum(houses[i]["av"] for i in range(1, h+1))
         year   = int(av_sum * 7 / 27)
         formula_str = f"Σ(1→{h})={av_sum} | {av_sum}×7={av_sum*7} | {av_sum*7}÷27 = {year}वर्ष"
+        nak_index = (av_sum * 7 % 27) if (av_sum * 7 % 27) > 0 else 27
+        nakshatra = NAKSHATRA[nak_index - 1]
         av_turning.append({
-            "code":     pc,
-            "hindi":    PLANET_HINDI_MC[pc],
-            "house":    h,
-            "avSum":    av_sum,
-            "year":     year,
-            "ageGroup": AGE_GROUP(year),
-            "formula":  formula_str,
+            "code":      pc,
+            "hindi":     PLANET_HINDI_MC[pc],
+            "house":     h,
+            "avSum":     av_sum,
+            "year":      year,
+            "ageGroup":  AGE_GROUP(year),
+            "formula":   formula_str,
+            "nakshatra": nakshatra,
         })
 
     # ── AV Bhavas (12 houses) ────────────────────────────────────
@@ -1675,6 +1715,11 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         "badhakHouse":       badhak_house_num,
         "enginesData":       {**engines_data, "nadi_jyotish": nadi_jyotish_output},
         "chalit":            chalit_data,
+        "bhavSandhi":        chalit_data.get("_bhavSandhi", []),
+        "planetStrength":    chalit_data.get("_planetStrength", {}),
+        "maitri":            maitri_data,
+        "sudarshan":         sudarshan_data,
+        "yearly":            yearly_data,
     }, None
 
 
@@ -1950,6 +1995,53 @@ def cities_autocomplete():
 def health():
     return jsonify({'status': 'ok', 'version': '2.0', 'engine': 'NadiJyotish'})
 
+
+
+
+# ── YEARLY PREDICTION ROUTE ───────────────────────────────────────────────
+@app.route('/api/yearly', methods=['POST'])
+def api_yearly():
+    try:
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({"error": "Invalid JSON"}), 400
+
+        age       = data.get("age")
+        sudarshan = data.get("sudarshan")
+        chart     = data.get("chart", {})
+
+        if not age or not sudarshan:
+            return jsonify({"error": "Missing required fields: age, sudarshan"}), 400
+
+        age = int(age)
+        if age < 1 or age > 120:
+            return jsonify({"error": "Age must be between 1 and 120"}), 400
+
+        # houses frontend से array आती है: [{num:1, sign_index:4,...}, ...]
+        # yearly_engine को dict चाहिए: {1: {sign_index:4,...}, ...}
+        houses = {}
+        raw_houses = chart.get("houses", [])
+        if isinstance(raw_houses, list):
+            for h in raw_houses:
+                try:
+                    houses[int(h["num"])] = h
+                except (KeyError, TypeError, ValueError):
+                    pass
+        elif isinstance(raw_houses, dict):
+            for k, v in raw_houses.items():
+                try:
+                    houses[int(k)] = v
+                except (ValueError, TypeError):
+                    pass
+
+        result = get_yearly_prediction(age, sudarshan, houses)
+        return jsonify({"success": True, **result})
+
+    except ValueError:
+        return jsonify({"error": "Invalid age value"}), 400
+    except Exception as e:
+        print(f"[Yearly Route Error]: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 # ── ENTRY POINT ──────────────────────────────────────────────────────────

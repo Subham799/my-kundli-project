@@ -69,7 +69,7 @@ export default function MasterConclusion({ data }) {
             <div className="text-right flex-shrink-0">
               <div className="text-[20px] font-black leading-none"
                 style={{ color: strColor(lagnesh.strength || 0) }}>{lagnesh.strength}</div>
-              <div className="text-[7px] text-slate-600">बल/150</div>
+              <div className="text-[7px] text-slate-400">बल/150</div>
               <div className="text-[8px] mt-0.5" style={{ color: strColor(lagnesh.strength || 0) }}>
                 {strLabel(lagnesh.strength || 0)}
               </div>
@@ -151,7 +151,7 @@ export default function MasterConclusion({ data }) {
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between mb-0.5">
-                      <span className="text-[7px] text-slate-600">बल</span>
+                      <span className="text-[7px] text-slate-400">बल</span>
                       <span className="text-[8px] font-bold" style={{ color: strColor(strength) }}>
                         {strength}/150
                       </span>
@@ -259,100 +259,73 @@ export default function MasterConclusion({ data }) {
         </CollapsibleSection>
       )}
 
-      {/* ══ BLOCK 6 — AV TURNING POINTS ══ */}
+      {/* ══ BLOCK 6 — AV TURNING POINTS (High Contrast) ══ */}
       {avTurningPoints?.length > 0 && (
-        <CollapsibleSection variant="compact" icon="⏳" title="Block 6 — अष्टकवर्ग टर्निंग पॉइंट"
-          badge="आयु सूत्र" color="#4ADE80" defaultOpen={true}>
-          <div className="mb-4 p-3 rounded-xl text-[12px] text-slate-300 leading-relaxed"
-            style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.25)" }}>
-            <span className="text-amber-400 font-bold">📐 आयु सूत्र: </span>
-            <span className="text-white font-bold">Σ(भाव 1 → ग्रह भाव) × 7 ÷ 27 = टर्निंग वर्ष</span>
+        <CollapsibleSection variant="compact" icon="⏳" title="Block 6 — अष्टकवर्ग आयु सूत्र (टर्निंग पॉइंट)"
+          badge="आयु सूत्र" color="#10B981" defaultOpen={true}>
+          
+          {/* 💡 Rule Explanation Banner (High Contrast & Clear Context) */}
+          <div className="mb-5 p-4 rounded-xl text-[12px] text-emerald-50 leading-relaxed shadow-sm"
+            style={{ background: "rgba(16, 185, 129, 0.10)", border: "1px solid rgba(16, 185, 129, 0.40)" }}>
+            <b className="text-emerald-400 text-[13px]">💡 गोचर ट्रिगर नियम:</b> 
+            <br className="mt-2" />
+            गणितीय सूत्र से प्राप्त शेषफल (Remainder) को हमेशा <b>'अश्विनी'</b> नक्षत्र से गिना जाता है। 
+            ब्रह्मांड में गोचर करता हुआ पापी ग्रह (जैसे शनि या राहु) जब ठीक इस निकाली गई <b>'ट्रिगर नक्षत्र'</b> के ऊपर से गुजरता है, तब जातक के जीवन में उस भाव से जुड़ा बड़ा परिवर्तन या कष्ट ट्रिगर होता है।
           </div>
-          <div className="relative">
-            <div className="absolute left-4 top-3 bottom-3 w-px pointer-events-none"
-              style={{ background:"linear-gradient(180deg,rgba(245,158,11,.35),rgba(245,158,11,.05))" }} />
-            {[...(avTurningPoints || [])].sort((a, b) => a.year - b.year).map(
-              ({ code, hindi, year, house, ageGroup, avSum, formula, planetaryReason, nature }, i) => {
-                const pm         = PLANET_META[code] || { color:"#94A3B8", symbol:"?" };
-                const col        = pm.color;
-                const isNear     = year >= currentYear - 2 && year <= currentYear + 10;
-                const isPast     = year < currentYear - 2;
-                const isPositive = nature === "good"  || /सुख|लाभ|उन्नति|सफलता|शुभ|धन/.test(ageGroup || "");
-                const isNegative = nature === "bad"   || /कष्ट|संकट|हानि|दुख|बाधा|रोग/.test(ageGroup || "");
-                const dotColor   = isNear ? C.amber : isPast ? "rgba(255,255,255,.12)" : isPositive ? C.green : isNegative ? C.rose : col;
 
-                return (
-                  <motion.div key={code} initial={{ opacity:0, x:8 }} animate={{ opacity:1, x:0 }}
-                    transition={{ delay: i * .05 }}
-                    className="relative flex items-stretch gap-3 mb-2.5 pl-10">
-                    <div className="absolute left-3 top-4 w-3 h-3 rounded-full -translate-x-1/2"
-                      style={{ background: dotColor, border:`2px solid ${dotColor}50`,
-                        boxShadow: isNear ? "0 0 10px rgba(245,158,11,.5)" : `0 0 6px ${dotColor}60` }} />
-                    <div className="flex-1 flex items-start gap-3 p-3 rounded-xl"
-                      style={{
-                        background: isNear ? "rgba(245,158,11,.08)" : isPast ? "rgba(255,255,255,.015)"
-                          : isPositive ? "rgba(74,222,128,.06)" : isNegative ? "rgba(251,113,133,.06)" : `${col}0A`,
-                        border: `1px solid ${isNear ? "rgba(245,158,11,.3)" : isPast ? "rgba(255,255,255,.04)"
-                          : isPositive ? "rgba(74,222,128,.2)" : isNegative ? "rgba(251,113,133,.2)" : col+"1E"}`,
-                        opacity: isPast ? .5 : 1,
-                      }}>
-                      <span className="text-xl flex-shrink-0 mt-0.5" style={{ color: isPast ? "#475569" : col }}>
-                        {pm.symbol}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[13px] font-black" style={{ color: isPast ? "#64748b" : col }}>
-                            {hindi || pm.label || code}
-                          </span>
-                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg"
-                            style={{ background:"rgba(255,255,255,.08)", color: isPast ? "#475569":"#CBD5E1" }}>
-                            भाव {house}
-                          </span>
-                          {isNear && <StatusPill color={C.amber} pulse>← निकट</StatusPill>}
-                        </div>
-                        {ageGroup && (
-                          <div className="text-[12px] font-bold mt-1.5 px-2 py-1 rounded-lg inline-block"
-                            style={{ color: isPast ? "#475569" : isPositive ? C.green : isNegative ? C.rose : col,
-                              background: isPast ? "transparent" : isPositive ? "rgba(74,222,128,.1)" : isNegative ? "rgba(251,113,133,.1)" : `${col}10`,
-                              border: isPast ? "none" : `1px solid ${isPast?"transparent":isPositive?C.green:isNegative?C.rose:col}30` }}>
-                            {isPositive ? "✅ " : isNegative ? "⚠️ " : ""}{ageGroup}
-                          </div>
-                        )}
-                        {planetaryReason && !isPast && (
-                          <div className="mt-1.5 text-[11px] leading-relaxed p-2 rounded-lg"
-                            style={{ background:`${col}0D`, border:`1px solid ${col}20`, color:"#CBD5E1" }}>
-                            <span style={{ color: col }} className="font-bold">🪐 कारण: </span>{planetaryReason}
-                          </div>
-                        )}
-                        {(formula || avSum != null) && (
-                          <div className="mt-1.5 text-[11px] font-mono p-2 rounded-lg"
-                            style={{ background:"rgba(255,255,255,.07)", border:`1px solid ${col}25`,
-                              color: isPast ? "#475569" : "#94A3B8" }}>
-                            {formula || `Σ(भाव 1→${house}) = ${avSum} | ×7 = ${avSum*7} | ÷27 = `}
-                            {!formula && <strong style={{ color: isPast ? "#475569" : col }}>{year} वर्ष</strong>}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <div className="text-[22px] font-black leading-none"
-                          style={{ color: isPast ? "#475569" : isNear ? C.amber : isPositive ? C.green : isNegative ? C.rose : col }}>
-                          {year}
-                        </div>
-                        <div className="text-[10px] font-bold mt-0.5"
-                          style={{ color: isPast ? "#475569" : col+"99" }}>वर्ष</div>
+          <div className="space-y-3">
+            {[...(avTurningPoints || [])].sort((a, b) => a.year - b.year).map((t, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }}
+                className="p-4 rounded-2xl shadow-lg flex flex-col gap-3 transition-all hover:shadow-xl"
+                style={{ background: "#1e293b", border: "1px solid rgba(148, 163, 184, 0.30)" }}>
+                
+                {/* Top Header */}
+                <div className="flex justify-between items-start">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[20px]">{PLANET_META[t.code]?.symbol || "•"}</span>
+                      <div>
+                        <span className="text-[13px] font-black text-amber-300 drop-shadow-sm">{t.hindi}</span>
+                        <div className="text-[11px] text-slate-300 mt-1">{t.ageGroup}</div>
                       </div>
                     </div>
-                  </motion.div>
-                );
-              }
-            )}
+                    <span className="px-2.5 py-1 rounded-md bg-white/10 text-white text-[10px] border border-white/20 font-bold w-fit">
+                      भाव {t.house}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-4xl font-black text-white drop-shadow-md">{t.year}</div>
+                    <div className="text-[10px] font-bold text-slate-400 mt-1">वर्ष की आयु</div>
+                  </div>
+                </div>
+
+                {/* Formula Box - Improved Contrast (Dark Black BG with Bright Text) */}
+                {t.formula && (
+                  <div className="px-3 py-3 rounded-lg font-mono text-[11.5px] tracking-wide shadow-inner overflow-x-auto whitespace-nowrap"
+                    style={{ background: "#050814", border: "1px solid rgba(100, 116, 139, 0.5)", color: "#fef3c7" }}>
+                    {t.formula}
+                  </div>
+                )}
+
+                {/* 🎯 Trigger Nakshatra Badge (Clear, Prominent & Explanatory) */}
+                {t.nakshatra && (
+                  <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl w-fit font-bold text-[12.5px] shadow-sm"
+                    style={{ background: "rgba(244, 63, 94, 0.20)", border: "1px solid rgba(244, 63, 94, 0.50)", color: "#fca5a5" }}>
+                    🎯 ट्रिगर नक्षत्र: <span style={{ color: "#f87171", fontSize: "13px", fontWeight: "900" }}>{t.nakshatra}</span>
+                  </div>
+                )}
+
+              </motion.div>
+            ))}
           </div>
+
           {avTotal != null && (
-            <div className="mt-2 p-2.5 rounded-xl text-[9px]"
-              style={{ background:"rgba(245,158,11,.06)", border:"1px solid rgba(245,158,11,.15)" }}>
-              <span className="text-amber-400/70">⭐ कुल सर्वाष्टकवर्ग: </span>
-              <span className="text-amber-300 font-black">{avTotal} बिंदु</span>
-              <span className="text-slate-600 ml-2">· औसत {(avTotal / 12).toFixed(1)}/भाव</span>
+            <div className="flex justify-between text-[10px] p-3 rounded-xl mt-4 font-bold"
+              style={{ background: "rgba(16, 185, 129, 0.06)", border: "1px solid rgba(16, 185, 129, 0.15)" }}>
+              <span className="text-slate-400">सर्वयोग:</span>
+              <span className="text-emerald-400">{avTotal} बिंदु</span>
+              <span className="text-slate-500">औसत: {(avTotal / 12).toFixed(1)} / भाव</span>
             </div>
           )}
         </CollapsibleSection>
@@ -367,9 +340,9 @@ export default function MasterConclusion({ data }) {
               const col = avColor(av);
               return (
                 <div key={n} className="rounded-xl p-2.5 text-center"
-                  style={{ background:`${col}0C`, border:`1px solid ${col}22` }}>
-                  <div className="text-[7px] text-slate-600">भाव {n}</div>
-                  <div className="text-[8px] text-slate-500 truncate">{rashi}</div>
+                  style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.35)" }}>
+                  <div className="text-[7px] text-slate-400">भाव {n}</div>
+                  <div className="text-[8px] text-slate-300 truncate">{rashi}</div>
                   <div className="text-[18px] font-black leading-tight" style={{ color: col }}>{av}</div>
                   <div className="text-[7px] mt-0.5" style={{ color: col }}>{avLabel(av)}</div>
                   <ProgressBar value={av} max={8} color={col} variant="thin"

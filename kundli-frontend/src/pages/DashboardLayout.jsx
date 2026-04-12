@@ -35,6 +35,7 @@ const AdvancedYogasPanel= lazy(() => import("../components/panels/Advancedyogasp
 const KPBTRPanel        = lazy(() => import("../components/panels/KPBTRPanel"));
 const VivahPanel        = lazy(() => import("../components/panels/VivahPanel"));
 const PrashnaKundli = lazy(() => import("../components/panels/PrashnaKundli"));
+const Chalit = lazy(() => import("../components/panels/Chalit"));
 
 // ── Suspense fallback — shown while a lazy panel is loading ──────────────
 function TabSkeleton() {
@@ -402,7 +403,7 @@ function buildPDFPage(pageNum, chartData) {
       <div style="flex:1">
         <div style="font-size:11px;font-weight:900;color:${c}">${t.hindi||t.code||""} — भाव ${t.house} ${t.nature==="good"?"✅":"⚠️"}</div>
         <div style="font-size:9px;color:#64748B;margin-top:1px">${t.ageGroup||""}${t.planetaryReason?" | "+t.planetaryReason:""}</div>
-        ${t.avSum?`<div style="font-size:8px;color:#334155;font-family:monospace">Σ(1→${t.house})=${t.avSum}×7÷27=${t.year}</div>`:""}
+        ${t.avSum?`<div style="font-size:8px;color:#334155;font-family:monospace">Σ(1→${t.house})=${t.avSum}×7%27=${t.year}</div>`:""}
       </div>
       ${near?`<span style="font-size:8px;padding:1px 5px;border-radius:4px;background:rgba(245,158,11,.2);color:#F59E0B;white-space:nowrap;align-self:center">← अभी</span>`:""}
     </div>`;
@@ -1622,6 +1623,53 @@ function buildPDFPage(pageNum, chartData) {
 
       ${stability ? `<div style="text-align:right;font-size:9px;color:#475569;margin-top:4px">कुंडली स्थिरता: <b style="color:#22D3EE">${stability}</b></div>` : ""}
 
+      ${(()=>{
+        const strength = pd.chalit?._planetStrength || {};
+        if (!Object.keys(strength).length) return "";
+        const ORDER = ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
+        let bal=0, madhyam=0, durbal=0;
+        ORDER.forEach(k=>{ const s=strength[k]; if(!s) return; if(s.score>=14) bal++; else if(s.score>=8) madhyam++; else durbal++; });
+        const rows = ORDER.map(k=>{
+          const s = strength[k];
+          if(!s) return "";
+          const sc   = Number(s.score||0).toFixed(2);
+          const col  = s.score>=14 ? "#4ADE80" : s.score>=8 ? "#F59E0B" : "#FB7185";
+          const purv = s.prev_cusp!=null ? Number(s.prev_cusp).toFixed(2)+"°" : (s.bhav_prev!=null ? Number(s.bhav_prev).toFixed(2)+"°" : "—");
+          const uttar= s.next_cusp!=null ? Number(s.next_cusp).toFixed(2)+"°" : (s.bhav_next!=null ? Number(s.bhav_next).toFixed(2)+"°" : "—");
+          return `<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
+            <td style="padding:5px 7px;color:#F59E0B;font-weight:900;font-size:11px">${PH[k]||k} ${PS[k]||""}</td>
+            <td style="padding:5px 7px;text-align:center;color:#94A3B8;font-weight:700">${s.house||"—"}</td>
+            <td style="padding:5px 7px;text-align:center">
+              <span style="font-size:13px;font-weight:900;color:${col}">${sc}</span>
+              <span style="font-size:8px;color:#475569">/20</span>
+            </td>
+            <td style="padding:5px 7px">
+              <span style="font-size:9px;font-weight:700;color:${col};padding:2px 6px;border-radius:4px;background:${col}12;border:1px solid ${col}25">${s.status_hi||"—"}</span>
+            </td>
+            <td style="padding:5px 7px;font-size:9px;color:#64748B">${purv}</td>
+            <td style="padding:5px 7px;font-size:9px;color:#64748B">${uttar}</td>
+          </tr>`;
+        }).join("");
+        return `
+        ${sect("🔢 विंशोपक बल (Bhav Strength)","#818CF8")}
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div style="padding:5px 10px;border-radius:6px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);font-size:10px;font-weight:700;color:#4ADE80">💪 ${bal} बलवान</div>
+          <div style="padding:5px 10px;border-radius:6px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);font-size:10px;font-weight:700;color:#F59E0B">〰️ ${madhyam} मध्यम</div>
+          <div style="padding:5px 10px;border-radius:6px;background:rgba(251,113,133,.08);border:1px solid rgba(251,113,133,.25);font-size:10px;font-weight:700;color:#FB7185">⚠️ ${durbal} दुर्बल</div>
+        </div>
+        <table style="font-size:10px;margin-bottom:8px">
+          <tr style="background:rgba(255,255,255,.05)">
+            <th>ग्रह</th><th style="text-align:center">भाव</th><th style="text-align:center">Score (/20)</th><th>स्थिति</th><th>पूर्व°</th><th>उत्तर°</th>
+          </tr>
+          ${rows}
+        </table>
+        <div style="padding:5px 9px;border-radius:5px;background:rgba(129,140,248,.04);border:1px solid rgba(129,140,248,.12);font-size:8px;color:#64748B;line-height:1.8">
+          💪 <b style="color:#4ADE80">बलवान</b> = 14 से अधिक (मध्य के पास) &nbsp;|&nbsp;
+          〰️ <b style="color:#F59E0B">मध्यम</b> = 8–14 &nbsp;|&nbsp;
+          ⚠️ <b style="color:#FB7185">दुर्बल</b> = 8 से कम या सन्धि पर
+        </div>`;
+      })()}
+
       ${foot(27, TOTAL_PAGES)}</div>${close}`;
   };
 
@@ -2057,6 +2105,7 @@ function RightPanel({ chartData }) {
             {activeTab === "kp_btr"         && <KPBTRPanel />}
             {activeTab === "vivah"           && <VivahPanel />}
             {activeTab === "prashna"         && <PrashnaKundli />}  {/* 🔥 PRASHNA KUNDLI TAB */}
+            {activeTab === "chalit" && <Chalit />}
           </motion.div>
           </AnimatePresence>
         </Suspense>

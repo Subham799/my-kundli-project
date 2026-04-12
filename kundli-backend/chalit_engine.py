@@ -417,7 +417,145 @@ def compare_d1_chalit(
 
 
 # ═══════════════════════════════════════════════════════════════════
-# SECTION 5 — MAIN PUBLIC API
+# SECTION 5 — BHAV SANDHI STRENGTH (Vimshopak-style)
+# ═══════════════════════════════════════════════════════════════════
+
+def _arc_length(start: float, end: float) -> float:
+    """
+    Forward arc length from start → end (zodiac direction).
+    Always positive in (0, 360]. Handles 360° wrap.
+    e.g. 350° → 20° = 30°
+    """
+    return (end - start) % 360.0
+
+
+def compute_bhav_strength(
+    planet_deg: float,
+    house_start: float,
+    house_end: float,
+) -> Dict[str, Any]:
+    """
+    Vimshopak-style Bhav Sandhi strength score (0–20).
+
+    Formula (Midpoint-based — correct Jyotish logic)
+    -------
+    Bhav Madhya (midpoint) = maximum strength → score 20
+    Bhav Sandhi (boundary) = zero strength    → score 0
+
+    score = (1 − dist_from_madhya / half_span) × 20
+
+    Interpretation
+    --------------
+    score >= 14  → Strong  (ग्रह भाव मध्य के पास — पूर्ण फलदाता)
+    score  8-13  → Medium  (मध्यम बल)
+    score  < 8   → Weak    (संधि के पास — निष्फल / अनिश्चित)
+
+    Principle: "भाव मध्ये स्थित ग्रह पूर्ण फलदाता,
+                संधि समीप स्थित ग्रह निष्फल।"
+    """
+    planet_deg  = normalize(planet_deg)
+    house_start = normalize(house_start)
+    house_end   = normalize(house_end)
+
+    total_span = _arc_length(house_start, house_end)
+
+    # Safety: degenerate house (bad data)
+    if total_span < 0.001:
+        return {
+            "score"      : 10.0,
+            "status"     : "medium",
+            "status_hi"  : "मध्यम",
+            "pct_traveled": 50.0,
+        }
+
+    half = total_span / 2.0
+
+    # Bhav Madhya = midpoint of the house arc
+    madhya = (house_start + half) % 360.0
+
+    # Shortest circular distance from planet to Madhya
+    dist = abs(angular_distance(planet_deg, madhya))   # always 0-180
+
+    # Clamp: guard float drift
+    dist = min(dist, half)
+
+    # Core formula: madhya → 20, sandhi → 0
+    score = round((1.0 - dist / half) * 20.0, 2)
+    score = max(0.0, score)
+
+    pct = round((1.0 - dist / half) * 100.0, 1)
+
+    if score >= 14.0:
+        status, status_hi = "strong", "बलवान"
+    elif score >= 8.0:
+        status, status_hi = "medium", "मध्यम"
+    else:
+        status, status_hi = "weak",   "दुर्बल (सन्धि)"
+
+    return {
+        "score"      : score,
+        "status"     : status,
+        "status_hi"  : status_hi,
+        "pct_traveled": pct,
+    }
+
+
+def compute_all_planet_strengths(
+    planet_list: List[Dict],
+    sandhis: List[float],
+) -> Dict[str, Dict]:
+    """
+    Compute Bhav Sandhi strength for every planet.
+
+    Parameters
+    ----------
+    planet_list : Output of place_planets() — needs "code", "degree", "chalit_house"
+    sandhis     : 12 Bhav Sandhi degrees from compute_shripati_houses()
+
+    Returns
+    -------
+    {
+        "Su": {"house":10, "score":17.5, "status":"strong",
+               "status_hi":"बलवान", "poorva":12.3, "uttara":3.2,
+               "total_span":28.5, "pct_traveled":87.3},
+        ...
+    }
+    """
+    result: Dict[str, Dict] = {}
+    for p in planet_list:
+        code     = p["code"]
+        deg      = float(p["degree"])
+        chalit_h = int(p["chalit_house"])
+
+        h_start = sandhis[chalit_h - 1]
+        h_end   = sandhis[chalit_h % 12]   # next sandhi = this house end
+
+        strength      = compute_bhav_strength(deg, h_start, h_end)
+        result[code]  = {"house": chalit_h, **strength}
+
+    return result
+
+
+def build_bhav_sandhi_output(sandhis: List[float]) -> List[Dict]:
+    """
+    Build bhavSandhi list for API response.
+
+    Returns
+    -------
+    [{"house":1, "start_deg":12.34, "end_deg":42.10}, ...]
+    """
+    return [
+        {
+            "house"    : i + 1,
+            "start_deg": round(sandhis[i], 4),
+            "end_deg"  : round(sandhis[(i + 1) % 12], 4),
+        }
+        for i in range(12)
+    ]
+
+
+# ═══════════════════════════════════════════════════════════════════
+# SECTION 6 — MAIN PUBLIC API
 # ═══════════════════════════════════════════════════════════════════
 
 def get_bhav_chalit(
@@ -483,10 +621,20 @@ def get_bhav_chalit(
     # ── Comparison ────────────────────────────────────────────────
     comparison = compare_d1_chalit(planets_d1, planet_list)
 
+    # ── Bhav Sandhi boundaries (always included) ──────────────────
+    flat_bhav_sandhi = build_bhav_sandhi_output(house_data["sandhis"])
+
+    # ── Planet strength scores ────────────────────────────────────
+    planet_strength = compute_all_planet_strengths(
+        planet_list, house_data["sandhis"]
+    )
+
     # ── Flat dict (backward compatible with old chalit_engine) ────
     flat: Dict[str, Any] = {}
     for p in planet_list:
-        flat[p["code"]] = {
+        code     = p["code"]
+        strength = planet_strength.get(code, {})
+        flat[code] = {
             "house"           : p["chalit_house"],
             "d1_house"        : p["d1_house"],
             "is_changed"      : p["is_changed"],
@@ -496,12 +644,20 @@ def get_bhav_chalit(
             "is_rashi_sandhi" : p["is_rashi_sandhi"],
             "degree"          : p["degree"],
             "dist_from_madhya": p["dist_from_madhya"],
+            # ── Strength fields (inline for frontend convenience) ──
+            "score"           : strength.get("score",        0.0),
+            "status"          : strength.get("status",       "medium"),
+            "status_hi"       : strength.get("status_hi",    "मध्यम"),
+            "pct_traveled"    : strength.get("pct_traveled", 50.0),
         }
 
     flat["_planets"]    = planet_list
     flat["_comparison"] = comparison
     if include_house_data:
         flat["_houses"] = house_data["houses"]
+
+    flat["_bhavSandhi"]     = flat_bhav_sandhi
+    flat["_planetStrength"] = planet_strength
 
     return flat
 
@@ -600,8 +756,8 @@ if __name__ == "__main__":
     res = get_bhav_chalit(jd_test, LAT, LON, sample, include_house_data=False)
 
     print(f"\n  {'Planet':<10} {'D1':>4} {'Chalit':>7}  "
-          f"{'Changed':>8}  {'BhavS':>7}  {'RashiS':>7}  {'SandhiDist':>11}")
-    print("  " + "─" * 62)
+          f"{'Changed':>8}  {'BhavS':>7}  {'RashiS':>7}  {'SandhiDist':>11}  {'Score':>6}  {'Status'}")
+    print("  " + "─" * 80)
     for code in ["Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa", "Ra", "Ke"]:
         if code not in res:
             continue
@@ -611,7 +767,7 @@ if __name__ == "__main__":
         rs  = "⚠️ YES" if p["is_rashi_sandhi"] else "  —"
         print(f"  {PLANET_ENGLISH.get(code,code):<10} {p['d1_house']:>4} "
               f"{p['house']:>7}  {ch:>9}  {bs:>9}  {rs:>9}  "
-              f"{p['bhav_sandhi_dist']:>8.4f}°")
+              f"{p['bhav_sandhi_dist']:>8.4f}°  {p['score']:>6.2f}  {p['status']}")
 
     cmp = res["_comparison"]
     s   = cmp["summary"]

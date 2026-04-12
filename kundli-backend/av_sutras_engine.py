@@ -27,6 +27,14 @@ from datetime import timedelta
 
 # Paap (Malefic) and Shubh (Benefic) planets
 PAAP_PLANETS  = {"Sa", "Ma", "Su", "Ra"}   # Shani, Mangal, Surya, Rahu
+
+NAKSHATRA_LIST = [
+    "अश्विनी","भरणी","कृत्तिका","रोहिणी","मृगशिरा","आर्द्रा","पुनर्वसु",
+    "पुष्य","आश्लेषा","मघा","पूर्वा फाल्गुनी","उत्तरा फाल्गुनी",
+    "हस्त","चित्रा","स्वाती","विशाखा","अनुराधा","ज्येष्ठा",
+    "मूल","पूर्वाषाढ़ा","उत्तराषाढ़ा","श्रवण","धनिष्ठा",
+    "शतभिषा","पूर्व भाद्रपद","उत्तर भाद्रपद","रेवती"
+]
 SHUBH_PLANETS = {"Ju", "Ve", "Me", "Mo"}   # Guru, Shukra, Budh, Chandra
 
 # Planet display names (Hindi + English)
@@ -809,6 +817,11 @@ def get_hardship_years(
         remainder = product % 27
         age = remainder if remainder != 0 else 27
 
+        # Ashwini se nakshatra gino (1-based → 0-based index)
+        nak_index = (age - 1) % 27
+        nakshatra = NAKSHATRA_LIST[nak_index]
+        trigger_rule = f"जब शनि/राहु {nakshatra} नक्षत्र से गोचर करेंगे → घटना सक्रिय होगी"
+
         activation = _check_activation(
             code, house, age, current_age,
             current_dasha, tp, sav, kaksha_score, antardasha
@@ -825,6 +838,8 @@ def get_hardship_years(
             "sav_sum":         total,
             "formula":         f"{total} × 7 = {product} ÷ 27 → शेष {age}",
             "age":             age,
+            "nakshatra":       nakshatra,
+            "trigger_rule":    trigger_rule,
             "type":            "hardship",
             "label":           "⚠️ कष्ट का वर्ष",
             "description":     f"{age} वर्ष की आयु में भारी समस्याएं, दुख या संकट आ सकता है।",
@@ -860,6 +875,11 @@ def get_fortune_years(
         remainder = product % 27
         age = remainder if remainder != 0 else 27
 
+        # Ashwini se nakshatra gino (1-based → 0-based index)
+        nak_index = (age - 1) % 27
+        nakshatra = NAKSHATRA_LIST[nak_index]
+        trigger_rule = f"जब गुरु/शुक्र {nakshatra} नक्षत्र से गोचर करेंगे → शुभ फल सक्रिय होगा"
+
         activation = _check_activation(
             code, house, age, current_age,
             current_dasha, tp, sav, kaksha_score, antardasha
@@ -876,6 +896,8 @@ def get_fortune_years(
             "sav_sum":         total,
             "formula":         f"{total} × 7 = {product} ÷ 27 → शेष {age}",
             "age":             age,
+            "nakshatra":       nakshatra,
+            "trigger_rule":    trigger_rule,
             "type":            "fortune",
             "label":           "🌟 भाग्योदय का वर्ष",
             "description":     f"{age} वर्ष की आयु में जीवन का सबसे बड़ा सुख, सफलता और समृद्धि प्राप्त होगी।",

@@ -666,6 +666,129 @@ function PunarjanmaBlock({ data }) {
 // ══════════════════════════════════════════════════
 // MAIN EXPORT
 // ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// ADVANCED TRANSIT SEARCHER — inline component
+// ══════════════════════════════════════════════════
+const RASHI_LIST=[{id:1,name:"मेष"},{id:2,name:"वृषभ"},{id:3,name:"मिथुन"},{id:4,name:"कर्क"},
+  {id:5,name:"सिंह"},{id:6,name:"कन्या"},{id:7,name:"तुला"},{id:8,name:"वृश्चिक"},
+  {id:9,name:"धनु"},{id:10,name:"मकर"},{id:11,name:"कुंभ"},{id:12,name:"मीन"}];
+const PLANET_LIST=[{id:"Su",name:"सूर्य"},{id:"Mo",name:"चंद्र"},{id:"Ma",name:"मंगल"},
+  {id:"Me",name:"बुध"},{id:"Ju",name:"गुरु"},{id:"Ve",name:"शुक्र"},
+  {id:"Sa",name:"शनि"},{id:"Ra",name:"राहु"},{id:"Ke",name:"केतु"}];
+
+function AdvancedTransitSearcher() {
+  const [startDate, setStartDate]   = useState("2024-01-01");
+  const [endDate,   setEndDate]     = useState("2030-12-31");
+  const [conditions, setConditions] = useState([{planet:"Sa", sign:12}]);
+  const [results,   setResults]     = useState(null);
+  const [loading,   setLoading]     = useState(false);
+  const [searched,  setSearched]    = useState(false);
+  const [error,     setError]       = useState(null);
+
+  const updateCond = (idx, key, val) => {
+    const c = [...conditions];
+    c[idx] = {...c[idx], [key]: val};
+    setConditions(c);
+  };
+
+  const handleSearch = async () => {
+    setLoading(true); setSearched(true); setError(null);
+    try {
+      const res  = await fetch("/api/transit_search", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({start_date:startDate, end_date:endDate, conditions})
+      });
+      const data = await res.json();
+      if(data.success) setResults(data.periods);
+      else setError(data.error || "सर्वर से गलत response");
+    } catch(e) { setError("नेटवर्क एरर — सर्वर से connect नहीं हो पाया"); }
+    setLoading(false);
+  };
+
+  return (
+    <div className="p-4 rounded-2xl mb-3 mt-2"
+      style={{background:"rgba(8,12,28,.97)", border:`1px solid ${C.teal}30`}}>
+      <div className="text-[11px] font-bold uppercase tracking-widest mb-4"
+        style={{color:C.teal,...HI}}>🔍 सटीक गोचर खोज</div>
+
+      {/* Date range */}
+      <div className="flex gap-3 mb-4">
+        <div className="flex-1">
+          <label className="text-[10px] text-slate-400 block mb-1" style={HI}>कब से शुरू</label>
+          <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)}
+            className="w-full bg-slate-900 border border-slate-700 text-white p-2 rounded-xl text-[12px] outline-none"/>
+        </div>
+        <div className="flex-1">
+          <label className="text-[10px] text-slate-400 block mb-1" style={HI}>कब तक खत्म</label>
+          <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)}
+            className="w-full bg-slate-900 border border-slate-700 text-white p-2 rounded-xl text-[12px] outline-none"/>
+        </div>
+      </div>
+
+      {/* Conditions */}
+      <div className="mb-4 p-3 rounded-xl bg-white/5 border border-white/10">
+        {conditions.map((cond,i)=>(
+          <div key={i} className="flex gap-2 mb-2 items-center">
+            <select value={cond.planet} onChange={e=>updateCond(i,"planet",e.target.value)}
+              className="bg-slate-800 border border-slate-600 text-amber-400 p-2 rounded-lg text-[12px] font-bold outline-none">
+              {PLANET_LIST.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <span className="text-slate-500">➔</span>
+            <select value={cond.sign} onChange={e=>updateCond(i,"sign",e.target.value)}
+              className="flex-1 bg-slate-800 border border-slate-600 text-cyan-400 p-2 rounded-lg text-[12px] outline-none" style={HI}>
+              {RASHI_LIST.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+            {conditions.length>1&&(
+              <button onClick={()=>setConditions(conditions.filter((_,j)=>j!==i))}
+                className="p-2 text-rose-400 rounded-lg text-[13px]">✕</button>
+            )}
+          </div>
+        ))}
+        <button onClick={()=>setConditions([...conditions,{planet:"Ju",sign:4}])}
+          className="mt-2 text-[10px] font-bold text-teal-400" style={HI}>
+          + और ग्रह जोड़ें
+        </button>
+      </div>
+
+      {/* Search button */}
+      <button onClick={handleSearch} disabled={loading}
+        className="w-full font-black py-2.5 rounded-xl text-[13px] transition-opacity"
+        style={{background:C.teal, color:"#0f172a", opacity:loading?0.6:1,...HI}}>
+        {loading ? "🔄 खोज रहा है..." : "🔍 समय खोजें"}
+      </button>
+
+      {/* Error */}
+      {error&&(
+        <div className="mt-3 p-3 rounded-xl text-[11px]"
+          style={{background:"rgba(251,113,133,.1)",border:`1px solid ${C.rose}30`,color:C.rose,...HI}}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* Results */}
+      {searched && !error && results && (
+        <div className="mt-5 p-3 rounded-xl" style={{background:`${C.teal}12`,border:`1px solid ${C.teal}30`}}>
+          <h4 className="text-[12px] font-bold mb-2" style={{color:C.teal,...HI}}>
+            परिणाम: {results.length} बार योग बना
+          </h4>
+          {results.length===0
+            ? <div className="text-slate-400 text-[11px]" style={HI}>इस अवधि में ऐसी ग्रह स्थिति नहीं है।</div>
+            : <ul className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                {results.map((p,i)=>(
+                  <li key={i} className="bg-slate-900 border border-white/10 p-2.5 rounded-lg text-[11px] flex justify-between items-center">
+                    <span className="font-bold" style={{color:C.green}}>{p.start}</span>
+                    <span className="text-slate-500 text-[10px]">से</span>
+                    <span className="font-bold" style={{color:C.rose}}>{p.end}</span>
+                  </li>
+                ))}
+              </ul>
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TABS=[
   {k:"combined",  l:"📊 समग्र",       color:C.cyan},
   {k:"sati",      l:"🪐 साढ़े साती",  color:C.red},
@@ -673,6 +796,7 @@ const TABS=[
   {k:"jupiter",   l:"♃ गुरु",         color:C.yellow},
   {k:"rahu",      l:"☊ राहु-केतु",   color:C.purple},
   {k:"daily",     l:"📅 दैनिक",       color:C.blue},
+  {k:"search",    l:"🔍 गोचर खोज",   color:C.teal},
 ];
 
 export default function GocharPanel({ chartData }) {
@@ -811,6 +935,7 @@ export default function GocharPanel({ chartData }) {
           {tab==="rahu"    && <Card color={C.purple}><SLabel color={C.purple}>☊ राहु-केतु गोचर फलादेश</SLabel>
             <RahuTransitBlock rahuHouse={rahuH} ketuHouse={ketuH} moonSignHi={moonSignHi} transitPos={transitPos}/></Card>}
           {tab==="daily"   && <DailyGocharTab data={chartData?.enginesData?.daily_prediction} />}
+          {tab==="search"  && <AdvancedTransitSearcher />}
         </motion.div>
       </AnimatePresence>
     </div>
