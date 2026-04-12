@@ -333,15 +333,16 @@ class AgeCalculator:
     @staticmethod
     def calculate_age_of_sorrow(planet_house: int, ashtakvarga_points: Dict[int, int]) -> int:
         """
-        Formula: (Sum of points from Lagna to planet's house) * 7 / 27
-        Return only quotient (floor value), ignore remainder
+        Formula: (Sum of points from Lagna to planet's house) * 7 % 27
+        Return the REMAINDER (modulo), not quotient - as per classical Jyotish
         """
         total_sum = sum(ashtakvarga_points.get(h, 0) for h in range(1, planet_house + 1))
         
         product = total_sum * 7
-        quotient = math.floor(product / 27)
+        remainder = product % 27
+        age = remainder if remainder != 0 else 27
         
-        return quotient
+        return age
     
     @staticmethod
     def calculate_all_sorrow_ages(planet_positions: Dict[str, Dict], 

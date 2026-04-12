@@ -866,12 +866,16 @@ def check_ashtakavarga_special(sav, houses):
         p_house = next((h for h, hd in houses.items() if p_short in hd.get("planets","").split(", ")), None)
         if p_house is None: continue
         total = sum(sav[h-1] for h in range(1, p_house + 1))
-        raw = total * 7; age = raw // 27
+        raw = total * 7
+        remainder = raw % 27
+        age = remainder if remainder != 0 else 27
         label = "बाल्यकाल" if age <= 12 else ("युवावस्था" if age <= 25 else ("प्रौढ़ता" if age <= 36 else ("मध्यावस्था" if age <= 50 else "परिपक्व आयु")))
-        results[p_code] = {'house':p_house,'av_sum':total,'raw':raw,'age':age,'planet_hindi':ph.get(p_code,p_code),'label':label,'formula_shown':f"Σ(भाव 1→{p_house}) = {total} | {total}×7={raw} | {raw}÷27 = {age}वर्ष"}
+        results[p_code] = {'house':p_house,'av_sum':total,'raw':raw,'age':age,'planet_hindi':ph.get(p_code,p_code),'label':label,'formula_shown':f"Σ(भाव 1→{p_house}) = {total} | {total}×7={raw} | {raw}%27 = {age}वर्ष"}
     special_notes = []
     if "श" in houses[1].get("planets","") and "गु" in houses[1].get("planets",""):
-        lagna_sum = sav[0]; _, _, age_sg = lagna_sum*7, lagna_sum*7//27, lagna_sum*7//27
+        lagna_sum = sav[0]
+        age_sg = (lagna_sum * 7) % 27
+        age_sg = age_sg if age_sg != 0 else 27
         special_notes.append(f"शनि-गुरु लग्न: टर्निंग पॉइंट {age_sg}वें वर्ष")
     return results, special_notes
 
@@ -1583,8 +1587,9 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         if h < 1: continue
         # 🔥 FIX: Sum bhav 1 to h using houses[]["av"] (already rotated)
         av_sum = sum(houses[i]["av"] for i in range(1, h+1))
-        year   = int(av_sum * 7 / 27)
-        formula_str = f"Σ(1→{h})={av_sum} | {av_sum}×7={av_sum*7} | {av_sum*7}÷27 = {year}वर्ष"
+        remainder = (av_sum * 7) % 27
+        year = remainder if remainder != 0 else 27
+        formula_str = f"Σ(1→{h})={av_sum} | {av_sum}×7={av_sum*7} | {av_sum*7}%27 = {year}वर्ष"
         nak_index = (av_sum * 7 % 27) if (av_sum * 7 % 27) > 0 else 27
         nakshatra = NAKSHATRA[nak_index - 1]
         av_turning.append({
