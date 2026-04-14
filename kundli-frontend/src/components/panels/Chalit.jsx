@@ -2,6 +2,7 @@
 // चलित पैनल — D1 vs Chalit comparison + Bhav Sandhi + Planet Strength
 import { useState, useEffect, useCallback } from "react";
 import useKundliStore from "../../store/useKundliStore";
+import ShodhanaPanel from "./ShodhanaPanel"; // 🔥 NEW IMPORT
 
 const HI = { fontFamily: "'Noto Sans Devanagari', sans-serif" };
 
@@ -553,7 +554,7 @@ function YearlyPrediction({ yearly, onAgeChange, age, loading, error }) {
           <div style={{ marginTop:12, display:"flex", gap:12, flexWrap:"wrap", fontSize:10, color:C.muted, ...HI }}>
             <span>✦ = त्रिक भाव — उल्टा नियम</span>
             <span>सीमा = 85 अंक</span>
-            <span>🔥 > 100 असाधारण | ⚠️ &lt; 70 दुर्बल</span>
+            <span>🔥 &gt; 100 असाधारण | ⚠️ &lt; 70 दुर्बल</span>
           </div>
         </>
       )}
@@ -686,6 +687,7 @@ const TABS = [
   { k:"strength",   l:"⚖️ ग्रह बल",      color:C.green         },
   { k:"sudarshan",  l:"🔱 सुदर्शन चक्र", color:SUDARSHAN_PURPLE},
   { k:"maitri",     l:"🤝 पंचधा मैत्री", color:MAITRI_PINK     },
+  { k:"shodhana",   l:"🔱 शोधन विश्लेषण", color:"#10B981"       }, // 🔥 NEW TAB
   { k:"yearly",     l:"📅 वार्षिक फल",    color:YEARLY_INDIGO   },
 ];
 
@@ -746,6 +748,11 @@ export default function Chalit() {
   const strength  = chartData?.planetStrength || {};
   const sudarshan = chartData?.sudarshan      || {};
   const maitri    = chartData?.maitri          || {};
+  // 🔥 enginesData.shodhana first, fallback chartData.shodhana
+  const shodhanaData = chartData?.enginesData?.shodhana
+                    || chartData?.shodhana
+                    || {};
+  const lagnaIdx = chartData?.planets?.La?.Vargas?.D1?.Idx ?? 0;
 
   return (
     <div style={{ paddingBottom:32 }}>
@@ -787,6 +794,15 @@ export default function Chalit() {
       {tab === "strength"   && <PlanetStrengthTable strength={strength} />}
       {tab === "sudarshan"  && <SudarshanChakra    sudarshan={sudarshan} />}
       {tab === "maitri"     && <MaitriTable          maitri={maitri} />}
+      {tab === "shodhana"   && (
+        shodhanaData?.trikona_shodhana ? (
+          <ShodhanaPanel shodhanaData={shodhanaData} lagnaIdx={lagnaIdx} />
+        ) : (
+          <div style={{padding:24, textAlign:"center", color:C.slate, fontSize:12, ...HI}}>
+            ⚠️ शोधन डेटा उपलब्ध नहीं
+          </div>
+        )
+      )}
       {tab === "yearly"     && (
         <YearlyPrediction
           yearly={yearly}

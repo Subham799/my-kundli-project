@@ -33,6 +33,7 @@ from chalit_engine import get_bhav_chalit
 from sudarshan_engine import get_sudarshan_data
 from yearly_engine import get_yearly_prediction
 from maitri_engine import compute_maitri
+from shodhana_engine import run_shodhana
 
 
 # ── Sunrise calculator ────────────────────────────────────────────────────
@@ -1137,6 +1138,9 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         print(f"[Maitri Engine] Error: {_me}")
         maitri_data = {}
 
+    # ── Shodhana placeholder — computed after engines_data below ──
+    shodhana_data = {}
+
     # ── Sudarshan Chakra ──────────────────────────────────────────
     try:
         sudarshan_data = get_sudarshan_data(astro, sav_points)
@@ -1671,6 +1675,19 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
     except Exception as _e:
         engines_data = {"error": str(_e)}
 
+    # ── Shodhana Engine — सही call (astro + AV_RULES) ──────────────────────
+    # NOTE: run_shodhana खुद compute_bav() करता है — बाहर से BAV नहीं चाहिए
+    try:
+        shodhana_data = run_shodhana(astro, AV_RULES)
+        print("[Shodhana] OK — keys:", list(shodhana_data.keys()))
+    except Exception as _sho_e:
+        print(f"[Shodhana Engine Error] {_sho_e}")
+        shodhana_data = {}
+
+    # ── CRITICAL: enginesData में inject ────────────────────────────────────
+    # Frontend chartData.enginesData.shodhana पढ़ता है
+    engines_data["shodhana"] = shodhana_data
+
     return {
         "meta": {
             "name":      name,
@@ -1718,11 +1735,12 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         "ashtakavargaSpecial": ashtakavarga_special,
         "disease12th":       disease_12th,
         "badhakHouse":       badhak_house_num,
-        "enginesData":       {**engines_data, "nadi_jyotish": nadi_jyotish_output},
+        "enginesData":       {**engines_data, "nadi_jyotish": nadi_jyotish_output, "shodhana": shodhana_data},
         "chalit":            chalit_data,
         "bhavSandhi":        chalit_data.get("_bhavSandhi", []),
         "planetStrength":    chalit_data.get("_planetStrength", {}),
         "maitri":            maitri_data,
+        "shodhana":          shodhana_data,
         "sudarshan":         sudarshan_data,
         "yearly":            yearly_data,
     }, None
