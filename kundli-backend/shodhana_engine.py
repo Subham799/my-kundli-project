@@ -299,6 +299,52 @@ def get_trigger_events(
 
 
 # ═══════════════════════════════════════════════════════════════════
+# SECTION 6B — WEAK BHAV ANALYSIS
+# ═══════════════════════════════════════════════════════════════════
+
+def analyze_weak_bhav(
+    original_bav: Dict[str, List[int]],
+    lagna_idx: int,
+) -> List[Dict]:
+    """
+    हर भाव का SAV (सर्वाष्टकवर्ग) निकालता है और check करता है:
+      1. SAV < 25 → भाव कमजोर
+      2. उस भाव में कौन-कौन से ग्रह ने < 4 points दिए (BAV से)
+
+    lagna_idx: 0-based rashi index of Lagna
+    Returns list of 12 bhav dicts.
+    """
+    result = []
+
+    for bhav in range(1, 13):                          # भाव 1 से 12
+        rashi_idx = (lagna_idx + bhav - 1) % 12       # भाव → रashi index
+
+        # SAV = सभी ग्रहों के उस rashi में points का योग
+        sav_points = sum(
+            original_bav[p][rashi_idx]
+            for p in PLANETS_7
+            if p in original_bav
+        )
+
+        # कौन से ग्रहों ने < 4 points दिए
+        weak_planets = [
+            p for p in PLANETS_7
+            if p in original_bav and original_bav[p][rashi_idx] < 4
+        ]
+
+        result.append({
+            "bhav"         : bhav,
+            "rashi_idx"    : rashi_idx,
+            "sav_points"   : sav_points,
+            "sav_weak"     : sav_points < 25,
+            "weak_planets" : weak_planets,        # BAV < 4 wale graha
+            "both_weak"    : sav_points < 25,     # SAV weak flag (frontend filter kar sakta hai)
+        })
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════
 # SECTION 7 — MAIN PUBLIC API (called from api.py)
 # ═══════════════════════════════════════════════════════════════════
 
@@ -327,17 +373,21 @@ def run_shodhana(astro: Dict, av_rules: Dict) -> Dict[str, Any]:
             if p in astro:
                 planet_positions[p] = int(astro[p]["Vargas"]["D1"]["Idx"]) + 1
 
+        lagna_idx     = int(astro["La"]["Vargas"]["D1"]["Idx"])
         original_bav  = compute_bav(astro, av_rules)
         trikona       = apply_trikona_shodhana(original_bav)
         ekadhipatya   = apply_ekadhipatya_shodhana(trikona, planet_positions)
         shodhya_pinda = calculate_shodhya_pinda(ekadhipatya, planet_positions)
         event_triggers = get_trigger_events(shodhya_pinda, original_bav, planet_positions)
+        weak_bhav     = analyze_weak_bhav(original_bav, lagna_idx)
 
         return {
             "trikona_shodhana"     : trikona,
             "ekadhipatya_shodhana" : ekadhipatya,
             "shodhya_pinda"        : shodhya_pinda,
             "event_triggers"       : event_triggers,
+            "original_bav"         : original_bav,
+            "weak_bhav_analysis"   : weak_bhav,
         }
 
     except Exception as e:

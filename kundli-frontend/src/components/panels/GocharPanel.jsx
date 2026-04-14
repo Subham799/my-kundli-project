@@ -789,6 +789,366 @@ function AdvancedTransitSearcher() {
   );
 }
 
+// ══════════════════════════════════════════════════════════════════
+// WEAK BHAV GOCHAR TAB — कमजोर भाव × गोचर (user date range)
+// ══════════════════════════════════════════════════════════════════
+
+const PLANET_COLOR = {
+  Su: C.amber, Mo: C.cyan,  Ma: C.rose,   Me: C.green,
+  Ju: C.yellow,Ve: C.pink,  Sa: C.indigo, Ra: C.purple, Ke: C.orange,
+};
+const PLANET_FULL_HI = {
+  Su:"सूर्य", Mo:"चंद्र", Ma:"मंगल", Me:"बुध",
+  Ju:"गुरु",  Ve:"शुक्र", Sa:"शनि",  Ra:"राहु", Ke:"केतु",
+};
+const BHAV_COLOR = (sav) => sav < 20 ? C.red : sav < 25 ? C.rose : C.amber;
+
+// Helper — is this bhav weak? (sav_weak flag OR sav_points < 25 fallback)
+function isBhavWeak(b) {
+  if (!b?.weak_planets?.length) return false;
+  if (b.sav_weak != null) return !!b.sav_weak;
+  return (b.sav_points ?? 999) < 25;
+}
+
+// Planet options for filter (Mo is last, default OFF)
+const PLANET_OPTIONS = [
+  { code:"Su", label:"सूर्य"  },
+  { code:"Ma", label:"मंगल"  },
+  { code:"Me", label:"बुध"   },
+  { code:"Ju", label:"गुरु"  },
+  { code:"Ve", label:"शुक्र" },
+  { code:"Sa", label:"शनि"  },
+  { code:"Mo", label:"चंद्र" },
+];
+
+function WeakGocharTab({ chartData }) {
+  const weakBhav = chartData?.enginesData?.shodhana?.weak_bhav_analysis;
+
+  // ── FIX: user-controlled date range (was hardcoded decade) ──────
+  const todayISO = new Date().toISOString().split("T")[0];
+  const plus2ISO  = new Date(Date.now() + 2*365*24*60*60*1000).toISOString().split("T")[0];
+
+  const [startDate,       setStartDate]       = useState(todayISO);
+  const [endDate,         setEndDate]         = useState(plus2ISO);
+  const [loading,         setLoading]         = useState(false);
+  const [alerts,          setAlerts]          = useState(null);
+  const [error,           setError]           = useState(null);
+  const [expanded,        setExpanded]        = useState({});
+  const [dateError,       setDateError]       = useState(null);
+  // Planet filter — Mo excluded by default (prevents spam)
+  const [selectedPlanets, setSelectedPlanets] = useState(["Su","Ma","Me","Ju","Ve","Sa"]);
+
+  const togglePlanet = (code) =>
+    setSelectedPlanets(prev =>
+      prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
+    );
+
+  // Quick-range presets
+  const PRESETS = [
+    { label:"1 साल",  days: 365 },
+    { label:"2 साल",  days: 730 },
+    { label:"5 साल",  days: 1825 },
+    { label:"10 साल", days: 3650 },
+  ];
+  const applyPreset = (days) => {
+    const s = new Date();
+    const e = new Date(Date.now() + days*24*60*60*1000);
+    setStartDate(s.toISOString().split("T")[0]);
+    setEndDate(e.toISOString().split("T")[0]);
+    setAlerts(null);
+  };
+
+  const fetchAlerts = async () => {
+    if (!weakBhav?.length) { setError("Shodhana data नहीं मिला"); return; }
+    if (startDate >= endDate) { setDateError("Start date, end date से पहले होनी चाहिए"); return; }
+    setDateError(null);
+    setLoading(true); setError(null); setAlerts(null); setExpanded({});
+    try {
+      const res  = await fetch("/api/weak_gochar_periods", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          weak_bhav_analysis: weakBhav,
+          start_date: startDate,
+          end_date:   endDate,
+          planets:    selectedPlanets,          // 🔑 planet filter
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        // ── FIX: backend returns "alerts" key ────────────────────
+        setAlerts(data.alerts ?? data.periods ?? []);
+      } else {
+        setError(data.error || "सर्वर से गलत response");
+      }
+    } catch (e) {
+      setError("नेटवर्क एरर — सर्वर से connect नहीं हो पाया");
+    }
+    setLoading(false);
+  };
+
+  // Group alerts by bhav
+  const grouped = alerts ? alerts.reduce((acc, a) => {
+    const key = a.bhav;
+    if (!acc[key]) acc[key] = { bhav: a.bhav, rashi_name: a.rashi_name, sav_points: a.sav_points, items: [] };
+    acc[key].items.push(a);
+    return acc;
+  }, {}) : {};
+  const groupList = Object.values(grouped).sort((a,b) => a.bhav - b.bhav);
+
+  if (!weakBhav) return (
+    <Card color={C.rose}>
+      <div className="text-center py-8 text-slate-400 text-[12px]" style={HI}>
+        ⚠️ Shodhana data नहीं मिला।<br/>
+        <span className="text-[11px]">पहले कुंडली बनाएं — enginesData.shodhana.weak_bhav_analysis चाहिए।</span>
+      </div>
+    </Card>
+  );
+
+  // ── FIX: use isBhavWeak() — was b.sav_weak only (missed fallback cases) ──
+  const weakOnly = weakBhav.filter(isBhavWeak);
+
+  return (
+    <div>
+      {/* ── Weak Bhav Table (SAV + weak_planets) ─────────────────── */}
+      <div className="p-3 rounded-2xl mb-4" style={{background:"rgba(251,113,133,.07)",border:`1px solid ${C.rose}25`}}>
+        <div className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{color:C.rose,...HI}}>
+          ⚠️ कमजोर भाव — SAV + कमजोर ग्रह (BAV &lt; 4)
+        </div>
+        {weakOnly.length === 0 ? (
+          <span className="text-[11px] text-slate-400" style={HI}>कोई कमजोर भाव नहीं — सब SAV ≥ 25 ✅</span>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px] border-collapse">
+              <thead>
+                <tr style={{color:"#94A3B8"}}>
+                  <th className="text-left px-2 py-1.5 font-bold border-b" style={{borderColor:"rgba(255,255,255,.08)"}}>भाव</th>
+                  <th className="text-left px-2 py-1.5 font-bold border-b" style={{borderColor:"rgba(255,255,255,.08)"}}>SAV</th>
+                  <th className="text-left px-2 py-1.5 font-bold border-b" style={{borderColor:"rgba(255,255,255,.08)"}}>कमजोर ग्रह (BAV &lt; 4)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {weakOnly.map(b => {
+                  const bc = BHAV_COLOR(b.sav_points);
+                  return (
+                    <tr key={b.bhav} className="border-b" style={{borderColor:"rgba(255,255,255,.05)"}}>
+                      <td className="px-2 py-2 font-black" style={{color:bc,...HI}}>{b.bhav}वाँ</td>
+                      <td className="px-2 py-2 font-black" style={{color:bc}}>
+                        {b.sav_points ?? "—"}
+                        {(b.sav_points ?? 99) < 20 && <span className="ml-1">🔴</span>}
+                        {(b.sav_points ?? 99) >= 20 && (b.sav_points ?? 99) < 25 && <span className="ml-1">🟠</span>}
+                      </td>
+                      <td className="px-2 py-2">
+                        {b.weak_planets?.length ? (
+                          <div className="flex flex-wrap gap-1">
+                            {b.weak_planets.map(p => {
+                              const code   = typeof p === "object" ? p.planet : p;
+                              const pts    = typeof p === "object" ? p.points : null;
+                              return (
+                                <span key={code} className="px-1.5 py-0.5 rounded text-[10px] font-bold"
+                                  style={{background:`${PLANET_COLOR[code] || C.slate}20`, color:PLANET_COLOR[code] || C.slate,...HI}}>
+                                  {PLANET_FULL_HI[code] ?? code}{pts != null ? ` (${pts})` : ""}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <span className="text-slate-500 italic">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Date Range Selector (replaces hardcoded decade) ──────── */}
+      <div className="p-3 rounded-2xl mb-4" style={{background:"rgba(45,212,191,.07)",border:`1px solid ${C.teal}25`}}>
+        <div className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{color:C.teal,...HI}}>
+          📅 तिथि सीमा चुनें
+        </div>
+
+        {/* Quick presets */}
+        <div className="flex gap-2 flex-wrap mb-3">
+          {PRESETS.map(p => (
+            <button key={p.label} onClick={() => applyPreset(p.days)}
+              className="px-3 py-1.5 rounded-xl text-[10px] font-black transition-all"
+              style={{background:"rgba(255,255,255,.06)", color:"#94A3B8",
+                border:"1px solid rgba(255,255,255,.1)",...HI}}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Custom date inputs */}
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <div className="text-[9px] text-slate-400 mb-1 uppercase tracking-wide" style={HI}>शुरू</div>
+            <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setDateError(null); }}
+              className="w-full px-3 py-2 rounded-xl text-[12px] font-bold text-white"
+              style={{background:"rgba(255,255,255,.07)", border:`1px solid ${dateError?C.rose:C.teal}40`, outline:"none"}}/>
+          </div>
+          <div>
+            <div className="text-[9px] text-slate-400 mb-1 uppercase tracking-wide" style={HI}>अंत</div>
+            <input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setDateError(null); }}
+              className="w-full px-3 py-2 rounded-xl text-[12px] font-bold text-white"
+              style={{background:"rgba(255,255,255,.07)", border:`1px solid ${dateError?C.rose:C.teal}40`, outline:"none"}}/>
+          </div>
+        </div>
+
+        {dateError && (
+          <div className="text-[10px] mb-2" style={{color:C.rose,...HI}}>⚠️ {dateError}</div>
+        )}
+
+        {/* ── Planet Filter ────────────────────────────────────── */}
+        <div className="mb-3">
+          <div className="text-[9px] font-bold uppercase tracking-widest mb-1.5 text-slate-400" style={HI}>
+            ग्रह फ़िल्टर (चंद्र default OFF — Moon spam से बचाव)
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {PLANET_OPTIONS.map(p => {
+              const active = selectedPlanets.includes(p.code);
+              const col    = PLANET_COLOR[p.code] || C.slate;
+              return (
+                <label key={p.code} className="flex items-center gap-1 cursor-pointer select-none">
+                  <input type="checkbox" checked={active} onChange={() => togglePlanet(p.code)}
+                    className="accent-teal-400 w-3 h-3"/>
+                  <span className="text-[10px] font-bold transition-colors"
+                    style={{color: active ? col : "#475569", ...HI}}>
+                    {p.label}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        <button onClick={fetchAlerts} disabled={loading}
+          className="w-full py-2.5 rounded-xl text-[12px] font-black transition-all"
+          style={{background:loading?"rgba(45,212,191,.15)":`${C.teal}CC`,
+            color: loading ? C.teal : "#0f172a",
+            border:`1px solid ${C.teal}50`,
+            opacity: loading ? 0.7 : 1,...HI}}>
+          {loading ? "🔄 Swiss Ephemeris scan हो रहा है..." : "🔍 कमजोर गोचर खोजें"}
+        </button>
+      </div>
+
+      {/* Error */}
+      {error && !loading && (
+        <div className="p-3 rounded-xl text-[11px] mb-3"
+          style={{background:"rgba(251,113,133,.1)", border:`1px solid ${C.rose}30`, color:C.rose,...HI}}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* Results */}
+      {alerts && !loading && (
+        <>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <div className="text-[12px] font-black" style={{color:C.teal,...HI}}>
+              {startDate} → {endDate} · {alerts.length} कमजोर गोचर
+            </div>
+            {groupList.length > 0 && (
+              <button onClick={() => {
+                const allKeys = groupList.reduce((a,g) => ({...a,[g.bhav]:true}),{});
+                const allOpen = groupList.every(g => expanded[g.bhav]);
+                setExpanded(allOpen ? {} : allKeys);
+              }} className="text-[10px] text-slate-400 hover:text-white transition-colors">
+                {groupList.every(g => expanded[g.bhav]) ? "सब बंद ▲" : "सब खोलें ▼"}
+              </button>
+            )}
+          </div>
+
+          {alerts.length === 0 && (
+            <div className="py-8 text-center text-slate-400 text-[12px]" style={HI}>
+              ✅ इस अवधि में कोई कमजोर गोचर नहीं है।
+            </div>
+          )}
+
+          {groupList.map(group => {
+            const isOpen = !!expanded[group.bhav];
+            const bcolor = BHAV_COLOR(group.sav_points);
+            return (
+              <div key={group.bhav} className="mb-3 rounded-2xl overflow-hidden"
+                style={{border:`1px solid ${bcolor}25`, background:"rgba(8,12,28,.97)"}}>
+
+                <button className="w-full flex items-center justify-between px-4 py-3"
+                  onClick={() => setExpanded(e => ({...e, [group.bhav]: !e[group.bhav]}))}
+                  style={{background:`${bcolor}10`}}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[13px] font-black" style={{color:bcolor,...HI}}>
+                      {group.bhav}वाँ भाव
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                      style={{background:`${bcolor}20`,color:bcolor,...HI}}>
+                      {group.rashi_name} · SAV {group.sav_points}
+                    </span>
+                    {/* ── FIX: show weak_planets in group header with points ── */}
+                    {group.items[0]?.weak_planets?.length > 0 && (
+                      <div className="flex gap-1 flex-wrap">
+                        {[...new Map(
+                          group.items[0].weak_planets.map(p => {
+                            const code = typeof p === "object" ? p.planet : p;
+                            const pts  = typeof p === "object" ? p.points : null;
+                            return [code, {code, pts}];
+                          })
+                        ).values()].map(({code, pts}) => (
+                          <span key={code} className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                            style={{background:`${PLANET_COLOR[code]||C.slate}18`,color:PLANET_COLOR[code]||C.slate}}>
+                            {PLANET_FULL_HI[code]??code}{pts != null ? ` (${pts})` : ""}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-[10px] text-slate-400" style={HI}>{group.items.length} period</span>
+                    <span className="text-slate-500 text-[11px]">{isOpen ? "▲" : "▼"}</span>
+                  </div>
+                </button>
+
+                {isOpen && (
+                  <div className="px-3 pb-3 pt-2 space-y-2">
+                    {group.items.map((a, i) => {
+                      const pc = PLANET_COLOR[a.transit_planet] || C.slate;
+                      return (
+                        <div key={i} className="flex items-center justify-between p-2.5 rounded-xl"
+                          style={{background:"rgba(255,255,255,.04)", border:`1px solid ${pc}20`}}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-black px-2 py-0.5 rounded-lg"
+                              style={{background:`${pc}20`, color:pc,...HI}}>
+                              {a.transit_planet_hi ?? PLANET_FULL_HI[a.transit_planet] ?? a.transit_planet}
+                            </span>
+                            {/* BAV points for this transiting planet */}
+                            {a.planet_bav_points != null && a.planet_bav_points !== "?" && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                                style={{background:"rgba(255,255,255,.07)",color:"#94A3B8"}}>
+                                BAV {a.planet_bav_points}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-slate-400" style={HI}>→ {a.rashi_name}</span>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[11px] font-bold text-green-400" style={HI}>{a.start}</div>
+                            <div className="text-[9px] text-slate-500" style={HI}>→ {a.end}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
 const TABS=[
   {k:"combined",  l:"📊 समग्र",       color:C.cyan},
   {k:"sati",      l:"🪐 साढ़े साती",  color:C.red},
@@ -797,6 +1157,7 @@ const TABS=[
   {k:"rahu",      l:"☊ राहु-केतु",   color:C.purple},
   {k:"daily",     l:"📅 दैनिक",       color:C.blue},
   {k:"search",    l:"🔍 गोचर खोज",   color:C.teal},
+  {k:"weak",      l:"⚠️ कमजोर गोचर", color:C.rose},
 ];
 
 export default function GocharPanel({ chartData }) {
@@ -936,6 +1297,7 @@ export default function GocharPanel({ chartData }) {
             <RahuTransitBlock rahuHouse={rahuH} ketuHouse={ketuH} moonSignHi={moonSignHi} transitPos={transitPos}/></Card>}
           {tab==="daily"   && <DailyGocharTab data={chartData?.enginesData?.daily_prediction} />}
           {tab==="search"  && <AdvancedTransitSearcher />}
+          {tab==="weak"    && <WeakGocharTab chartData={chartData} />}
         </motion.div>
       </AnimatePresence>
     </div>

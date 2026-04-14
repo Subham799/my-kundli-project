@@ -1962,7 +1962,16 @@ def api_chart_engines():
             print(f"[KP BTR] Error: {_kp_e}")
             kp_btr_data = {"computed": False, "error": str(_kp_e)}
 
-        return jsonify({'enginesData': {**engines_data, 'nadi_jyotish': nadi_jyotish_output, 'kp_btr': kp_btr_data}, '_enginesReady': True})
+        # ── Shodhana Engine ──────────────────────────────────────────
+        shodhana_data = {}
+        try:
+            shodhana_data = run_shodhana(astro, AV_RULES)
+            print("[Shodhana] ✅ OK — keys:", list(shodhana_data.keys()))
+        except Exception as _sho_e:
+            print(f"[Shodhana Engine Error] {_sho_e}")
+            shodhana_data = {}
+
+        return jsonify({'enginesData': {**engines_data, 'nadi_jyotish': nadi_jyotish_output, 'kp_btr': kp_btr_data, 'shodhana': shodhana_data}, '_enginesReady': True})
 
     except Exception as e:
         import traceback
@@ -2065,6 +2074,349 @@ def api_yearly():
     except Exception as e:
         print(f"[Yearly Route Error]: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  गोचर खोज Route — GocharPanel.jsx → AdvancedTransitSearcher का backend
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/transit_search', methods=['POST'])
+def transit_search():
+    """
+    GocharPanel.jsx → AdvancedTransitSearcher का backend.
+
+    Request body (JSON):
+    {
+      "start_date": "2024-01-01",
+      "end_date":   "2030-12-31",
+      "conditions": [
+        {"planet": "Sa", "sign": 12},
+        {"planet": "Ju", "sign":  4}
+      ]
+    }
+
+    Response:
+    {
+      "success": true,
+      "periods": [
+        {"start": "15 Mar 2025", "end": "02 Nov 2025"},
+        ...
+      ],
+      "total": 2
+    }
+    """
+    try:
+        body = request.get_json(force=True)
+        if not body:
+            return jsonify({"success": False, "error": "Invalid JSON"}), 400
+
+        start_str  = body.get("start_date", "2024-01-01")
+        end_str    = body.get("end_date",   "2030-12-31")
+        conditions = body.get("conditions", [])
+
+        if not conditions:
+            return jsonify({"success": False, "error": "कोई condition नहीं दी"}), 400
+
+        # ── Parse dates ──────────────────────────────────────────────────
+        try:
+            start_dt = datetime.strptime(start_str, "%Y-%m-%d")
+            end_dt   = datetime.strptime(end_str,   "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"success": False, "error": "तारीख format गलत है (YYYY-MM-DD चाहिए)"}), 400
+
+        if start_dt >= end_dt:
+            return jsonify({"success": False, "error": "start_date, end_date से पहले होनी चाहिए"}), 400
+
+        if (end_dt - start_dt).days > 3650:
+            return jsonify({"success": False, "error": "Maximum 10 साल की range allowed है"}), 400
+
+        # ── Planet code → Swiss Ephemeris ID mapping ──────────────────────
+        PLANET_SWE = {
+            "Su": swe.SUN,
+            "Mo": swe.MOON,
+            "Ma": swe.MARS,
+            "Me": swe.MERCURY,
+            "Ju": swe.JUPITER,
+            "Ve": swe.VENUS,
+            "Sa": swe.SATURN,
+            "Ra": swe.TRUE_NODE,
+            "Ke": None,
+        }
+
+        def get_sidereal_sign(planet_code, jd):
+            swe.set_sid_mode(swe.SIDM_LAHIRI)
+            flags = swe.FLG_SIDEREAL
+            if planet_code == "Ke":
+                pos = swe.calc_ut(jd, swe.TRUE_NODE, flags)[0][0]
+                pos = (pos + 180.0) % 360.0
+            else:
+                swe_id = PLANET_SWE.get(planet_code)
+                if swe_id is None:
+                    return None
+                pos = swe.calc_ut(jd, swe_id, flags)[0][0]
+            return int(pos / 30) % 12  # 0=मेष, 11=मीन
+
+        # ── Step size — slow planets daily, fast planets 4-hourly ────────
+        SLOW_PLANETS = {"Sa", "Ju", "Ra", "Ke"}
+        all_slow  = all(c.get("planet", "Sa") in SLOW_PLANETS for c in conditions)
+        step_days = 1 if all_slow else (4 / 24.0)
+
+        # ── Scan through date range ───────────────────────────────────────
+        periods      = []
+        in_match     = False
+        period_start = None
+        cur          = start_dt
+
+        while cur <= end_dt:
+            jd = swe.julday(cur.year, cur.month, cur.day,
+                            cur.hour + cur.minute / 60.0)
+
+            match = True
+            for cond in conditions:
+                p_code  = cond.get("planet", "Sa")
+                sign_id = int(cond.get("sign", 1)) - 1  # 1-indexed → 0-indexed
+                if get_sidereal_sign(p_code, jd) != sign_id:
+                    match = False
+                    break
+
+            if match and not in_match:
+                in_match     = True
+                period_start = cur
+            elif not match and in_match:
+                in_match = False
+                periods.append({
+                    "start": period_start.strftime("%d %b %Y"),
+                    "end":   (cur - timedelta(days=step_days)).strftime("%d %b %Y")
+                })
+                period_start = None
+
+            cur += timedelta(days=step_days)
+
+        # Range end तक match चलता रहा हो तो
+        if in_match and period_start:
+            periods.append({
+                "start": period_start.strftime("%d %b %Y"),
+                "end":   end_dt.strftime("%d %b %Y")
+            })
+
+        return jsonify({"success": True, "periods": periods, "total": len(periods)})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  Weak Bhav × Gochar Cross-Match Route
+#  GocharPanel.jsx → "कमजोर भाव + गोचर" periods nikalta hai
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/weak_gochar_periods', methods=['POST'])
+def weak_gochar_periods():
+    """
+    weak_bhav_analysis (shodhana engine) + Swiss Ephemeris transit scan.
+    Jab koi transit planet kisi weak bhav ki rashi se guzre AUR
+    woh planet us bhav ke weak_planets mein ho — tab alert.
+
+    Request:
+    {
+      "weak_bhav_analysis": [...],   // shodhana engine ka output
+      "start_date": "2024-01-01",    // optional
+      "end_date":   "2027-12-31"     // optional
+    }
+
+    Response:
+    {
+      "success": true,
+      "alerts": [
+        {
+          "bhav": 6,
+          "rashi_idx": 7,
+          "rashi_name": "वृश्चिक",
+          "sav_points": 23,
+          "transit_planet": "Ma",
+          "transit_planet_hi": "मंगल",
+          "start": "12 Apr 2025",
+          "end": "28 May 2025",
+          "label": "मंगल → वृश्चिक (6वाँ भाव, SAV=23) — कमजोर गोचर ⚠️"
+        }, ...
+      ],
+      "total": 5
+    }
+    """
+    try:
+        body = request.get_json(force=True)
+        if not body:
+            return jsonify({"success": False, "error": "Invalid JSON"}), 400
+
+        weak_bhav_list   = body.get("weak_bhav_analysis", [])
+        start_str        = body.get("start_date", datetime.now().strftime("%Y-%m-%d"))
+        end_str          = body.get("end_date",   (datetime.now() + timedelta(days=3*365)).strftime("%Y-%m-%d"))
+        selected_planets = body.get("planets", ["Su","Ma","Me","Ju","Ve","Sa"])  # Mo excluded by default
+
+        if not weak_bhav_list:
+            return jsonify({"success": False, "error": "weak_bhav_analysis data nahi mila"}), 400
+
+        try:
+            start_dt = datetime.strptime(start_str, "%Y-%m-%d")
+            end_dt   = datetime.strptime(end_str,   "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"success": False, "error": "Date format galat (YYYY-MM-DD chahiye)"}), 400
+
+        if start_dt >= end_dt:
+            return jsonify({"success": False, "error": "start_date, end_date se pehle honi chahiye"}), 400
+
+        if (end_dt - start_dt).days > 365 * 15:
+            return jsonify({"success": False, "error": "Max 15 saal ki range allowed hai"}), 400
+
+        PLANET_SWE = {
+            "Su": swe.SUN,    "Mo": swe.MOON,    "Ma": swe.MARS,
+            "Me": swe.MERCURY,"Ju": swe.JUPITER, "Ve": swe.VENUS,
+            "Sa": swe.SATURN, "Ra": swe.TRUE_NODE,
+        }
+        RASHI_NAMES_HI = ["मेष","वृषभ","मिथुन","कर्क","सिंह","कन्या",
+                           "तुला","वृश्चिक","धनु","मकर","कुंभ","मीन"]
+        PLANET_HI = {
+            "Su":"सूर्य","Mo":"चंद्र","Ma":"मंगल","Me":"बुध",
+            "Ju":"गुरु","Ve":"शुक्र","Sa":"शनि","Ra":"राहु","Ke":"केतु"
+        }
+        SLOW = {"Sa","Ju","Ra","Ke"}
+
+        def sidereal_sign(planet_code, jd):
+            swe.set_sid_mode(swe.SIDM_LAHIRI)
+            flags = swe.FLG_SIDEREAL
+            if planet_code == "Ke":
+                pos = swe.calc_ut(jd, swe.TRUE_NODE, flags)[0][0]
+                return int((pos + 180.0) % 360 / 30) % 12
+            swe_id = PLANET_SWE.get(planet_code)
+            if swe_id is None:
+                return None
+            return int(swe.calc_ut(jd, swe_id, flags)[0][0] / 30) % 12
+
+        # Fix: sav_weak flag missing hone par sav_points < 25 fallback use karo
+        def _is_weak_bhav(b):
+            has_weak_planets = bool(b.get("weak_planets"))
+            if not has_weak_planets:
+                return False
+            sav_flag = b.get("sav_weak")       # True/False/None
+            if sav_flag is not None:            # explicit flag present — trust it
+                return bool(sav_flag)
+            return int(b.get("sav_points", 999)) < 25   # fallback: SAV threshold
+
+        weak_bhavs = [b for b in weak_bhav_list if _is_weak_bhav(b)]
+
+        if not weak_bhavs:
+            return jsonify({"success": True, "alerts": [], "total": 0,
+                            "message": "Koi weak bhav nahi mila (sav_weak=True ya sav<25 chahiye)"})
+
+        # (planet_code, rashi_idx) → bhav_info list
+        # Ek planet ek hi rashi mein ek baar aata hai — bhav info attach karo
+        combos = []
+        for bhav in weak_bhavs:
+            r = int(bhav["rashi_idx"])
+            # Support both formats: ["Ma","Sa"] OR [{"planet":"Ma","points":2},...]
+            raw_wp = bhav.get("weak_planets", [])
+            wp_with_points = []
+            for wp in raw_wp:
+                if isinstance(wp, dict):
+                    wp_with_points.append({"planet": wp["planet"], "points": wp.get("points", "?")})
+                else:
+                    # Try to get points from bav_points dict if frontend sends it
+                    pts = bhav.get("bav_points", {}).get(wp, "?") if isinstance(bhav.get("bav_points"), dict) else "?"
+                    wp_with_points.append({"planet": wp, "points": pts})
+
+            for wp in wp_with_points:
+                p = wp["planet"]
+                if p not in selected_planets:          # 🔑 planet filter (blocks Mo by default)
+                    continue
+                if p in PLANET_SWE or p == "Ke":
+                    combos.append({
+                        "planet"           : p,
+                        "rashi_idx"        : r,
+                        "bhav"             : bhav["bhav"],
+                        "sav_points"       : bhav["sav_points"],
+                        "weak_planets"     : wp_with_points,   # full list [{planet,points},...]
+                        "planet_bav_points": wp["points"],     # this specific planet's BAV points
+                    })
+
+        if not combos:
+            return jsonify({"success": True, "alerts": [], "total": 0})
+
+        # Step: slow planets = 1 day, fast planets = 4 hours
+        all_slow  = all(c["planet"] in SLOW for c in combos)
+        step_days = 1.0 if all_slow else (4.0 / 24.0)
+
+        # State tracking per combo
+        states = [{"in_match": False, "period_start": None} for _ in combos]
+        alerts = []
+
+        cur = start_dt
+        while cur <= end_dt:
+            jd = swe.julday(cur.year, cur.month, cur.day,
+                            cur.hour + cur.minute / 60.0)
+
+            for i, combo in enumerate(combos):
+                sign = sidereal_sign(combo["planet"], jd)
+                match = (sign == combo["rashi_idx"])
+
+                if match and not states[i]["in_match"]:
+                    states[i]["in_match"]     = True
+                    states[i]["period_start"] = cur
+
+                elif not match and states[i]["in_match"]:
+                    states[i]["in_match"] = False
+                    ps = states[i]["period_start"]
+                    pe = cur - timedelta(days=step_days)
+                    rname = RASHI_NAMES_HI[combo["rashi_idx"]]
+                    phi   = PLANET_HI.get(combo["planet"], combo["planet"])
+                    alerts.append({
+                        "bhav"              : combo["bhav"],
+                        "rashi_idx"         : combo["rashi_idx"],
+                        "rashi_name"        : rname,
+                        "sav_points"        : combo["sav_points"],
+                        "weak_planets"      : combo["weak_planets"],       # [{planet,points},...]
+                        "transit_planet"    : combo["planet"],
+                        "transit_planet_hi" : phi,
+                        "planet_bav_points" : combo.get("planet_bav_points", "?"),
+                        "start"             : ps.strftime("%d %b %Y"),
+                        "end"               : pe.strftime("%d %b %Y"),
+                        "label"             : f"{phi} ({combo.get('planet_bav_points','?')}) → {rname} ({combo['bhav']}वाँ भाव, SAV={combo['sav_points']}) — कमजोर गोचर ⚠️"
+                    })
+                    states[i]["period_start"] = None
+
+            cur += timedelta(days=step_days)
+
+        # Range end tak match chalta raha ho
+        for i, combo in enumerate(combos):
+            if states[i]["in_match"] and states[i]["period_start"]:
+                ps    = states[i]["period_start"]
+                rname = RASHI_NAMES_HI[combo["rashi_idx"]]
+                phi   = PLANET_HI.get(combo["planet"], combo["planet"])
+                alerts.append({
+                    "bhav"              : combo["bhav"],
+                    "rashi_idx"         : combo["rashi_idx"],
+                    "rashi_name"        : rname,
+                    "sav_points"        : combo["sav_points"],
+                    "weak_planets"      : combo["weak_planets"],       # [{planet,points},...]
+                    "transit_planet"    : combo["planet"],
+                    "transit_planet_hi" : phi,
+                    "planet_bav_points" : combo.get("planet_bav_points", "?"),
+                    "start"             : ps.strftime("%d %b %Y"),
+                    "end"               : end_dt.strftime("%d %b %Y"),
+                    "label"             : f"{phi} ({combo.get('planet_bav_points','?')}) → {rname} ({combo['bhav']}वाँ भाव, SAV={combo['sav_points']}) — कमजोर गोचर ⚠️"
+                })
+
+        # Chronological sort
+        alerts.sort(key=lambda x: datetime.strptime(x["start"], "%d %b %Y"))
+
+        # Return both keys — "alerts" (legacy) and "periods" (frontend new standard)
+        return jsonify({"success": True, "alerts": alerts, "periods": alerts, "total": len(alerts)})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ── ENTRY POINT ──────────────────────────────────────────────────────────
