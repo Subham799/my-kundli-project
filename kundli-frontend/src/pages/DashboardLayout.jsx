@@ -502,10 +502,9 @@ function buildPDFPage(pageNum, chartData) {
       const pts = rawBav[k] || rawBav[k.toLowerCase()] || rawBav[k.toUpperCase()];
       if (!pts || !Array.isArray(pts) || pts.length < 12) return "";
       
-      // 🔥 ROTATE: BAV data is rashi-wise (Mesh=0), rotate to lagna-based bhav order
-      // lagnaIdx = 0 (Mesh) to 11 (Meen)
-      // If Tula lagna (idx=6), rotate: [6,7,8,9,10,11,0,1,2,3,4,5] → bhav [1,2,3,4,5,6,7,8,9,10,11,12]
-      const rotatedPts = [...pts.slice(lagnaIdx), ...pts.slice(0, lagnaIdx)];
+      // 🔥 FIX: Backend already sends data rotated from Lagna, no need to rotate again.
+      // Double rotation was causing a 4-index shift (e.g., Dhanu lagna → Leo shown first).
+      const rotatedPts = pts;
       
       let row = `<td style="color:#F59E0B;font-weight:900;background:rgba(245,158,11,0.05)">${PH[k] || k}</td>`;
       let total = 0;

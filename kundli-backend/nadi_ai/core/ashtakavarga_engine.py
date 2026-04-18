@@ -15,15 +15,23 @@ class AshtakavargaEngine:
     def _sum_bindus(self, start_sign_idx, target_sign_idx, sav_bindus):
         """
         Sums the bindus from the starting sign (Lagna) to the target sign (Planet).
-        sav_bindus: dict mapping sign index (0-11) to total bindus (int).
+        Supports both List and Dict for sav_bindus to prevent crashes.
         """
         total = 0
-        current_idx = start_sign_idx
+        # FIX 1: Both indices strictly converted to int to prevent Infinite Loop
+        current_idx = int(start_sign_idx)
+        target_idx = int(target_sign_idx)
         
         # Circular sum (inclusive of start and target signs)
         while True:
-            total += sav_bindus.get(str(current_idx), 0)  # JSON keys are usually strings
-            if current_idx == target_sign_idx:
+            # FIX 2: Safe handling for both List and Dict
+            if isinstance(sav_bindus, list):
+                total += sav_bindus[current_idx]
+            else:
+                # Try both string and int keys for dict
+                total += sav_bindus.get(str(current_idx), sav_bindus.get(current_idx, 0))
+                
+            if current_idx == target_idx:
                 break
             current_idx = (current_idx + 1) % 12
             
@@ -41,10 +49,11 @@ class AshtakavargaEngine:
         """
         triggers = []
 
-      # 1️⃣ DUKH TRIGGERS (Struggle / Karma Cleansing)
+        # 1️⃣ DUKH TRIGGERS (Struggle / Karma Cleansing)
         for planet in self.DUKH_PLANETS:
             if planet in astro_data:
-                p_sign_idx = astro_data[planet]["Vargas"]["D1"]["Idx"]
+                # FIX 3: Explicitly wrap in int() to avoid String vs Int comparison bug
+                p_sign_idx = int(astro_data[planet]["Vargas"]["D1"]["Idx"])
                 total_pts = self._sum_bindus(lagna_sign_idx, p_sign_idx, sav_bindus)
                 age = self.calculate_exact_age(total_pts)
                 
@@ -54,9 +63,7 @@ class AshtakavargaEngine:
                     "target": "karmic_dukh",
                     "year": age,
                     "event_tag": f"{planet}_karmic_crisis_point",
-                    
-                    "base_strength": -5.0, # 👈 FIX A: Changed from 5.0 to -5.0
-                    
+                    "base_strength": -5.0,
                     "domain": "general_crisis",
                     "context": {"total_bindus": total_pts, "sign_idx": p_sign_idx}
                 })
@@ -64,7 +71,8 @@ class AshtakavargaEngine:
         # 2️⃣ SUKH TRIGGERS (Destiny / Joy)
         for planet in self.SUKH_PLANETS:
             if planet in astro_data:
-                p_sign_idx = astro_data[planet]["Vargas"]["D1"]["Idx"]
+                # FIX 3: Explicitly wrap in int()
+                p_sign_idx = int(astro_data[planet]["Vargas"]["D1"]["Idx"])
                 total_pts = self._sum_bindus(lagna_sign_idx, p_sign_idx, sav_bindus)
                 age = self.calculate_exact_age(total_pts)
                 

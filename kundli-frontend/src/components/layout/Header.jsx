@@ -27,7 +27,7 @@ export default function Header() {
               className="font-bold tracking-wide text-amber-100 text-[17px] leading-tight"
               style={{ fontFamily: "'Cinzel', serif" }}
             >
-              नादी ज्योतिष
+              वैदिक ज्योतिष 
             </div>
             <div className="text-[9px] tracking-[0.3em] text-slate-500 uppercase">
               Vedic Astrology Engine

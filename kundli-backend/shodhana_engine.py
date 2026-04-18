@@ -327,8 +327,10 @@ def analyze_weak_bhav(
         )
 
         # कौन से ग्रहों ने < 4 points दिए
+        # 🔥 FIX: अब सिर्फ ग्रह का नाम नहीं, बल्कि उसके 'points' भी डिक्शनरी (Object) के रूप में भेज रहे हैं
         weak_planets = [
-            p for p in PLANETS_7
+            {"planet": p, "points": original_bav[p][rashi_idx]}
+            for p in PLANETS_7
             if p in original_bav and original_bav[p][rashi_idx] < 4
         ]
 

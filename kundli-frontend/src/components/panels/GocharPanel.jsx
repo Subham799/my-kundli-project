@@ -5,6 +5,11 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import DailyGocharTab from './DailyGocharTab';   // ← NEW
 
+// ── Production fix: Vercel → Render bridge ──────────────────────────────────
+// Vercel पर VITE_API_URL = "https://your-app.onrender.com" set करो
+// Localhost पर खाली रहेगा → relative URL काम करेगा
+const API_BASE = import.meta.env.VITE_API_URL ?? "";
+
 const HI = { fontFamily:"'Noto Sans Devanagari',sans-serif" };
 const C  = { amber:"#F59E0B", cyan:"#22D3EE", rose:"#FB7185", green:"#4ADE80",
              purple:"#C084FC", indigo:"#818CF8", orange:"#FB923C", teal:"#2DD4BF",
@@ -694,7 +699,7 @@ function AdvancedTransitSearcher() {
   const handleSearch = async () => {
     setLoading(true); setSearched(true); setError(null);
     try {
-      const res  = await fetch("/api/transit_search", {
+      const res  = await fetch(`${API_BASE}/api/transit_search`, {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({start_date:startDate, end_date:endDate, conditions})
       });
@@ -864,7 +869,7 @@ function WeakGocharTab({ chartData }) {
     setDateError(null);
     setLoading(true); setError(null); setAlerts(null); setExpanded({});
     try {
-      const res  = await fetch("/api/weak_gochar_periods", {
+      const res  = await fetch(`${API_BASE}/api/weak_gochar_periods`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
