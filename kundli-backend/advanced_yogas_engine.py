@@ -174,7 +174,10 @@ def compute_indu_lagna(
         remainder = 12
 
     indu_rashi = (moon_rashi + remainder - 1) % 12
-    indu_sav   = _sav(sav, indu_rashi)
+    
+    # 🚀 FIX: Rashi Index को House Index में बदलें (Lagna Offset लगाकर)
+    indu_house_idx = (indu_rashi - lagna_index) % 12
+    indu_sav   = _sav(sav, indu_house_idx)
 
     if indu_sav >= 35:
         wealth_level = "ultra_rich"
@@ -345,11 +348,7 @@ def compute_danger_zones(sav: List[int]) -> Dict:
 # 4. NEECH BHANG + UCHHA BHANG VIA AV
 # ─────────────────────────────────────────────
 
-def compute_neech_uchha_av(
-    planets: Dict,
-    bav_charts: Dict,
-    sav: List[int] = None,
-) -> List[Dict]:
+def compute_neech_uchha_av(planets: Dict, bav_charts: Dict, sav: List[int] = None, lagna_index: int = 0) -> List[Dict]:
     """
     For each planet:
     - Neech + BAV 6/7/8 → Neech Bhang = exalted results
@@ -446,7 +445,9 @@ def compute_neech_uchha_av(
             full_deg = d1_sign * 30 + degree
             d9_sign  = int(full_deg / (360 / 108)) % 12
             if d1_sign == d9_sign:
-                rashi_sav = _sav(sav, d1_sign)
+                # 🚀 FIX: Rashi Index को House Index में बदलें
+                house_idx = (d1_sign - lagna_index) % 12
+                rashi_sav = _sav(sav, house_idx)
                 if rashi_sav >= 30:
                     label = f"⭐ वर्गोत्तम + SAV {rashi_sav}≥30 — असाधारण और स्थायी फल"
                     color = "#22D3EE"
@@ -1275,7 +1276,7 @@ def compute_advanced_yogas(
         result["indu_lagna"]       = compute_indu_lagna(planets, sav, lagna_index, moon_rashi)
         result["spouse_direction"] = compute_spouse_direction(bav_charts)
         result["danger_zones"]     = compute_danger_zones(sav)
-        result["neech_uchha"]      = compute_neech_uchha_av(planets, bav_charts, sav)
+        result["neech_uchha"]      = compute_neech_uchha_av(planets, bav_charts, sav,lagna_index)
         result["debt_trap"]        = compute_rajyoga_debt_trap(planets, bav_charts)
         result["sudden_rise"]      = compute_sudden_rise(sav)
         result["income_trapped"]   = compute_income_trapped(sav)
