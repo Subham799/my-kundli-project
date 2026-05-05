@@ -484,7 +484,7 @@ function buildPDFPage(pageNum, chartData) {
 
   const head=(title)=>`<!DOCTYPE html><html lang="hi"><head><meta charset="UTF-8"/><title>${title} — ${name}</title><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700;900&display=swap" rel="stylesheet"/><style>${css}</style></head><body>`;
   const close=`</body></html>`;
-  const TOTAL_PAGES = 27;
+  const TOTAL_PAGES = 28;
 
   const headerBlock=`<div class="hdr">
     <div style="font-size:19px;font-weight:900;color:#F59E0B">🪐 सम्पूर्ण वैदिक कुंडली</div>
@@ -1679,13 +1679,86 @@ function buildPDFPage(pageNum, chartData) {
       ${foot(27, TOTAL_PAGES)}</div>${close}`;
   };
 
+
+  // 🆕 PAGE 28 — षोडशवर्ग चक्र (16 D-Charts) + वक्री ग्रह सारांश
+  pages[28] = () => {
+    const VARGA_KEYS = ["D1","D2","D3","D4","D7","D9","D10","D12","D16","D20","D24","D27","D30","D40","D45","D60"];
+    const PL_KEYS    = ["La","Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
+    const PL_NAMES   = {"La":"लग्न","Su":"सूर्य","Mo":"चंद्र","Ma":"मंगल","Me":"बुध","Ju":"गुरु","Ve":"शुक्र","Sa":"शनि","Ra":"राहु","Ke":"केतु"};
+
+    const getVarga = (p, k) => {
+      try {
+        const vName = p === "La"
+          ? (meta.lagnaVargas?.[k]?.Name || "—")
+          : (pl[p]?.vargas?.[k]?.Name   || "—");
+        return vName.split(" ")[0];
+      } catch(e) { return "—"; }
+    };
+
+    // वक्री ग्रह — सभी वक्री ग्रहों की सूची
+    const PLANET_KEYS = ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
+    const vakri = PLANET_KEYS.filter(p => pl[p]?.Retrograde || pl[p]?.retrograde);
+    const vakriBadge = vakri.length > 0
+      ? vakri.map(p => `<span style="display:inline-block;margin:2px 3px;padding:3px 8px;border-radius:20px;background:rgba(129,140,248,.15);border:1px solid rgba(129,140,248,.4);color:#818CF8;font-size:9px;font-weight:900">${PL_NAMES[p]||p} ⟲</span>`).join("")
+      : `<span style="color:#4ADE80;font-size:9px">✅ इस समय कोई ग्रह वक्री नहीं है</span>`;
+
+    const rows = PL_KEYS.map(p => {
+      const isLagna  = p === "La";
+      const isVakri  = !isLagna && (pl[p]?.Retrograde || pl[p]?.retrograde);
+      const pCol     = isLagna ? "#F59E0B" : isVakri ? "#818CF8" : "#22D3EE";
+      const vakriTag = isVakri ? ' <span style="font-size:8px;color:#818CF8">⟲</span>' : "";
+      return `<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
+        <td style="padding:6px 3px;text-align:left;font-weight:900;color:${pCol};background:rgba(255,255,255,0.02);white-space:nowrap">${PL_NAMES[p]}${vakriTag}</td>
+        ${VARGA_KEYS.map(k => {
+          const sign = getVarga(p, k);
+          const isD9 = k === "D9";
+          return `<td style="padding:6px 2px;font-size:7.5px;${isD9?"background:rgba(34,211,238,.08);color:#22D3EE;font-weight:900":"color:#CBD5E1"}">${sign}</td>`;
+        }).join("")}
+      </tr>`;
+    }).join("");
+
+    const body = `
+      ${sect("षोडशवर्ग चक्र (16 D-Charts Matrix)", "#F59E0B")}
+      <div style="font-size:9px;color:#64748B;margin-bottom:8px">
+        💡 सभी 16 वर्ग कुण्डलियों में लग्न और ग्रहों की राशियों का सम्पूर्ण मैट्रिक्स।
+        <b style="color:#22D3EE">D9 (नवांश)</b> विशेष महत्वपूर्ण — <b style="color:#818CF8">⟲ = वक्री ग्रह</b>।
+      </div>
+
+      <div style="padding:7px 10px;border-radius:7px;background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.2);margin-bottom:10px">
+        <span style="font-size:9px;font-weight:900;color:#818CF8">⟲ वर्तमान वक्री ग्रह: </span>${vakriBadge}
+      </div>
+
+      <div style="border-radius:8px;border:1px solid rgba(255,255,255,.1);overflow:hidden">
+        <table style="font-size:8px;text-align:center;width:100%;border-collapse:collapse;margin:0">
+          <tr style="background:rgba(245,158,11,.12)">
+            <th style="padding:6px 3px;text-align:left;color:#F59E0B;width:45px">ग्रह</th>
+            ${VARGA_KEYS.map(k => `<th style="padding:6px 2px;color:${k==="D9"?"#22D3EE":"#F59E0B"}">${k}</th>`).join("")}
+          </tr>
+          ${rows}
+        </table>
+      </div>
+
+      <div style="margin-top:10px;padding:8px;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);font-size:8px;color:#94A3B8;line-height:1.6">
+        <b>कुण्डली उपयोग:</b> <b>D1</b> (शारीरिक व मूल), <b>D2</b> (धन), <b>D3</b> (भाई-बहन), <b>D4</b> (संपत्ति), <b>D7</b> (संतान),
+        <b>D9</b> (जीवनसाथी/सूक्ष्म भाग्य), <b>D10</b> (कर्म/करियर), <b>D12</b> (माता-पिता), <b>D16</b> (वाहन सुख), <b>D20</b> (आध्यात्मिक),
+        <b>D24</b> (शिक्षा), <b>D27</b> (बल), <b>D30</b> (अरिष्ट), <b>D40</b> (शुभ/अशुभ), <b>D45</b> (समग्र चरित्र), <b>D60</b> (पूर्वजन्म कर्म)।
+      </div>
+    `;
+
+    return `${head("षोडशवर्ग")}<div class="page">
+      ${headerBlock}
+      ${body}
+      ${foot(28, TOTAL_PAGES)}
+    </div>${close}`;
+  };
+
   const bodyOnly = (html) => {
     let s = html.replace(/[\s\S]*?<body[^>]*>/i, "");
     s = s.replace(/<\/body>[\s\S]*$/i, "");
     return s;
   };
 
-  const ALL_PAGE_NUMS  = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27];
+  const ALL_PAGE_NUMS  = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28];
   const NADI_PAGE_NUMS = [9,10,11,12,13,14,15,16,17,18,19,20,21,22,23];
 
   if(pageNum==="all"){
@@ -1772,6 +1845,8 @@ const PDF_PAGES = [
   {num:26, icon:"⏳", label:"वशोत्तरी दशा",             desc:"महा, अंतर, प्रत्यंतर — 120 वर्ष चक्र"},
   // ── चलित ──
   {num:27, icon:"🔄", label:"चलित कुंडली",              desc:"श्री पति पद्धति — वास्तविक भाव स्थिति"},
+  // ── षोडशवर्ग ──
+  {num:28, icon:"📊", label:"षोडशवर्ग चक्र",            desc:"16 D-Charts का सम्पूर्ण मैट्रिक्स + वक्री ग्रह"},
 ];
 
 function PDFModal({ chartData, onClose }) {
@@ -1799,7 +1874,7 @@ function PDFModal({ chartData, onClose }) {
             }}>
             <span className="text-xl">📚</span>
             <div className="flex-1 text-left">
-              <div className="text-[13px] font-black text-amber-400" style={HI}>सम्पूर्ण कुंडली — सभी 27 पेज</div>
+              <div className="text-[13px] font-black text-amber-400" style={HI}>सम्पूर्ण कुंडली — सभी 28 पेज</div>
               <div className="text-[10px] text-slate-500 mt-0.5" style={HI}>Complete report — ग्रह से नाड़ी ज्योतिष तक</div>
             </div>
             {sel===null && <span className="text-amber-400 text-lg">✓</span>}

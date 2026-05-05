@@ -1462,6 +1462,8 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             # vakri aur ast — calculate_astrology se React tak pahunchana zaroori tha
             "Retrograde":     p.get("Retrograde", False),
             "Combust":        p.get("Combust", False),
+            # Shodashvarga — sabhi 16 D-charts ka data React ko bhejte hain
+            "vargas":         p.get("Vargas", {}),
         }
 
     # ── Dasha response ─────────────────────────────────────────────
@@ -1745,6 +1747,8 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             "birth_hour":     round(dt.hour + dt.minute / 60.0, 4),
             "sunrise_hour":   6.0,   # approximate — swisseph se calculate bhi ho sakta hai
             "nakshatra_index": int(astro["Mo"]["Degree"] / (360/27)) % 27 + 1,  # 1-27
+            # Lagna ke sabhi D-charts — Shodashvarga table ke liye
+            "lagnaVargas":    astro.get("La", {}).get("Vargas", {}),
         },
         "planets":     planets_out,
         "houses":      houses_list,
