@@ -366,8 +366,15 @@ function buildPDFPage(pageNum, chartData) {
     const dk=p.dignity||"Sama", dh_=p.dignityHindi||dk;
     const dc=DC[dk]||DC[dh_]||"#64748B", di=DI[dk]||DI[dh_]||"⚪";
     const fc=FC[p.functionalNature]||"#64748B";
+    // वक्री और अस्त — तीनों possible keys check करते हैं
+    const isVakri = p.Retrograde || p.retrograde || (p.notes && p.notes.includes("वक्री"));
+    const isAst   = p.Combust   || p.combust   || (p.notes && p.notes.includes("अस्त"));
     return `<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
-      <td style="padding:4px 6px;color:#F59E0B;font-weight:900;font-size:11px">${PH[c]||c} ${PS[c]||""} ${p.Retrograde?"⟲":""}</td>
+      <td style="padding:4px 6px;color:#F59E0B;font-weight:900;font-size:11px">
+        ${PH[c]||c} ${PS[c]||""}
+        ${isVakri ? '<span style="color:#818CF8;font-size:10px;margin-left:2px" title="वक्री">⟲</span>' : ''}
+        ${isAst   ? '<span style="color:#FB923C;font-size:10px;margin-left:2px" title="अस्त">🔥</span>' : ''}
+      </td>
       <td style="padding:4px 6px;color:#CBD5E1;font-size:11px">${p.hindi_sign||"—"}</td>
       <td style="padding:4px 6px;color:#94A3B8;font-size:10px;text-align:center;font-weight:700">${p.house||"—"} ${p.houseCategory ? `<br/><span style="font-size:8px;color:#64748B;font-weight:normal">${p.houseCategory}</span>` : ""}</td>
       <td style="padding:4px 6px;color:#64748B;font-size:10px">${p.degree||"—"}</td>
@@ -572,7 +579,7 @@ function buildPDFPage(pageNum, chartData) {
       ${headerBlock}
       ${sect("ग्रह स्थिति — नवग्रह (9 Planets)")}
       <table><tr><th>ग्रह</th><th>राशि</th><th>भाव</th><th>डिग्री</th><th>नक्षत्र</th><th>नक्ष.स्वामी</th><th>राशि स्वामी</th><th>अवस्था</th><th>स्वभाव</th><th>बल%</th></tr>${pRows}</table>
-      <div style="margin-top:5px;padding:4px 8px;border-radius:5px;background:rgba(245,158,11,.05);font-size:8px;color:#475569">⬆️उच्च &nbsp;⬇️नीच &nbsp;🏠स्वराशि &nbsp;💜मित्र &nbsp;🔴शत्रु &nbsp;⭐योगकारक &nbsp;⟲वक्री</div>
+      <div style="margin-top:5px;padding:4px 8px;border-radius:5px;background:rgba(245,158,11,.05);font-size:8px;color:#475569">⬆️उच्च &nbsp;⬇️नीच &nbsp;🏠स्वराशि &nbsp;💜मित्र &nbsp;🔴शत्रु &nbsp;⭐योगकारक &nbsp;⟲वक्री &nbsp;🔥अस्त</div>
       ${sect("भाव स्थिति — 12 भाव","#22D3EE")}
       <table><tr><th>भाव</th><th>राशि</th><th>ग्रह</th><th>AV अंक</th></tr>${hRows}</table>
       ${foot(1,TOTAL_PAGES)}</div>${close}`,

@@ -963,12 +963,36 @@ def calculate_astrology(local_dt, lat, lon):
     cusps, ascmc = swe.houses_ex(jd, lat, lon, b'P', swe.FLG_SIDEREAL)
     data["La"] = {"Degree":ascmc[0],"SignDegree":ascmc[0]%30,"Vargas":get_all_vargas(ascmc[0]),"Details":get_nakshatra_info(ascmc[0])}
     for name, code in planets_map.items():
-        pos, _ = swe.calc_ut(jd, code, swe.FLG_SIDEREAL)
-        data[name] = {"Degree":pos[0],"SignDegree":pos[0]%30,"Vargas":get_all_vargas(pos[0]),"Details":get_nakshatra_info(pos[0])}
+        pos, _ = swe.calc_ut(jd, code, swe.FLG_SIDEREAL | swe.FLG_SPEED)
+        # वक्री (Retrograde) logic: pos[3] = ग्रह की गति (speed in longitude)
+        # FLG_SPEED जरूरी है — बिना इसके speed 0 या unreliable आती है
+        # सूर्य और चंद्र कभी वक्री नहीं होते
+        # threshold -0.0001: station (रुके हुए) ग्रहों का false positive रोकता है
+        speed = pos[3]
+        is_retro = (speed < -0.0001) and (name not in ["Su", "Mo"])
+        data[name] = {
+            "Degree":     pos[0],
+            "SignDegree": pos[0] % 30,
+            "Vargas":     get_all_vargas(pos[0]),
+            "Details":    get_nakshatra_info(pos[0]),
+            "Retrograde": is_retro   # True = वक्री, False = मार्गी
+        }
     rahu_deg = swe.calc_ut(jd, swe.MEAN_NODE, swe.FLG_SIDEREAL)[0][0]
-    data["Ra"] = {"Degree":rahu_deg,"SignDegree":rahu_deg%30,"Vargas":get_all_vargas(rahu_deg),"Details":get_nakshatra_info(rahu_deg)}
+    data["Ra"] = {
+        "Degree":     rahu_deg,
+        "SignDegree": rahu_deg % 30,
+        "Vargas":     get_all_vargas(rahu_deg),
+        "Details":    get_nakshatra_info(rahu_deg),
+        "Retrograde": True   # राहु हमेशा वक्री होता है
+    }
     ketu_deg = (rahu_deg + 180) % 360
-    data["Ke"] = {"Degree":ketu_deg,"SignDegree":ketu_deg%30,"Vargas":get_all_vargas(ketu_deg),"Details":get_nakshatra_info(ketu_deg)}
+    data["Ke"] = {
+        "Degree":     ketu_deg,
+        "SignDegree": ketu_deg % 30,
+        "Vargas":     get_all_vargas(ketu_deg),
+        "Details":    get_nakshatra_info(ketu_deg),
+        "Retrograde": True   # केतु हमेशा वक्री होता है
+    }
     return data
 
 def calculate_sav(data):
@@ -1422,7 +1446,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             "dignity":        dm["key"],
             "dignityHindi":   dm["hindi"],
             "nakshatra":      NAKSHATRA[nak_idx] if nak_idx < 27 else "",
-            "lord":           SIGN_LORDS[sign_idx], 
+            "lord":           SIGN_LORDS[sign_idx],
             "rashiLord":      PLANET_HINDI.get(SIGN_LORDS[sign_idx], ""),
             "nakshatraLord":  PLANET_HINDI.get(real_nak_lord_code, ""),
             "strength":       min(100, max(0, int(strength.get("score", 50) * 100 / 150))),
@@ -1435,16 +1459,9 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             "notes":          " | ".join(strength.get("strength_factors", []) + strength.get("weakness_factors", [])),
             "keyYogas":       strength.get("special_yogas", []),
             "riskFactors":    evaluation.get("risk_factors", []),
-        
-            
-            # 👇 तुम्हारी ओरिजिनल 5 लाइनें जो मैंने वापस डाल दी हैं
-            "dispositor":     SIGN_LORDS[sign_idx],
-            "dispositorSign": RASHI_EN[astro.get(SIGN_LORDS[sign_idx], {}).get("Vargas", {}).get("D1", {}).get("Idx", 0)] if SIGN_LORDS[sign_idx] in astro else "",
-            "maleficInfluence": evaluation.get("malefic_influence", {}).get("score", 0) > 20,
-            "aspects":        [a["target_house"] for a in jyotish_evaluation.get("drishti_matrix", {}).get(p_code, {}).get("aspects", [])],
-            "notes":          " | ".join(strength.get("strength_factors", []) + strength.get("weakness_factors", [])),
-            "keyYogas":       strength.get("special_yogas", []),
-            "riskFactors":    evaluation.get("risk_factors", []),
+            # vakri aur ast — calculate_astrology se React tak pahunchana zaroori tha
+            "Retrograde":     p.get("Retrograde", False),
+            "Combust":        p.get("Combust", False),
         }
 
     # ── Dasha response ─────────────────────────────────────────────
