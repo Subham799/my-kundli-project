@@ -42,7 +42,7 @@ export default function ConsultancyPage() {
         {[
           { label: "Satisfied Clients", val: "500+", icon: <User className="text-cyan-400" /> },
           { label: "Accuracy Rate", val: "99%", icon: <Zap className="text-amber-400" /> },
-          { label: "Consultation Fee", val: "₹251", icon: <Star className="text-yellow-400" /> }, 
+          { label: "Consultation Fee", val: "₹299", icon: <Star className="text-yellow-400" /> }, 
           { label: "Trusted Platform", val: "100%", icon: <ShieldCheck className="text-green-400" /> },
         ].map((s, i) => (
           <div key={i} className="bg-white/5 border border-white/10 p-4 rounded-2xl text-center">
