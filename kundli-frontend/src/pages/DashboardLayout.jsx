@@ -1,5 +1,6 @@
 // pages/DashboardLayout.jsx
 import { AnimatePresence, motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { User, Moon, Zap, Download, FileText } from "lucide-react";
 import useKundliStore from "../store/useKundliStore";
@@ -264,6 +265,12 @@ function WelcomeState() {
       >
         <Zap size={14} /> डेमो कुंडली देखें
       </button>
+      <Link
+        to="/consultancy"
+        className="px-4 py-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl hover:bg-amber-500/20 transition-all text-sm font-bold"
+      >
+        क्लाइंट्स के रिव्यू देखें 🌟
+      </Link>
     </div>
   );
 }

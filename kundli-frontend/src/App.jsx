@@ -1,8 +1,12 @@
 // App.jsx — Root component
-import Header         from "./components/layout/Header";
-import DashboardLayout from "./pages/DashboardLayout";
+import React, { Suspense, lazy } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Header from "./components/layout/Header";
 
-// ── Animated star field background ─────────────────────────
+// 🚀 Lazy Load Pages (यह पेज तभी डाउनलोड होंगे जब यूज़र इन्हें खोलेगा)
+const DashboardLayout = lazy(() => import("./pages/DashboardLayout"));
+const ConsultancyPage = lazy(() => import("./pages/ConsultancyPage"));
+// ── Animated star field background (तुम्हारा पुराना कोड) ───────────
 function StarField() {
   const stars = Array.from({ length: 130 }, (_, i) => ({
     id:    i,
@@ -33,19 +37,14 @@ function StarField() {
       {stars.map((s) => (
         <div
           key={s.id}
-          className="absolute rounded-full bg-white"
+          className="absolute bg-white rounded-full"
           style={{
-            left:             `${s.x}%`,
-            top:              `${s.y}%`,
-            width:            s.size,
-            height:           s.size,
-            opacity:          Math.random() * 0.55 + 0.1,
-            animationName:    "starPulse",
-            animationDuration:`${s.dur}s`,
-            animationDelay:   `${s.delay}s`,
-            animationTimingFunction: "ease-in-out",
-            animationIterationCount: "infinite",
-            animationDirection: "alternate",
+            left: `${s.x}%`,
+            top: `${s.y}%`,
+            width: `${s.size}px`,
+            height: `${s.size}px`,
+            opacity: 0.1,
+            animation: `starPulse ${s.dur}s infinite alternate ${s.delay}s`,
           }}
         />
       ))}
@@ -53,14 +52,12 @@ function StarField() {
   );
 }
 
-// ── Root ────────────────────────────────────────────────────
 export default function App() {
   return (
-    <>
-      {/* Global styles injected once */}
+    <BrowserRouter>
+      {/* 1. Global Styles (तुम्हारा पुराना CSS) */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap');
-
         *, *::before, *::after { box-sizing: border-box; }
         html, body, #root { height: 100%; margin: 0; }
         body {
@@ -69,40 +66,54 @@ export default function App() {
           font-family: ui-sans-serif, system-ui, sans-serif;
           overflow: hidden;
         }
-
         @keyframes starPulse {
           from { opacity: 0.1; }
           to   { opacity: 0.7; }
         }
-
-        /* Custom scrollbars */
         ::-webkit-scrollbar              { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track        { background: transparent; }
         ::-webkit-scrollbar-thumb        { background: rgba(99,102,241,0.3); border-radius: 4px; }
-
-        /* Date / time picker icon tint */
         input[type="date"]::-webkit-calendar-picker-indicator,
         input[type="time"]::-webkit-calendar-picker-indicator {
           filter: invert(0.5) sepia(1) saturate(3) hue-rotate(190deg);
         }
       `}</style>
 
-      {/* Layered background */}
-      <div
-        className="fixed inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse at 50% 0%, rgba(30,27,75,0.6) 0%, #020B18 70%)",
-          zIndex: 0,
-        }}
-      />
+      {/* 2. Background Animation */}
       <StarField />
 
-      {/* App shell */}
-      <div className="relative z-10 flex flex-col h-screen overflow-hidden">
-        <Header />
-        <DashboardLayout />
-      </div>
-    </>
+      {/* 3. Routes & Lazy Loading (Suspense) */}
+      <Suspense fallback={
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#020B18]">
+           <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+           <p className="text-amber-500 font-bold tracking-widest text-sm animate-pulse">KUNDALIMAKER...</p>
+        </div>
+      }>
+        <div className="relative z-10 flex flex-col h-full">
+          <Routes>
+            {/* 🏠 Homepage Route */}
+            <Route 
+              path="/" 
+              element={
+                <>
+                  <Header />
+                  <DashboardLayout />
+                </>
+              } 
+            />
+
+            {/* 💼 Consultancy Route (यह पूरी स्क्रीन पर स्क्रॉल के साथ खुलेगा) */}
+            <Route 
+              path="/consultancy" 
+              element={
+                <div className="h-full overflow-y-auto" style={{ scrollbarWidth: "none" }}>
+                  <ConsultancyPage />
+                </div>
+              } 
+            />
+          </Routes>
+        </div>
+      </Suspense>
+    </BrowserRouter>
   );
 }

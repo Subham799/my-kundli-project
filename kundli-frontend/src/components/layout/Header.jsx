@@ -1,5 +1,6 @@
 // components/layout/Header.jsx
-import { Moon, Menu, XCircle } from "lucide-react";
+import { Moon, Menu, XCircle, Star } from "lucide-react";
+import { Link } from "react-router-dom";
 import useKundliStore from "../../store/useKundliStore";
 
 export default function Header() {
@@ -47,6 +48,18 @@ export default function Header() {
             New Chart
           </button>
         )}
+
+        {/* Consultancy Link */}
+        <Link
+          to="/consultancy"
+          className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg hover:bg-amber-500/20 transition-all group"
+          style={{ fontFamily: "'Noto Sans Devanagari', sans-serif" }}
+        >
+          <Star size={14} className="text-amber-400 group-hover:rotate-12 transition-transform" />
+          <span className="text-[12px] font-bold text-amber-400 whitespace-nowrap">
+            क्लाइंट्स रिव्यू 🌟
+          </span>
+        </Link>
 
         {/* Live indicator */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10">
