@@ -78,7 +78,7 @@ export default function ConsultancyPage() {
           rel="noreferrer"
           className="flex items-center gap-3 bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-full font-bold shadow-[0_0_20px_rgba(22,163,74,0.4)] transition-all scale-110"
         >
-          <MessageCircle /> अभी परामर्श लें (₹251)
+          <MessageCircle /> अभी परामर्श लें (₹299)
         </a>
       </div>
     </motion.div>
