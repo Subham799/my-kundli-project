@@ -15,6 +15,7 @@ import {
 } from "../shared/ui";
 import { HI, C } from "../shared/designTokens";
 import useKundliStore from "../../store/useKundliStore";
+import KPSignificators from "./KPSignificators";
 
 // ── Planet Hindi names ────────────────────────────────
 const PH = {
@@ -436,7 +437,7 @@ function RectificationSection({ rect, timeAdjust }) {
 // ══════════════════════════════════════════════════════
 export default function KPBTRPanel() {
   const chartData = useKundliStore(s => s.chartData);
-
+console.log("🔥 [DEBUG FRONTEND] Full chartData.enginesData:", chartData?.enginesData);
   if (!chartData) {
     return (
       <EmptyState
@@ -466,6 +467,9 @@ export default function KPBTRPanel() {
   const timeAdj   = kpData.time_adjustment || "—";
   const bothPass  = current?.cil?.cil_connected && current?.d24_matrukaraka?.d24_connected;
 
+  // KP Significators data (for the new table)
+  const kpSigData = chartData?.enginesData?.kp_significators;
+
   return (
     <div className="p-4 space-y-4">
 
@@ -478,6 +482,9 @@ export default function KPBTRPanel() {
           KP System · CIL + D24 मातृकारक · Auto Rectification
         </p>
       </div>
+
+      {/* ✅ नई टेबल: KP Significators — BTR से पहले दिखती है */}
+      <KPSignificators kpData={kpSigData} />
 
       {/* Score Hero */}
       <GlassCard className="p-5 text-center" style={{ borderLeft: `4px solid ${col}` }}>
