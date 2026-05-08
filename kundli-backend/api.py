@@ -961,6 +961,9 @@ def calculate_astrology(local_dt, lat, lon):
     planets_map = {"Su":swe.SUN,"Mo":swe.MOON,"Ma":swe.MARS,"Me":swe.MERCURY,"Ju":swe.JUPITER,"Ve":swe.VENUS,"Sa":swe.SATURN}
     data = {}
     cusps, ascmc = swe.houses_ex(jd, lat, lon, b'P', swe.FLG_SIDEREAL)
+    # 100% Safe Cusp Extraction — library 12 de ya 13, dono handle hoga
+    c_list = list(cusps)
+    data["Cusps"] = c_list[1:13] if len(c_list) > 12 else c_list[:12]
     data["La"] = {"Degree":ascmc[0],"SignDegree":ascmc[0]%30,"Vargas":get_all_vargas(ascmc[0]),"Details":get_nakshatra_info(ascmc[0])}
     for name, code in planets_map.items():
         pos, _ = swe.calc_ut(jd, code, swe.FLG_SIDEREAL | swe.FLG_SPEED)
@@ -1724,9 +1727,22 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         print(f"[Shodhana Engine Error] {_sho_e}")
         shodhana_data = {}
 
+    # ── KP Significators Engine ─────────────────────────────────────────────
+    kp_sig_data = {}
+    try:
+        from kp_significators import compute_kp_significators
+        kp_sig_data = compute_kp_significators(astro)
+        print("[KP Significators] ✅ OK")
+    except Exception as _kps_e:
+        print(f"[KP Significators] Error: {_kps_e}")
+        kp_sig_data = {}
+
     # ── CRITICAL: enginesData में inject ────────────────────────────────────
     # Frontend chartData.enginesData.shodhana पढ़ता है
     engines_data["shodhana"] = shodhana_data
+
+    # kp_btr_data yahan define nahi tha — NameError fix
+    kp_btr_data = {}
 
     return {
         "meta": {
@@ -1777,7 +1793,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         "ashtakavargaSpecial": ashtakavarga_special,
         "disease12th":       disease_12th,
         "badhakHouse":       badhak_house_num,
-        "enginesData":       {**engines_data, "nadi_jyotish": nadi_jyotish_output, "shodhana": shodhana_data},
+        "enginesData":       {**engines_data, "nadi_jyotish": nadi_jyotish_output, "kp_btr": kp_btr_data, "shodhana": shodhana_data, "kp_significators": kp_sig_data},
         "chalit":            chalit_data,
         "bhavSandhi":        chalit_data.get("_bhavSandhi", []),
         "planetStrength":    chalit_data.get("_planetStrength", {}),
@@ -2013,7 +2029,17 @@ def api_chart_engines():
             print(f"[Shodhana Engine Error] {_sho_e}")
             shodhana_data = {}
 
-        return jsonify({'enginesData': {**engines_data, 'nadi_jyotish': nadi_jyotish_output, 'kp_btr': kp_btr_data, 'shodhana': shodhana_data}, '_enginesReady': True})
+        # ── KP Significators Engine ─────────────────────────────────────────
+        kp_sig_data = {}
+        try:
+            from kp_significators import compute_kp_significators
+            kp_sig_data = compute_kp_significators(astro)
+            print("[KP Significators] ✅ OK")
+        except Exception as _kps_e:
+            print(f"[KP Significators] Error: {_kps_e}")
+            kp_sig_data = {}
+
+        return jsonify({'enginesData': {**engines_data, 'nadi_jyotish': nadi_jyotish_output, 'kp_btr': kp_btr_data, 'shodhana': shodhana_data, 'kp_significators': kp_sig_data}, '_enginesReady': True})
 
     except Exception as e:
         import traceback
