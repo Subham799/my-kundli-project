@@ -16,6 +16,8 @@ import {
 import { HI, C } from "../shared/designTokens";
 import useKundliStore from "../../store/useKundliStore";
 import KPSignificators from "./KPSignificators";
+import KPResonanceDashboard from "./KPResonanceDashboard";
+
 
 // ── Planet Hindi names ────────────────────────────────
 const PH = {
@@ -438,6 +440,10 @@ function RectificationSection({ rect, timeAdjust }) {
 export default function KPBTRPanel() {
   const chartData = useKundliStore(s => s.chartData);
 console.log("🔥 [DEBUG FRONTEND] Full chartData.enginesData:", chartData?.enginesData);
+  
+  // 🔮 KP AI Predictions data extract करें
+  const predictions = chartData?.enginesData?.kp_predictions;
+
   if (!chartData) {
     return (
       <EmptyState
@@ -484,8 +490,10 @@ console.log("🔥 [DEBUG FRONTEND] Full chartData.enginesData:", chartData?.engi
       </div>
 
       {/* ✅ नई टेबल: KP Significators — BTR से पहले दिखती है */}
-      <KPSignificators kpData={kpSigData} />
+      <KPSignificators kpData={kpSigData} predictions={predictions} />
 
+      {/* 🚀 Advanced On-Demand Resonance Dashboard */}
+      <KPResonanceDashboard />
       {/* Score Hero */}
       <GlassCard className="p-5 text-center" style={{ borderLeft: `4px solid ${col}` }}>
 

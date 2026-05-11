@@ -1220,8 +1220,11 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         if ad['is_current']: current_ad = ad
 
     current_pds = get_pratyantardashas(current_md['idx'], current_ad['idx'], current_ad['start'])
+    current_pd = current_pds[0] # Default to first
     for pd in current_pds:
         pd['is_current'] = datetime.strptime(pd['start'], "%d-%m-%Y") <= now < datetime.strptime(pd['end'], "%d-%m-%Y")
+        if pd['is_current']: 
+            current_pd = pd
 
     # ── Houses ────────────────────────────────────────────────────
     houses     = {i: {"sign": "", "sign_index": 0, "planets": "", "av": 0} for i in range(1, 13)}
@@ -1772,7 +1775,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             "current": {
                 "mahadasha":       current_md["planet"],
                 "antardasha":      current_ad["planet"],
-                "pratyantara":     current_pds[0]["planet"] if current_pds else "",
+                "pratyantara":     current_pd["planet"] if current_pds else "",
                 "endDate":         current_md["end"][-4:] + "-" + current_md["end"][3:5],
                 "progressPercent": md_pct,
             },
@@ -2039,7 +2042,34 @@ def api_chart_engines():
             print(f"[KP Significators] Error: {_kps_e}")
             kp_sig_data = {}
 
-        return jsonify({'enginesData': {**engines_data, 'nadi_jyotish': nadi_jyotish_output, 'kp_btr': kp_btr_data, 'shodhana': shodhana_data, 'kp_significators': kp_sig_data}, '_enginesReady': True})
+        # ── KP Extensions: Ruling Planets + Predictions ───────────────────
+        kp_pred_data = {}
+        kp_rp_data   = {}
+        try:
+            from kp_transit_rp import compute_ruling_planets
+            from kp_predictions import generate_kp_predictions
+
+            # dt pehle se api_chart_engines mein bana hua hai — seedha use karo
+            birth_dt_obj = dt
+            sunrise_val  = astro.get('sunrise', "06:00")
+            kp_rp_data   = compute_ruling_planets(astro, birth_dt_obj, sunrise_val)
+            print("[KP Ruling Planets] ✅ OK")
+
+            _pc_rev_kp = {"सूर्य":"Su","चंद्र":"Mo","मंगल":"Ma","बुध":"Me","गुरु":"Ju","शुक्र":"Ve","शनि":"Sa","राहु":"Ra","केतु":"Ke"}
+            md_planet  = _pc_rev_kp.get(current_md.get("planet",""),"")  if 'current_md' in locals() and current_md else ""
+            ad_planet  = _pc_rev_kp.get(current_md.get("planet",""),"")  if 'current_ad' in locals() and current_md else ""
+            pd_planet  = _pc_rev_kp.get(current_md.get("planet",""),"")  if 'current_pd' in locals() and current_md else ""
+            dba_codes  = {"MD": md_planet, "BD": ad_planet, "AD": pd_planet}
+
+            if kp_sig_data.get("computed"):
+                kp_pred_data = generate_kp_predictions(kp_sig_data, dba_codes)
+                print("[KP Predictions] ✅ OK")
+
+        except Exception as _kp_ext_e:
+            import traceback; traceback.print_exc()
+            print(f"[KP Extensions] Error: {_kp_ext_e}")
+
+        return jsonify({'enginesData': {**engines_data, 'nadi_jyotish': nadi_jyotish_output, 'kp_btr': kp_btr_data, 'shodhana': shodhana_data, 'kp_significators': kp_sig_data, 'kp_predictions': kp_pred_data, 'kp_ruling_planets': kp_rp_data}, '_enginesReady': True})
 
     except Exception as e:
         import traceback
@@ -2152,26 +2182,7 @@ def api_yearly():
 def transit_search():
     """
     GocharPanel.jsx → AdvancedTransitSearcher का backend.
-
-    Request body (JSON):
-    {
-      "start_date": "2024-01-01",
-      "end_date":   "2030-12-31",
-      "conditions": [
-        {"planet": "Sa", "sign": 12},
-        {"planet": "Ju", "sign":  4}
-      ]
-    }
-
-    Response:
-    {
-      "success": true,
-      "periods": [
-        {"start": "15 Mar 2025", "end": "02 Nov 2025"},
-        ...
-      ],
-      "total": 2
-    }
+    🚀 UPGRADED: अब यह Rashi के साथ-साथ Nakshatra और Nakshatra Lord भी खोजेगा!
     """
     try:
         body = request.get_json(force=True)
@@ -2185,7 +2196,6 @@ def transit_search():
         if not conditions:
             return jsonify({"success": False, "error": "कोई condition नहीं दी"}), 400
 
-        # ── Parse dates ──────────────────────────────────────────────────
         try:
             start_dt = datetime.strptime(start_str, "%Y-%m-%d")
             end_dt   = datetime.strptime(end_str,   "%Y-%m-%d")
@@ -2200,18 +2210,12 @@ def transit_search():
 
         # ── Planet code → Swiss Ephemeris ID mapping ──────────────────────
         PLANET_SWE = {
-            "Su": swe.SUN,
-            "Mo": swe.MOON,
-            "Ma": swe.MARS,
-            "Me": swe.MERCURY,
-            "Ju": swe.JUPITER,
-            "Ve": swe.VENUS,
-            "Sa": swe.SATURN,
-            "Ra": swe.TRUE_NODE,
-            "Ke": None,
+            "Su": swe.SUN, "Mo": swe.MOON, "Ma": swe.MARS, "Me": swe.MERCURY,
+            "Ju": swe.JUPITER, "Ve": swe.VENUS, "Sa": swe.SATURN, "Ra": swe.TRUE_NODE, "Ke": None,
         }
 
-        def get_sidereal_sign(planet_code, jd):
+        # ✨ NEW: मास्टर फंक्शन जो एक साथ राशि, नक्षत्र और नक्षत्र-स्वामी निकालेगा
+        def get_sidereal_data(planet_code, jd):
             swe.set_sid_mode(swe.SIDM_LAHIRI)
             flags = swe.FLG_SIDEREAL
             if planet_code == "Ke":
@@ -2222,30 +2226,48 @@ def transit_search():
                 if swe_id is None:
                     return None
                 pos = swe.calc_ut(jd, swe_id, flags)[0][0]
-            return int(pos / 30) % 12  # 0=मेष, 11=मीन
+                
+            return {
+                "sign": int(pos / 30) % 12, # 0 to 11
+                "nakshatra": int(pos / (360/27)), # 0 to 26
+                "nak_lord": ["Ke","Ve","Su","Mo","Ma","Ra","Ju","Sa","Me"][int(pos / (360/27)) % 9]
+            }
 
-        # ── Step size — slow planets daily, fast planets 4-hourly ────────
         SLOW_PLANETS = {"Sa", "Ju", "Ra", "Ke"}
         all_slow  = all(c.get("planet", "Sa") in SLOW_PLANETS for c in conditions)
         step_days = 1 if all_slow else (4 / 24.0)
 
-        # ── Scan through date range ───────────────────────────────────────
         periods      = []
         in_match     = False
         period_start = None
         cur          = start_dt
 
         while cur <= end_dt:
-            jd = swe.julday(cur.year, cur.month, cur.day,
-                            cur.hour + cur.minute / 60.0)
+            jd = swe.julday(cur.year, cur.month, cur.day, cur.hour + cur.minute / 60.0)
 
             match = True
             for cond in conditions:
                 p_code  = cond.get("planet", "Sa")
-                sign_id = int(cond.get("sign", 1)) - 1  # 1-indexed → 0-indexed
-                if get_sidereal_sign(p_code, jd) != sign_id:
+                pos_data = get_sidereal_data(p_code, jd)
+                
+                if not pos_data:
                     match = False
                     break
+
+                # 1. Rashi Match (अगर UI से सिर्फ Rashi आई है)
+                if "sign" in cond and cond["sign"] is not None and str(cond["sign"]).strip() != "":
+                    if pos_data["sign"] != (int(cond["sign"]) - 1):
+                        match = False; break
+
+                # 2. Nakshatra Match (अगर UI से 1-27 नक्षत्र आया है)
+                if "nakshatra" in cond and cond["nakshatra"] is not None and str(cond["nakshatra"]).strip() != "":
+                    if pos_data["nakshatra"] != (int(cond["nakshatra"]) - 1):
+                        match = False; break
+                        
+                # 3. Nakshatra Lord Match (अगर UI से 'Ma', 'Sa' आदि आया है)
+                if "nak_lord" in cond and cond["nak_lord"] is not None and str(cond["nak_lord"]).strip() != "":
+                    if pos_data["nak_lord"] != cond["nak_lord"]:
+                        match = False; break
 
             if match and not in_match:
                 in_match     = True
@@ -2260,7 +2282,6 @@ def transit_search():
 
             cur += timedelta(days=step_days)
 
-        # Range end तक match चलता रहा हो तो
         if in_match and period_start:
             periods.append({
                 "start": period_start.strftime("%d %b %Y"),
@@ -2273,8 +2294,6 @@ def transit_search():
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
-
-
 # ══════════════════════════════════════════════════════════════════════════
 #  Weak Bhav × Gochar Cross-Match Route
 #  GocharPanel.jsx → "कमजोर भाव + गोचर" periods nikalta hai
@@ -2485,6 +2504,170 @@ def weak_gochar_periods():
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# =====================================================================
+# 🚀 ON-DEMAND ADVANCED KP RESONANCE API (v5.0)
+# =====================================================================
+import traceback  # 👈 FIX: Traceback यहाँ इम्पोर्ट कर दिया
+
+@app.route('/api/generate-kp-payload', methods=['POST'])
+def generate_kp_payload():
+    """
+    5-BLOCK UNIVERSAL KP PAYLOAD GENERATOR
+    No probabilities, no brute-force loops. Pure Top-Down KP Data.
+    """
+    try:
+        data = request.json
+        topic    = data.get('topic', 'career')
+        astro    = data.get('astro_data', {})
+        raw_sigs = data.get('raw_significators', {})
+        raw_cusps= data.get('cusp_data', {})
+        dob_str  = data.get('dob')
+        moon_deg = data.get('moon_degree')
+
+        # ── 1. DEPENDENCIES ──
+        from kp_strength_engine import compute_planet_strength, compute_effective_significators, inject_node_delegated_houses
+        strength_report = compute_planet_strength(astro, raw_sigs)
+        effective_sigs  = compute_effective_significators(raw_sigs, strength_report)
+        effective_sigs  = inject_node_delegated_houses(effective_sigs, astro, raw_sigs, strength_report)
+
+        # ── Cusp Normalization ──
+        cusp_data = {}
+        if isinstance(raw_cusps, dict):
+            for k, v in raw_cusps.items(): cusp_data[str(k)] = v
+        elif isinstance(raw_cusps, list):
+            for i, v in enumerate(raw_cusps): cusp_data[str(i + 1)] = v
+
+        # ─────────────────────────────────────────────────────────
+        # BLOCK 1: TOPIC METADATA
+        # ─────────────────────────────────────────────────────────
+        KP_EVENT_DICTIONARY = {
+            "marriage":       {"label": "Marriage Timing?",    "target": [2, 7, 11],     "stress": [1, 6, 10]},
+            "career":         {"label": "Job/Career Start?",   "target": [2, 6, 10, 11], "stress": [5, 9, 12]},
+            "ex_return":      {"label": "Will Ex Return?",     "target": [5, 11],         "stress": [6, 8, 12]},
+            "childbirth":     {"label": "Childbirth?",         "target": [2, 5, 11],      "stress": [1, 4, 10]},
+            "foreign_travel": {"label": "Foreign Travel?",     "target": [3, 9, 12],      "stress": [2, 4, 11]},
+            "property_buy":   {"label": "Property/Vehicle?",   "target": [4, 11, 12],     "stress": [3, 10]},
+            "accident":       {"label": "Accident/Injury?",    "target": [1, 8, 12],      "stress": [11]}
+        }
+        topic_meta    = KP_EVENT_DICTIONARY.get(topic, KP_EVENT_DICTIONARY["career"])
+        target_houses = topic_meta["target"]
+
+        # ─────────────────────────────────────────────────────────
+        # BLOCK 2: EVENT PROMISE (CSL CHECK)
+        # ─────────────────────────────────────────────────────────
+        csl_promise = {}
+        for house in target_houses:
+            h_str    = str(house)
+            cdata    = cusp_data.get(h_str, {})
+            sl_planet= cdata.get("SL", "") or cdata.get("sub_lord", "")
+            nl_planet= cdata.get("NL", "") or cdata.get("star_lord", "")
+            sl_sigs  = effective_sigs.get(sl_planet, {})
+            csl_promise[h_str] = {
+                "CSL":  sl_planet,
+                "NL":   nl_planet,
+                "Significations": {
+                    "L1": sl_sigs.get("L1", []), "L2": sl_sigs.get("L2", []),
+                    "L3": sl_sigs.get("L3", []), "L4": sl_sigs.get("L4", [])
+                }
+            }
+
+        # ─────────────────────────────────────────────────────────
+        # BLOCK 3: 4-STEP PLANETARY SIGNIFICATORS (Fix: Untenanted Logic)
+        # ─────────────────────────────────────────────────────────
+        # KP Rule: jo planet kisi bhi planet ka NL nahi = Untenanted (balwaan)
+        all_nls = [effective_sigs.get(p, {}).get("NL", "") for p in ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"]]
+        all_nls = [nl for nl in all_nls if nl]
+
+        p_table = {}
+        for p in ["Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa", "Ra", "Ke"]:
+            p_data = effective_sigs.get(p, {})
+            p_table[p] = {
+                "NL":           p_data.get("NL", ""),
+                "SL":           p_data.get("SL", ""),
+                "L1":           p_data.get("L1", []),
+                "L2":           p_data.get("L2", []),
+                "L3":           p_data.get("L3", []),
+                "L4":           p_data.get("L4", []),
+                "is_untenanted": p not in all_nls  # True = koi planet iski nakshatra mein nahi
+            }
+
+        # ─────────────────────────────────────────────────────────
+        # BLOCK 4: DBA TIMELINE (Fix: 5 Upcoming BDs)
+        # ─────────────────────────────────────────────────────────
+        timeline = {"Current_MD": {}, "Current_BD": {}, "Upcoming_ADs": []}
+        if dob_str and moon_deg is not None:
+            try:
+                b_dt = None
+                for fmt in ["%d %B %Y", "%Y-%m-%d", "%d-%m-%Y", "%Y-%m-%dT%H:%M:%S.%fZ"]:
+                    try:
+                        b_dt = datetime.strptime(dob_str.split('T')[0], fmt.split('T')[0])
+                        break
+                    except ValueError: pass
+
+                if b_dt:
+                    today  = datetime.now()
+                    dashas = calculate_vimshottari(float(moon_deg), b_dt)
+                    curr_md= next((d for d in dashas if datetime.strptime(d['start'], "%d-%m-%Y") <= today <= datetime.strptime(d['end'], "%d-%m-%Y")), None)
+
+                    if curr_md:
+                        _rev = {"सूर्य":"Su","चंद्र":"Mo","मंगल":"Ma","बुध":"Me","गुरु":"Ju","शुक्र":"Ve","शनि":"Sa","राहु":"Ra","केतु":"Ke"}
+                        timeline["Current_MD"] = {"Planet": _rev.get(curr_md["planet"], ""), "End_Date": curr_md["end"]}
+
+                        all_bds     = get_antardashas(curr_md['idx'], curr_md['start'])
+                        curr_bd_idx = next((i for i, bd in enumerate(all_bds) if datetime.strptime(bd['start'], "%d-%m-%Y") <= today <= datetime.strptime(bd['end'], "%d-%m-%Y")), -1)
+
+                        if curr_bd_idx != -1:
+                            curr_bd = all_bds[curr_bd_idx]
+                            timeline["Current_BD"] = {"Planet": _rev.get(curr_bd["planet"], ""), "Start_Date": curr_bd["start"], "End_Date": curr_bd["end"]}
+                            # Agle 5 BDs — client ko future timing dikhane ke liye
+                            for bd in all_bds[curr_bd_idx + 1 : curr_bd_idx + 6]:
+                                timeline["Upcoming_ADs"].append({
+                                    "Planet": _rev.get(bd["planet"], bd["planet"]),
+                                    "Starts": bd["start"],
+                                    "Ends":   bd["end"]
+                                })
+            except Exception as e:
+                print(f"DBA Timeline Error: {e}")
+
+        # ─────────────────────────────────────────────────────────
+        # BLOCK 5: MACRO GOCHAR (Fix: Real Transit NL & Sign)
+        # ─────────────────────────────────────────────────────────
+        t_lat         = float(data.get('lat', 28.61))
+        t_lon         = float(data.get('lon', 77.20))
+        transit_astro = calculate_astrology(datetime.now(), t_lat, t_lon)
+
+        RASHI_EN = ["Mesha","Vrishabha","Mithuna","Karka","Simha","Kanya","Tula","Vrischika","Dhanu","Makara","Kumbha","Meena"]
+
+        macro_gochar = {}
+        for p in ["Ju", "Sa", "Ra", "Ke", "Su", "Mo"]:
+            if p in transit_astro:
+                deg      = transit_astro[p].get("Degree", 0)
+                sign_idx = int(deg / 30) % 12
+                real_nl  = get_nakshatra_lord(deg)  # direct degree se accurate NL
+                macro_gochar[p] = {
+                    "Planet":       p,
+                    "Current_Sign": RASHI_EN[sign_idx],
+                    "Transit_NL":   real_nl,
+                    "Degree":       f"{round(deg % 30, 2)}°"
+                }
+
+        # ── Final Payload ──
+        final_payload = {
+            "Block_1_Topic":                   topic_meta,
+            "Block_2_CSL_Promise":             csl_promise,
+            "Block_3_Planetary_Significators": p_table,
+            "Block_4_DBA_Timeline":            timeline,
+            "Block_5_Macro_Gochar":            macro_gochar
+        }
+
+        return jsonify({"success": True, "topic": topic, "universal_payload": final_payload})
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 
 # ── ENTRY POINT ──────────────────────────────────────────────────────────
