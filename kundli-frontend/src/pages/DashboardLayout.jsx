@@ -1689,7 +1689,7 @@ function buildPDFPage(pageNum, chartData) {
 
   // 🆕 PAGE 28 — षोडशवर्ग चक्र (16 D-Charts) + वक्री ग्रह सारांश
   pages[28] = () => {
-    const VARGA_KEYS = ["D1","D2","D3","D4","D7","D9","D10","D12","D16","D20","D24","D27","D30","D40","D45","D60"];
+    const VARGA_KEYS = ["D1","D2","D3","D4","D6","D7","D9","D10","D12","D16","D20","D24","D27","D30","D40","D45","D60"];
     const PL_KEYS    = ["La","Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
     const PL_NAMES   = {"La":"लग्न","Su":"सूर्य","Mo":"चंद्र","Ma":"मंगल","Me":"बुध","Ju":"गुरु","Ve":"शुक्र","Sa":"शनि","Ra":"राहु","Ke":"केतु"};
 
@@ -2157,20 +2157,57 @@ function RightPanel({ chartData }) {
                 ))}
               </div>
             )}
-            {activeTab === "drishti" && <DrishtiGrid drishti={chartData.drishti} bhavDrishti={chartData.bhavDrishti || {}} planets={chartData.planets} houses={chartData.houses || []} />}
-            {activeTab === "dasha" && <DashaTimeline dasha={chartData.dasha} chartMeta={chartData.meta} />}
-            {activeTab === "av" && <AshtakavargaGrid sav={chartData.sav||[]} houses={chartData.houses||[]} ashtakavargaSpecial={chartData.ashtakavargaSpecial||""} />}
-            {activeTab === "yogas" && (
-              enginesLoading
-                ? <TabSkeleton />
-                : <YogaPanel data={chartData.enginesData?.yogas} chartData={chartData} />
-            )}
-            {activeTab === "houses" && <HousePanel chartData={chartData} />}
-            {activeTab === "advanced" && (
-              enginesLoading
-                ? <TabSkeleton />
-                : <AdvancedAVPanel enginesData={chartData.enginesData} chartData={chartData} onExportPDF={() => exportKundliPDF(chartData)} />
-            )}
+            {activeTab === "drishti" && (
+  <DrishtiGrid
+    drishti={chartData.drishti}
+    bhavDrishti={chartData.bhavDrishti || {}}
+    advancedDrishti={chartData.chalit?._advancedDrishti || []}
+    planets={chartData.planets}
+    houses={chartData.houses || []}
+  />
+)}
+
+{activeTab === "dasha" && (
+  <DashaTimeline
+    dasha={chartData.dasha}
+    chartMeta={chartData.meta}
+  />
+)}
+
+{activeTab === "av" && (
+  <AshtakavargaGrid
+    sav={chartData.sav || []}
+    houses={chartData.houses || []}
+    ashtakavargaSpecial={chartData.ashtakavargaSpecial || ""}
+  />
+)}
+
+{activeTab === "yogas" && (
+  enginesLoading
+    ? <TabSkeleton />
+    : (
+      <YogaPanel
+        data={chartData.enginesData?.yogas}
+        chartData={chartData}
+      />
+    )
+)}
+
+{activeTab === "houses" && (
+  <HousePanel chartData={chartData} />
+)}
+
+{activeTab === "advanced" && (
+  enginesLoading
+    ? <TabSkeleton />
+    : (
+      <AdvancedAVPanel
+        enginesData={chartData.enginesData}
+        chartData={chartData}
+        onExportPDF={() => exportKundliPDF(chartData)}
+      />
+    )
+)}
             {activeTab === "kamukta" && <KamuktaPanel chartData={chartData} />}
             {activeTab === "gochar" && <GocharPanel chartData={chartData} />}
             {activeTab === "nadi" && (

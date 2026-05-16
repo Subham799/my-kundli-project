@@ -939,7 +939,6 @@ def get_all_vargas(degree):
     v['D2']  = (4 if rem < 15 else 3) if sign % 2 == 0 else (3 if rem < 15 else 4)
     v['D3']  = (sign + (int(rem/10)*4)) % 12
     v['D4']  = (sign + (int(rem/7.5)*3)) % 12
-    v['D6']  = (sign + int(rem / 5)) % 12 if sign % 2 == 0 else (sign + 6 + int(rem / 5)) % 12
     v['D7']  = (sign + int(rem/(30/7))) % 12 if sign % 2 == 0 else (sign + 6 + int(rem/(30/7))) % 12
     v['D9']  = int(((degree * 9) % 360) / 30)
     v['D10'] = (sign + int(rem/3)) % 12 if sign % 2 == 0 else (sign + 8 + int(rem/3)) % 12

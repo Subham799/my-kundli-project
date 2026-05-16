@@ -475,7 +475,910 @@ const rowLabel = {
 const rowValue = {
   fontSize: 14, fontWeight: 600, color: "#e2e8f0", flex: 1,
 };
+// ── Ruling Planets Card ────────────────────────────────────────────────────
+function RulingPlanetsCard({ result }) {
+  if (!result?.ruling_planets) return null;
+  const rp = result.ruling_planets;
+  const rows = [
+    { label: "लग्न NL (नक्षत्र स्वामी)", value: rp.lagna_nl },
+    { label: "लग्न SL (उप-स्वामी)",      value: rp.lagna_sl },
+    { label: "लग्न राशि स्वामी",         value: rp.lagna_sign_lord },
+    { label: "चंद्र NL",                 value: rp.moon_nl },
+    { label: "चंद्र SL",                 value: rp.moon_sl },
+    { label: "चंद्र राशि स्वामी",        value: rp.moon_sign_lord },
+    { label: "दिन स्वामी",               value: rp.day_lord },
+  ];
+  return (
+    <div style={{ background: "#1e293b", borderRadius: 12, padding: "16px", border: "1px solid #334155" }}>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12, color: "#f59e0b" }}>⭐ Ruling Planets (RPs)</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        {rp.ruling_planets?.map((p) => (
+          <span key={p} style={{
+            background: (PLANET_COLORS[p] || "#334155") + "33",
+            border: `1px solid ${PLANET_COLORS[p] || "#475569"}`,
+            borderRadius: 20, padding: "4px 14px",
+            color: PLANET_COLORS[p] || "#e2e8f0",
+            fontWeight: 700, fontSize: 13,
+          }}>{p}</span>
+        ))}
+      </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.label} style={{ borderBottom: "1px solid #1e293b" }}>
+              <td style={{ padding: "6px 8px", color: "#64748b" }}>{r.label}</td>
+              <td style={{ padding: "6px 8px", fontWeight: 700, color: PLANET_COLORS[r.value] || "#e2e8f0" }}>{r.value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
+// ── DBA Card ───────────────────────────────────────────────────────────────
+function DbaCard({ result }) {
+  if (!result?.dba) return null;
+  const d = result.dba;
+  return (
+    <div style={{ background: "#1e293b", borderRadius: 12, padding: "16px", border: "1px solid #334155" }}>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12, color: "#a78bfa" }}>🕐 Vimshottari DBA</div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {[
+          { label: "महादशा", value: d.mahadasha, sub: `${d.balance_yrs} yr शेष`, color: "#f59e0b" },
+          { label: "भुक्ति",  value: d.bhukti,    sub: `${d.bhukti_yrs} yr`, color: "#a78bfa" },
+          { label: "अंतरा",  value: d.antara,    sub: `${d.antara_yrs} yr`, color: "#10b981" },
+        ].map(item => (
+          <div key={item.label} style={{
+            flex: 1, minWidth: 90,
+            background: "#0f172a", borderRadius: 10,
+            padding: "10px 14px", textAlign: "center",
+            border: `1px solid ${item.color}44`,
+          }}>
+            <div style={{ fontSize: 10, color: "#64748b", marginBottom: 4, textTransform: "uppercase", letterSpacing: 1 }}>{item.label}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: PLANET_COLORS[item.value] || item.color }}>{item.value}</div>
+            <div style={{ fontSize: 10, color: "#64748b", marginTop: 3 }}>{item.sub}</div>
+          </div>
+        ))}
+      </div>
+      {result.moon_connection && (
+        <div style={{ marginTop: 10, padding: "8px 12px", background: "#0f172a", borderRadius: 8, fontSize: 12, color: "#94a3b8" }}>
+          🌙 {result.moon_connection.note}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── KP House Analysis Card — Full layered verdict ─────────────────────────
+const GRADE_COLORS = { A:"#22c55e", B:"#4ade80", C:"#fbbf24", D:"#fb923c", E:"#94a3b8" };
+const RETRO_COLORS = { rejected:"#ef4444", delayed:"#f59e0b", suspended:"#fb923c", direct:"#10b981" };
+
+// ── Small reusable layer section ──────────────────────────────────────────
+function LayerBox({ title, children, color="#334155" }) {
+  return (
+    <div style={{ padding:"10px 12px", background:"#0f172a", borderRadius:8,
+      borderLeft:`3px solid ${color}`, marginBottom:2 }}>
+      <div style={{ fontSize:10, color:"#64748b", fontWeight:700, letterSpacing:1,
+        textTransform:"uppercase", marginBottom:6 }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function Tag({ label, color="#475569", bg, strike=false, small=false }) {
+  return (
+    <span style={{
+      display:"inline-block", padding: small ? "2px 7px" : "3px 10px",
+      borderRadius:12, fontSize: small ? 10 : 11, fontWeight:700,
+      background: bg || color+"22", border:`1px solid ${color}`,
+      color, textDecoration: strike ? "line-through" : "none",
+      opacity: strike ? 0.5 : 1, margin:"2px",
+    }}>{label}</span>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+//  14-LAYER KP ANALYTICAL CONSOLE
+// ═══════════════════════════════════════════════════════════
+function HouseAnalysisCard({ result }) {
+  const [expanded, setExpanded] = useState(null);
+const [activeLayers, setActiveLayers] = useState({});
+  if (!result?.house_analysis?.length) return null;
+
+  const LAYERS = [
+    { id:"summary",  label:"📋 Summary" },
+    { id:"l1",       label:"1️⃣ Query" },
+    { id:"l3",       label:"2️⃣ Houses" },
+    { id:"l4",       label:"3️⃣ CSL" },
+    { id:"l5",       label:"4️⃣ Sigs" },
+    { id:"l6",       label:"5️⃣ Ra/Ke" },
+    { id:"l7",       label:"6️⃣ DBA" },
+    { id:"l8",       label:"7️⃣ RP" },
+    { id:"l9",       label:"8️⃣ Transit" },
+    { id:"l10",      label:"9️⃣ Promise" },
+    { id:"l11",      label:"🔟 Resonance" },
+    { id:"l12",      label:"⚠️ Delay" },
+    { id:"l13",      label:"⏱️ Timing" },
+  ];
+
+  return (
+    <div style={{ background:"#1e293b", borderRadius:12, padding:"16px",
+      border:"1px solid #334155" }}>
+      <div style={{ fontWeight:600, fontSize:15, marginBottom:12, color:"#a78bfa" }}>
+        🔬 KP Raw Analytical Console
+        <span style={{ fontSize:10, fontWeight:400, color:"#64748b", marginLeft:8 }}>
+          14 layers — no final prediction
+        </span>
+      </div>
+
+      {/* Topic list */}
+      <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+        {result.house_analysis.map((h, i) => (
+          <div key={h.topic}>
+            {/* Topic row */}
+            <div onClick={() => setExpanded(expanded===i ? null : i)}
+              style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                padding:"10px 12px", background:"#0f172a", borderRadius: expanded===i ? "8px 8px 0 0" : 8,
+                border:`1px solid ${h.color}44`, cursor:"pointer" }}>
+              <span style={{ fontSize:13, color:"#cbd5e1" }}>{h.icon} {h.topic}</span>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:12, fontWeight:700, color:h.color }}>{h.status}</span>
+                <span style={{ color:"#475569", fontSize:10 }}>{expanded===i ? "▲" : "▼"}</span>
+              </div>
+            </div>
+
+            {/* Expanded panel */}
+            {expanded===i && (
+              <div style={{ background:"#080f1e", border:`1px solid ${h.color}44`,
+                borderTop:"none", borderRadius:"0 0 8px 8px" }}>
+
+                {/* Layer tab bar */}
+                <div style={{ display:"flex", overflowX:"auto", gap:4, padding:"8px 10px",
+                  borderBottom:"1px solid #1e293b" }}>
+                  {LAYERS.map(l => (
+                   <button
+                          key={l.id}
+                          onClick={() =>
+                            setActiveLayers(prev => ({
+                              ...prev,
+                              [i]: l.id
+                            }))
+                          }
+                          style={{
+                            background:
+                              (activeLayers[i] || "summary") === l.id
+                                ? h.color
+                                : "#1e293b",
+                        color: activeLayer===l.id ? "#000" : "#64748b" }}>
+                      {l.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+
+                  {/* ── SUMMARY ── */}
+                  {(activeLayers[i] || "summary")==="summary" && h.l14_summary && (
+                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      <LayerBox title="📊 Layer 14 — Raw KP Summary" color={h.color}>
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:8 }}>
+                          <Tag label={h.l14_summary.promise_status}
+                            color={h.l14_summary.promise_status.includes("✅") ? "#22c55e" : "#ef4444"} />
+                          <Tag label={`RP: ${h.l14_summary.rp_agreement}`} color="#f59e0b" />
+                          <Tag label={`Transit: ${h.l14_summary.transit_readiness}`} color="#10b981" />
+                          <Tag label={h.l14_summary.resonance_label} color="#a78bfa" />
+                        </div>
+                        <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                          <div style={{ flex:1, minWidth:120 }}>
+                            <div style={{ fontSize:10, color:"#64748b", marginBottom:3 }}>✅ Strongest Sig</div>
+                            {h.l14_summary.strongest_significators?.map(p =>
+                              <Tag key={p} label={p} color="#22c55e" small />
+                            )}
+                          </div>
+                          <div style={{ flex:1, minWidth:120 }}>
+                            <div style={{ fontSize:10, color:"#64748b", marginBottom:3 }}>✗ Rejected</div>
+                            {h.l14_summary.rejected_significators?.map(p =>
+                              <Tag key={p} label={p} color="#ef4444" strike small />
+                            ) || <span style={{ fontSize:10, color:"#475569" }}>—</span>}
+                          </div>
+                          <div style={{ flex:1, minWidth:120 }}>
+                            <div style={{ fontSize:10, color:"#64748b", marginBottom:3 }}>⏳ Suspended</div>
+                            {h.l14_summary.retro_suspended?.map(p =>
+                              <Tag key={p} label={p} color="#f59e0b" small />
+                            ) || <span style={{ fontSize:10, color:"#475569" }}>—</span>}
+                          </div>
+                        </div>
+                        {h.l14_summary.denial_indicated &&
+                          <div style={{ marginTop:8, padding:"6px 10px", background:"#ef444422", borderRadius:6,
+                            fontSize:11, color:"#ef4444" }}>🚫 Denial Indicated</div>}
+                        {h.l14_summary.delay_indicated && !h.l14_summary.denial_indicated &&
+                          <div style={{ marginTop:8, padding:"6px 10px", background:"#f59e0b22", borderRadius:6,
+                            fontSize:11, color:"#f59e0b" }}>⏳ Delay Indicated</div>}
+                        <div style={{ marginTop:8, fontSize:10, color:"#475569", fontStyle:"italic" }}>
+                          {h.l14_summary.analytical_note}
+                        </div>
+                      </LayerBox>
+                    </div>
+                  )}
+
+                  {/* ── LAYER 1: QUERY VALIDATION ── */}
+                  {(activeLayers[i] || "summary")==="l1" && h.l1_query_validation && (() => {
+                    const qv = h.l1_query_validation;
+                    return (
+                      <LayerBox title="Layer 1 — Query Validation" color="#f59e0b">
+                        <div style={{ fontSize:13, fontWeight:700, color:"#f59e0b", marginBottom:8 }}>
+                          {qv.validity} &nbsp; Score: {qv.score}/{qv.max_score}
+                        </div>
+                        {[
+                          { label:"Moon NL", planet:qv.moon_nl, houses:qv.moon_nl_houses, ok:qv.moon_nl_ok },
+                          { label:"Moon SL", planet:qv.moon_sl, houses:qv.moon_sl_houses, ok:qv.moon_sl_ok, retro:qv.moon_sl_retro },
+                          { label:"Lagna NL", planet:qv.lagna_nl, houses:qv.lagna_nl_houses, ok:qv.lagna_nl_ok },
+                          { label:"Lagna SL", planet:qv.lagna_sl, houses:qv.lagna_sl_houses, ok:qv.lagna_sl_ok },
+                          { label:"11th CSL", planet:qv.cusp11_csl, houses:qv.cusp11_houses, ok:qv.cusp11_ok },
+                        ].map(row => (
+                          <div key={row.label} style={{ display:"flex", alignItems:"center", gap:8,
+                            marginBottom:5, fontSize:12 }}>
+                            <span style={{ color:"#64748b", minWidth:70 }}>{row.label}:</span>
+                            <span style={{ fontWeight:700, color:PLANET_COLORS[row.planet]||"#e2e8f0" }}>
+                              {row.planet}{row.retro ? " ℞" : ""}
+                            </span>
+                            <span style={{ color:"#475569", fontSize:11 }}>→ {row.houses?.join(",") || "—"}</span>
+                            <span style={{ color: row.ok ? "#10b981" : "#ef4444", fontWeight:700 }}>
+                              {row.ok ? "✓" : "✗"}
+                            </span>
+                          </div>
+                        ))}
+                        <div style={{ fontSize:10, color:"#64748b", marginTop:6, fontStyle:"italic" }}>{qv.note}</div>
+                      </LayerBox>
+                    );
+                  })()}
+
+                  {/* ── LAYER 3: EVENT HOUSE MAPPING ── */}
+                  {activeLayer==="l3" && h.l3_event_map && (
+                    <LayerBox title="Layer 3 — Event House Mapping" color="#10b981">
+                      <div style={{ fontSize:10, color:"#64748b", marginBottom:8 }}>{h.l3_event_map.topic_note}</div>
+                      {["primary","support","fulfillment","obstruct"].map(role => (
+                        <div key={role} style={{ marginBottom:8 }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:
+                            role==="obstruct"?"#ef4444":role==="fulfillment"?"#22c55e":"#94a3b8",
+                            marginBottom:4, textTransform:"uppercase" }}>{role}</div>
+                          {h.l3_event_map[role]?.map(item => (
+                            <div key={item.house} style={{ display:"flex", gap:8, alignItems:"center",
+                              marginBottom:3, fontSize:11 }}>
+                              <Tag label={`Bhav ${item.house}`}
+                                color={item.csl_favors_event?"#10b981":item.csl_obstructs?"#ef4444":"#475569"} small />
+                              <span style={{ color:"#64748b" }}>CSL:</span>
+                              <span style={{ color:PLANET_COLORS[item.csl]||"#e2e8f0", fontWeight:700 }}>{item.csl}</span>
+                              <span style={{ color:"#475569" }}>→ {item.csl_sig_houses?.join(",") || "—"}</span>
+                              {item.csl_favors_event && <span style={{ color:"#10b981" }}>✓</span>}
+                              {item.csl_obstructs && <span style={{ color:"#ef4444" }}>⚠</span>}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </LayerBox>
+                  )}
+
+                  {/* ── LAYER 4: CSL DEEP ── */}
+                  {activeLayer==="l4" && h.l4_csl_deep && (
+                    <LayerBox title="Layer 4 — Complete CSL Analysis" color="#a78bfa">
+                      {h.l4_csl_deep.filter(c => [
+                        ...h.l3_event_map?.primary?.map(x=>x.house)||[],
+                        ...h.l3_event_map?.fulfillment?.map(x=>x.house)||[]
+                      ].includes(c.house)).map(c => (
+                        <div key={c.house} style={{ marginBottom:10, padding:"8px",
+                          background:"#1e293b", borderRadius:6,
+                          borderLeft:`3px solid ${c.retro_verdict==="denial"?"#ef4444":c.retro_verdict==="delay"?"#f59e0b":"#10b981"}` }}>
+                          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:4 }}>
+                            <Tag label={`Bhav ${c.house}`} color="#a78bfa" small />
+                            <span style={{ fontSize:11, color:"#64748b" }}>CSL:</span>
+                            <span style={{ fontWeight:700, color:PLANET_COLORS[c.sub_lord]||"#e2e8f0" }}>
+                              {c.sub_lord}{c.csl_retro?" ℞":""}
+                            </span>
+                            <span style={{ fontSize:10, color:
+                              c.retro_verdict==="denial"?"#ef4444":c.retro_verdict==="delay"?"#f59e0b":"#10b981" }}>
+                              [{c.retro_verdict}]
+                            </span>
+                          </div>
+                          <div style={{ fontSize:10, color:"#94a3b8" }}>
+                            NL: {c.csl_nl}{c.nl_retro?" ℞":""} → {c.csl_nl_signifies?.join(",") || "—"}
+                          </div>
+                          <div style={{ fontSize:10, color:"#94a3b8" }}>
+                            Sig: {c.csl_signifies?.join(",") || "—"}
+                            &nbsp;{c.favors_event?"✅":""}
+                            &nbsp;{c.obstructs_event?"⚠️":""}
+                          </div>
+                          <div style={{ fontSize:10, color:
+                            c.retro_verdict==="denial"?"#ef4444":"#f59e0b", marginTop:3 }}>
+                            {c.retro_note}
+                          </div>
+                        </div>
+                      ))}
+                    </LayerBox>
+                  )}
+
+                  {/* ── LAYER 5: SIGNIFICATORS ── */}
+                  {activeLayer==="l5" && h.l5_significators && (
+                    <LayerBox title="Layer 5 — Full Significator Extraction (A/B/C/D/E)" color="#22c55e">
+                      {["strongest","medium","weak","delayed","rejected"].map(cat => (
+                        h.l5_significators[cat]?.length > 0 && (
+                          <div key={cat} style={{ marginBottom:8 }}>
+                            <div style={{ fontSize:10, fontWeight:700, marginBottom:4,
+                              color:cat==="rejected"?"#ef4444":cat==="delayed"?"#f59e0b":
+                                    cat==="strongest"?"#22c55e":"#94a3b8",
+                              textTransform:"uppercase" }}>
+                              {cat==="strongest"?"✅ Strongest":cat==="medium"?"⚖️ Medium":
+                               cat==="weak"?"🔵 Weak (E)":cat==="delayed"?"⏳ Delayed/Suspended":"✗ Rejected"}
+                            </div>
+                            {h.l5_significators[cat].map(p => {
+                              const d = h.l5_significators.graded[p];
+                              return (
+                                <div key={p} style={{ display:"flex", gap:8, alignItems:"flex-start",
+                                  marginBottom:5, padding:"5px 8px", background:"#0f172a", borderRadius:5 }}>
+                                  <div style={{ minWidth:80 }}>
+                                    <Tag label={`${p} (${d?.grade})`}
+                                      color={GRADE_COLORS[d?.grade]||"#475569"}
+                                      strike={d?.rejected} small />
+                                    {d?.is_retro && <Tag label="℞" color="#f59e0b" small />}
+                                  </div>
+                                  <div style={{ flex:1, fontSize:10, color:"#64748b", lineHeight:1.5 }}>
+                                    <div>{d?.grade_reason}</div>
+                                    <div style={{ color:RETRO_COLORS[d?.retro_class]||"#94a3b8" }}>
+                                      {d?.retro_why}
+                                    </div>
+                                    {d?.neg_touched?.length > 0 &&
+                                      <div style={{ color:"#ef4444" }}>⚠ neg: {d.neg_touched.join(",")}</div>}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )
+                      ))}
+                    </LayerBox>
+                  )}
+
+                  {/* ── LAYER 6: RAHU/KETU ── */}
+                  {activeLayer==="l6" && h.l6_rahu_ketu && (
+                    <LayerBox title="Layer 6 — Rahu/Ketu Advanced Breakdown" color="#f59e0b">
+                      {Object.entries(h.l6_rahu_ketu).map(([node, nd]) => (
+                        <div key={node} style={{ marginBottom:10, padding:"8px",
+                          background:"#1e293b", borderRadius:6 }}>
+                          <div style={{ fontWeight:700, color:PLANET_COLORS[node]||"#e2e8f0",
+                            marginBottom:6 }}>{node} — Bhav {nd.house_placed}</div>
+                          <div style={{ fontSize:11, color:"#94a3b8", lineHeight:1.8 }}>
+                            <div>युक्त ग्रह: {nd.conjoined_planets?.join(", ") || "कोई नहीं"}</div>
+                            <div>Star Lord (NL): {nd.star_lord} → {nd.star_lord_houses?.join(",") || "—"}
+                              {nd.retro_contaminated ? " ℞ (contaminated)" : ""}</div>
+                            <div>Sign Lord: {nd.sign_lord} → {nd.sign_lord_houses?.join(",") || "—"}</div>
+                            <div>Star Tenanted: {nd.star_tenanted ? "हाँ — partial rep." : "नहीं — full rep."}</div>
+                            <div style={{ marginTop:4, fontWeight:600,
+                              color: nd.retro_contaminated ? "#ef4444" : "#10b981" }}>
+                              {nd.representation}
+                            </div>
+                            <div style={{ color: nd.favors_event ? "#10b981" : "#ef4444" }}>
+                              Event favors: {nd.favors_event ? "✅" : "❌"}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </LayerBox>
+                  )}
+
+                  {/* ── LAYER 7: DBA ── */}
+                  {activeLayer==="l7" && h.l7_dba && (
+                    <LayerBox title="Layer 7 — DBA Resonance Analysis" color="#a78bfa">
+                      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                        {Object.entries(h.l7_dba).map(([period, d]) => (
+                          <div key={period} style={{ flex:1, minWidth:100,
+                            background:"#1e293b", borderRadius:8, padding:"10px",
+                            borderLeft:`3px solid ${d.supports_event?"#10b981":d.obstructs_event?"#ef4444":"#475569"}` }}>
+                            <div style={{ fontSize:10, color:"#64748b", marginBottom:3 }}>{period}</div>
+                            <div style={{ fontWeight:800, fontSize:16,
+                              color:PLANET_COLORS[d.lord]||"#e2e8f0" }}>
+                              {d.lord}{d.is_retro?" ℞":""}
+                            </div>
+                            <div style={{ fontSize:10, color:"#94a3b8", marginTop:4 }}>
+                              Houses: {d.houses?.join(",") || "—"}
+                            </div>
+                            <div style={{ fontSize:10, color:"#10b981" }}>
+                              ✅ {d.positive_houses?.join(",") || "—"}
+                            </div>
+                            <div style={{ fontSize:10, color:"#ef4444" }}>
+                              ⚠ {d.negative_houses?.join(",") || "—"}
+                            </div>
+                            <div style={{ fontSize:10, marginTop:4,
+                              color:d.supports_event?"#10b981":d.obstructs_event?"#ef4444":"#94a3b8" }}>
+                              {d.resonance} | {d.retro_effect}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </LayerBox>
+                  )}
+
+                  {/* ── LAYER 8: RP ── */}
+                  {activeLayer==="l8" && h.l8_rp && (
+                    <LayerBox title="Layer 8 — Ruling Planet Concurrence" color="#f59e0b">
+                      <div style={{ marginBottom:8 }}>
+                        <Tag label={h.l8_rp.strength} color="#f59e0b" />
+                        <Tag label={`Score: ${h.l8_rp.score}`} color="#a78bfa" small />
+                      </div>
+                      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+                        <div style={{ fontSize:10, color:"#64748b" }}>Sig overlap:</div>
+                        {h.l8_rp.sig_overlap?.map(p => <Tag key={p} label={p} color="#22c55e" small />)}
+                        {h.l8_rp.sig_overlap?.length === 0 && <span style={{ fontSize:10, color:"#475569" }}>—</span>}
+                      </div>
+                      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+                        <div style={{ fontSize:10, color:"#64748b" }}>DBA overlap:</div>
+                        {h.l8_rp.dba_overlap?.map(p => <Tag key={p} label={p} color="#a78bfa" small />)}
+                      </div>
+                      {h.l8_rp.rp_detail?.map(rp => (
+                        <div key={rp.planet} style={{ display:"flex", gap:8, alignItems:"center",
+                          marginBottom:4, fontSize:11 }}>
+                          <span style={{ fontWeight:700, minWidth:70,
+                            color:PLANET_COLORS[rp.planet]||"#e2e8f0" }}>
+                            {rp.planet}{rp.is_retro?" ℞":""}
+                          </span>
+                          <span style={{ color:"#64748b", flex:1 }}>{rp.influence}</span>
+                        </div>
+                      ))}
+                    </LayerBox>
+                  )}
+
+                  {/* ── LAYER 9: TRANSIT ── */}
+                  {activeLayer==="l9" && h.l9_transit && (
+                    <LayerBox title="Layer 9 — Transit Activation Engine" color="#10b981">
+                      <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap" }}>
+                        <Tag label={h.l9_transit.trigger_active ? "⚡ Trigger Active" : "⏳ No Active Trigger"}
+                          color={h.l9_transit.trigger_active ? "#10b981" : "#94a3b8"} />
+                        <Tag label={`Moon ✓ ${h.l9_transit.moon_transit_ok ? "Active" : "Pending"}`}
+                          color={h.l9_transit.moon_transit_ok ? "#10b981" : "#475569"} small />
+                        <Tag label={`Sun ${h.l9_transit.sun_transit_ok ? "✓ Active" : "Pending"}`}
+                          color={h.l9_transit.sun_transit_ok ? "#10b981" : "#475569"} small />
+                      </div>
+                      {["activated","pending","blocked"].map(cat => (
+                        h.l9_transit[cat]?.length > 0 && (
+                          <div key={cat} style={{ marginBottom:6 }}>
+                            <div style={{ fontSize:10, fontWeight:700, marginBottom:3,
+                              color:cat==="activated"?"#10b981":cat==="blocked"?"#ef4444":"#f59e0b",
+                              textTransform:"uppercase" }}>
+                              {cat==="activated"?"⚡ Activated":cat==="blocked"?"🚫 Blocked":"⏳ Pending"}
+                            </div>
+                            {h.l9_transit[cat].map((t, ti) => (
+                              <div key={ti} style={{ fontSize:11, color:"#94a3b8",
+                                paddingLeft:8, borderLeft:"2px solid #334155", marginBottom:2 }}>
+                                {t.planet} via {t.via_nl}
+                                {t.grade && ` (${t.grade})`}
+                                {t.is_rp && " [RP]"}
+                                {t.is_dba && " [DBA]"}
+                                {t.reason && ` — ${t.reason}`}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      ))}
+                      <div style={{ fontSize:10, color:"#475569", marginTop:6, fontStyle:"italic" }}>
+                        {h.l9_transit.note}
+                      </div>
+                    </LayerBox>
+                  )}
+
+                  {/* ── LAYER 10: PROMISE/FRUCTIFY ── */}
+                  {activeLayer==="l10" && h.l10_promise_fructify && (() => {
+                    const pf = h.l10_promise_fructify;
+                    const items = [
+                      { label:"Event Promised",     val:pf.event_promised,     yes:"✅ हाँ", no:"❌ नहीं" },
+                      { label:"Timing Active",       val:pf.timing_active,      yes:"⚡ Active", no:"⏳ Pending" },
+                      { label:"Delay Indicated",     val:pf.delay_indicated,    yes:"⏳ हाँ", no:"✓ नहीं", inverted:true },
+                      { label:"Denial Indicated",    val:pf.denial_indicated,   yes:"🚫 हाँ", no:"✓ नहीं", inverted:true },
+                      { label:"Retro Suspended",     val:pf.retro_suspended,    yes:"⏸️ हाँ", no:"✓ नहीं", inverted:true },
+                      { label:"Partial Fulfillment", val:pf.partial_fulfillment,yes:"⚖️ हाँ", no:"✓ नहीं", inverted:true },
+                      { label:"DBA Supports",        val:pf.dba_supports,       yes:"✅ हाँ", no:"❌ नहीं" },
+                      { label:"RP Supports",         val:pf.rp_supports,        yes:"✅ हाँ", no:"❌ नहीं" },
+                      { label:"Transit Ready",       val:pf.transit_ready,      yes:"✅ हाँ", no:"⏳ नहीं" },
+                    ];
+                    return (
+                      <LayerBox title="Layer 10 — Promise vs Fructification" color="#a78bfa">
+                        <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>
+                          Obstruction: {pf.obstruction_type} | Strong count: {pf.strong_count}
+                        </div>
+                        {items.map(item => (
+                          <div key={item.label} style={{ display:"flex", justifyContent:"space-between",
+                            alignItems:"center", marginBottom:4, fontSize:12 }}>
+                            <span style={{ color:"#64748b" }}>{item.label}</span>
+                            <span style={{ fontWeight:700,
+                              color: item.inverted ? (item.val?"#ef4444":"#10b981") : (item.val?"#10b981":"#ef4444") }}>
+                              {item.val ? item.yes : item.no}
+                            </span>
+                          </div>
+                        ))}
+                        <div style={{ fontSize:10, color:"#475569", marginTop:6, fontStyle:"italic" }}>
+                          {pf.note}
+                        </div>
+                      </LayerBox>
+                    );
+                  })()}
+
+                  {/* ── LAYER 11: RESONANCE ── */}
+                  {activeLayer==="l11" && h.l11_resonance && (() => {
+                    const r = h.l11_resonance;
+                    const total = (r.pos_score||0) + (r.neg_score||0) + (r.retro_contamination||0) || 1;
+                    return (
+                      <LayerBox title="Layer 11 — Positive vs Negative Resonance" color="#22c55e">
+                        <div style={{ fontWeight:700, fontSize:14, color:"#a78bfa", marginBottom:10 }}>
+                          {r.label} &nbsp; Balance: {r.balance > 0 ? "+" : ""}{r.balance}
+                        </div>
+                        {/* Bar */}
+                        <div style={{ height:12, background:"#334155", borderRadius:6, overflow:"hidden",
+                          display:"flex", marginBottom:10 }}>
+                          <div style={{ width:`${(r.pos_score/total)*100}%`, background:"#22c55e" }} />
+                          <div style={{ width:`${(r.neg_score/total)*100}%`, background:"#ef4444" }} />
+                          <div style={{ width:`${(r.retro_contamination/total)*100}%`, background:"#f59e0b" }} />
+                        </div>
+                        <div style={{ display:"flex", gap:10, fontSize:11, marginBottom:10 }}>
+                          <span style={{ color:"#22c55e" }}>✅ Pos: {r.pos_score}</span>
+                          <span style={{ color:"#ef4444" }}>⚠ Neg: {r.neg_score}</span>
+                          <span style={{ color:"#f59e0b" }}>℞ Retro: {r.retro_contamination}</span>
+                        </div>
+                        <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4 }}>
+                          Pos Houses: {r.pos_houses_activated?.join(", ") || "—"}
+                        </div>
+                        <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4 }}>
+                          Neg Houses: {r.neg_houses_activated?.join(", ") || "—"}
+                        </div>
+                        {r.mixed_planets?.length > 0 && (
+                          <div style={{ fontSize:11, color:"#f59e0b" }}>
+                            Mixed: {r.mixed_planets.map(m => `${m.planet}(+${m.pos.join(",")} -${m.neg.join(",")})`).join(" | ")}
+                          </div>
+                        )}
+                        {r.dormant_planets?.length > 0 && (
+                          <div style={{ fontSize:11, color:"#475569", marginTop:4 }}>
+                            Dormant (retro): {r.dormant_planets.join(", ")}
+                          </div>
+                        )}
+                      </LayerBox>
+                    );
+                  })()}
+
+                  {/* ── LAYER 12: DELAY/DENIAL ── */}
+                  {activeLayer==="l12" && h.l12_delay_denial && (
+                    <LayerBox title="Layer 12 — Delay / Denial / Obstruction" color="#ef4444">
+                      <div style={{ fontWeight:700, color:"#ef4444", marginBottom:8 }}>
+                        {h.l12_delay_denial.summary}
+                      </div>
+                      {h.l12_delay_denial.issues?.length === 0 &&
+                        <div style={{ fontSize:12, color:"#10b981" }}>✅ कोई विशेष बाधा नहीं</div>}
+                      {h.l12_delay_denial.issues?.map((issue, ii) => (
+                        <div key={ii} style={{ marginBottom:5, padding:"6px 10px",
+                          background:"#1e293b", borderRadius:6,
+                          borderLeft:`3px solid ${issue.severity==="high"?"#ef4444":issue.severity==="medium"?"#f59e0b":"#475569"}` }}>
+                          <div style={{ fontSize:11, fontWeight:700,
+                            color:issue.severity==="high"?"#ef4444":issue.severity==="medium"?"#f59e0b":"#94a3b8" }}>
+                            [{issue.type.toUpperCase()}] {issue.planet || ""}
+                          </div>
+                          <div style={{ fontSize:11, color:"#94a3b8" }}>{issue.reason}</div>
+                        </div>
+                      ))}
+                    </LayerBox>
+                  )}
+
+                  {/* ── LAYER 13: MICRO TIMING ── */}
+                  {activeLayer==="l13" && h.l13_micro_timing && (() => {
+                    const t = h.l13_micro_timing;
+                    return (
+                      <LayerBox title="Layer 13 — Micro Timing Preparation" color="#10b981">
+                        <div style={{ fontSize:10, color:"#475569", marginBottom:8, fontStyle:"italic" }}>
+                          {t.note}
+                        </div>
+                        {[
+                          { label:"Strongest DBA", items:t.strongest_dba, color:"#a78bfa" },
+                          { label:"Strongest RP",  items:t.strongest_rp,  color:"#f59e0b" },
+                          { label:"Transit Triggers", items:t.strongest_transit, color:"#10b981" },
+                          { label:"Lagna A-grade", items:t.lagna_trigger_candidates, color:"#22c55e" },
+                          { label:"Dormant (retro)", items:t.dormant_triggers, color:"#f59e0b" },
+                          { label:"Blocked Transit", items:t.blocked_transit, color:"#ef4444" },
+                        ].map(row => (
+                          <div key={row.label} style={{ display:"flex", gap:8, alignItems:"center",
+                            marginBottom:5, fontSize:11 }}>
+                            <span style={{ color:"#64748b", minWidth:110 }}>{row.label}:</span>
+                            <div>
+                              {row.items?.length > 0
+                                ? row.items.map(p => <Tag key={p} label={p} color={row.color} small />)
+                                : <span style={{ color:"#475569", fontSize:10 }}>—</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </LayerBox>
+                    );
+                  })()}
+
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+// ── 1st & 11th CSL Success Banner ────────────────────────────────────────
+function CslSuccessBanner({ result }) {
+  if (!result?.kp_cusp_lords || !result?.kp_4_step) return null;
+  const cslMap = {};
+  result.kp_cusp_lords.forEach(c => { cslMap[c.house] = c.sub_lord; });
+
+  // Build sig map
+  const sigMap = {};
+  result.kp_4_step.forEach(p => {
+    sigMap[p.planet] = new Set([...(p.L1||[]), ...(p.L2||[]), ...(p.L3||[]), ...(p.L4||[])]);
+  });
+  const SHORT_EN = {Su:"Sun",Mo:"Moon",Ma:"Mars",Me:"Mercury",Ju:"Jupiter",Ve:"Venus",Sa:"Saturn",Ra:"Rahu",Ke:"Ketu"};
+
+  const csl1_s  = cslMap[1]  || "";
+  const csl11_s = cslMap[11] || "";
+  const csl1_en  = SHORT_EN[csl1_s]  || csl1_s;
+  const csl11_en = SHORT_EN[csl11_s] || csl11_s;
+
+  const csl1_houses  = sigMap[csl1_en]  || new Set();
+  const csl11_houses = sigMap[csl11_en] || new Set();
+
+  const csl1_to_11     = csl1_houses.has(11);
+  const csl11_benef    = [1,2,3,6,10,11].some(h => csl11_houses.has(h));
+  const fulfillment    = csl1_to_11 || csl11_benef;
+
+  return (
+    <div style={{ background: fulfillment ? "#052e16" : "#1e293b", borderRadius: 10,
+      padding: "12px 16px", border: `1px solid ${fulfillment ? "#22c55e" : "#334155"}` }}>
+      <div style={{ fontWeight: 700, fontSize: 13, color: fulfillment ? "#22c55e" : "#94a3b8", marginBottom: 8 }}>
+        {fulfillment ? "✅ Desire Fulfillment Promised" : "⚠️ Fulfillment Not Confirmed"}
+      </div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 12 }}>
+        <div style={{ padding: "4px 12px", borderRadius: 6, background: "#0f172a",
+          border: `1px solid ${csl1_to_11 ? "#22c55e" : "#334155"}` }}>
+          <span style={{ color: "#64748b" }}>1st CSL: </span>
+          <span style={{ fontWeight: 700, color: "#e2e8f0" }}>{csl1_en}</span>
+          <span style={{ color: csl1_to_11 ? "#22c55e" : "#ef4444", marginLeft: 6 }}>
+            {csl1_to_11 ? "→ 11th ✓" : "→ 11th ✗"}
+          </span>
+        </div>
+        <div style={{ padding: "4px 12px", borderRadius: 6, background: "#0f172a",
+          border: `1px solid ${csl11_benef ? "#22c55e" : "#334155"}` }}>
+          <span style={{ color: "#64748b" }}>11th CSL: </span>
+          <span style={{ fontWeight: 700, color: "#e2e8f0" }}>{csl11_en}</span>
+          <span style={{ color: csl11_benef ? "#22c55e" : "#ef4444", marginLeft: 6 }}>
+            {csl11_benef ? "→ Benef ✓" : "→ Benef ✗"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Query Verification Banner (per-topic from house_analysis) ─────────────
+function QueryVerifyBanner({ result }) {
+  if (!result?.house_analysis?.length) return null;
+  // Show Moon NL/SL + Lagna CSL from first topic (same for all)
+  // Use first VALID topic instead of blindly taking first
+const validTopic = result.house_analysis.find(
+  h => h?.l1_query_validation
+);
+
+const qv = validTopic?.l1_query_validation;
+  if (!qv) return null;
+
+  return (
+    <div style={{ background: "#1e293b", borderRadius: 10, padding: "12px 16px",
+      border: "1px solid #334155" }}>
+      <div style={{ fontWeight: 700, fontSize: 13, color: "#f59e0b", marginBottom: 8 }}>
+        🔍 प्रश्न सत्यता (Query Verification)
+      </div>
+      <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>
+        Moon NL: <strong style={{ color: PLANET_COLORS[qv.moon_nl]||"#e2e8f0" }}>{qv.moon_nl}</strong>
+        &nbsp;|&nbsp;Moon SL: <strong style={{ color: PLANET_COLORS[qv.moon_sl]||"#e2e8f0" }}>{qv.moon_sl}</strong>
+        {qv.moon_sl_retro && <span style={{ color: "#ef4444" }}> ℞</span>}
+        &nbsp;|&nbsp;Lagna CSL: <strong style={{ color: PLANET_COLORS[qv.lagna_csl]||"#e2e8f0" }}>{qv.lagna_csl}</strong>
+      </div>
+      {/* Per-topic verification */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {result.house_analysis.slice(0,5).map(h => (
+          <div key={h.topic} style={{ display: "flex", justifyContent: "space-between",
+            alignItems: "center", fontSize: 11, padding: "3px 8px",
+            background: "#0f172a", borderRadius: 5 }}>
+            <span style={{ color: "#64748b" }}>{h.icon} {h.topic}</span>
+            <span style={{ fontWeight: 700,
+              color: h.l1_query_validation?.validity?.includes("✅") ? "#22c55e"
+                   : h.l1_query_validation?.validity?.includes("⚠️") ? "#f59e0b"
+                   : "#ef4444", fontSize: 10 }}>
+              {h.l1_query_validation?.validity || "—"}
+            </span>
+          </div>
+        ))}
+        {result.house_analysis.length > 5 && (
+          <div style={{ fontSize: 10, color: "#475569", textAlign: "center" }}>
+            + {result.house_analysis.length - 5} more topics in KP Console below
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KpTables({ result }) {
+  if (!result || !result.is_kp) return null;
+  const retro = new Set(result.retrograde_planets || []);
+  const EN_HI = { Sun:"सूर्य", Moon:"चंद्र", Mars:"मंगल", Mercury:"बुध", Jupiter:"गुरु", Venus:"शुक्र", Saturn:"शनि", Rahu:"राहु", Ketu:"केतु" };
+
+  // Build Grade E (L5) map from ALL topics
+const gradeE = {};
+
+if (result.house_analysis?.length) {
+  result.house_analysis.forEach(topic => {
+
+    const graded = topic?.l5_significators?.graded || {};
+
+    Object.entries(graded).forEach(([planet, data]) => {
+
+      if (data?.grade === "E") {
+        gradeE[planet] = data;
+      }
+
+    });
+
+  });
+}
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Query Verification Banner */}
+      <QueryVerifyBanner result={result} />
+      {/* 1st + 11th CSL Success Banner */}
+      <CslSuccessBanner result={result} />
+      {/* Ruling Planets */}
+      <RulingPlanetsCard result={result} />
+      {/* DBA */}
+      <DbaCard result={result} />
+      {/* House Analysis */}
+      <HouseAnalysisCard result={result} />
+
+      {/* CSL Table */}
+      <div style={{ background: "#1e293b", borderRadius: 12, padding: "16px", border: "1px solid #334155" }}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 10, color: "#a78bfa" }}>🎯 KP Cuspal Sub Lords (1 to 12)</div>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, color: "#cbd5e1" }}>
+          <thead>
+            <tr>
+              {["House","Degree","Sign Lord","Star Lord","Sub Lord (CSL)"].map(h => (
+                <th key={h} style={{textAlign:"left",padding:"8px",color:"#a78bfa",borderBottom:"1px solid #334155"}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {result.kp_cusp_lords?.map((c) => (
+              <tr key={c.house} style={{ background: c.house === 11 ? "rgba(16,185,129,0.15)" : "transparent" }}>
+                <td style={{padding:"8px",borderBottom:"1px solid #1e293b"}}>{c.house}{c.house===11&&" ⭐"}{c.house===1&&" 🔑"}</td>
+                <td style={{padding:"8px",borderBottom:"1px solid #1e293b"}}>{c.degree}°</td>
+                <td style={{padding:"8px",borderBottom:"1px solid #1e293b"}}>{c.sign_lord}</td>
+                <td style={{padding:"8px",borderBottom:"1px solid #1e293b"}}>{c.star_lord}</td>
+                <td style={{padding:"8px",borderBottom:"1px solid #1e293b",
+                  color:c.house===11?"#10b981":c.house===1?"#f59e0b":"#e2e8f0",
+                  fontWeight:(c.house===11||c.house===1)?"bold":"normal"}}>
+                  {c.sub_lord}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 4-Step + L5 Table */}
+      <div style={{ background: "#1e293b", borderRadius: 12, padding: "16px", border: "1px solid #334155" }}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4, color: "#a78bfa" }}>📊 KP Significators (L1→L4 + L5/Grade E)</div>
+        <div style={{ fontSize: 11, color: "#64748b", marginBottom: 8 }}>
+          ℞ = वक्री &nbsp;|&nbsp; ✗ = Rejected (retro NL) &nbsp;|&nbsp; L5 = Conjunct (Grade E)
+        </div>
+        <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: "#cbd5e1", minWidth: 480 }}>
+          <thead>
+            <tr>
+              {["Planet","L1","L2","L3","L4","L5 (E)"].map(h => (
+                <th key={h} style={{textAlign:"left",padding:"8px",color:"#a78bfa",
+                  borderBottom:"1px solid #334155",
+                  background: h==="L5 (E)" ? "#1e293b" : "transparent",
+                  color: h==="L5 (E)" ? "#f59e0b" : "#a78bfa"}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {result.kp_4_step?.map((p) => {
+              const hi = EN_HI[p.planet] || p.planet;
+              const isRetro = retro.has(hi);
+              const gradeEData = gradeE[p.planet];
+              // Find planets in same house as this planet (Grade E candidates)
+              const l5Planets = Object.entries(gradeE)
+                .filter(([ep]) => ep !== p.planet)
+                .map(([ep, ed]) => ep)
+                .slice(0,3);
+              return (
+                <tr key={p.planet} style={{
+                  background: isRetro ? "#ef444411" : "transparent",
+                  opacity: gradeEData?.rejected ? 0.5 : 1,
+                }}>
+                  <td style={{padding:"8px",borderBottom:"1px solid #1e293b",fontWeight:"bold",
+                    color:PLANET_COLORS[hi]||"#e2e8f0"}}>
+                    {p.planet}{isRetro ? " ℞" : ""}
+                    {gradeEData?.rejected && <span style={{color:"#ef4444",fontSize:10}}> ✗</span>}
+                  </td>
+                  <td style={{padding:"8px",borderBottom:"1px solid #1e293b"}}>{p.L1?.join(", ")}</td>
+                  <td style={{padding:"8px",borderBottom:"1px solid #1e293b"}}>{p.L2?.join(", ")}</td>
+                  <td style={{padding:"8px",borderBottom:"1px solid #1e293b"}}>{p.L3?.join(", ")}</td>
+                  <td style={{padding:"8px",borderBottom:"1px solid #1e293b"}}>{p.L4?.join(", ")}</td>
+                  <td style={{padding:"8px",borderBottom:"1px solid #1e293b",color:"#f59e0b",fontSize:11}}>
+                    {gradeEData ? `E: ${gradeEData.grade_reason?.replace("Grade E/L5: ","").slice(0,30)}` : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+            {/* Grade E only planets (not in L1-L4 but conjunct) */}
+            {Object.entries(gradeE)
+              .filter(([ep]) => !result.kp_4_step?.find(p => p.planet===ep))
+              .map(([ep, ed]) => {
+                const hi = EN_HI[ep] || ep;
+                return (
+                  <tr key={ep} style={{ background: "#f59e0b11" }}>
+                    <td style={{padding:"8px",borderBottom:"1px solid #1e293b",fontWeight:"bold",
+                      color:PLANET_COLORS[hi]||"#f59e0b", fontSize:11}}>
+                      {ep} {ed.is_retro ? "℞" : ""}{ed.rejected ? " ✗" : ""}
+                    </td>
+                    <td colSpan={4} style={{padding:"8px",borderBottom:"1px solid #1e293b",
+                      fontSize:10,color:"#64748b"}}>L1-L4 में नहीं</td>
+                    <td style={{padding:"8px",borderBottom:"1px solid #1e293b",
+                      color:ed.rejected?"#ef4444":"#f59e0b",fontSize:11,fontWeight:700}}>
+                      ★ E
+                    </td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GocharTable({ result }) {
+  if (!result || !result.macro_gochar) return null;
+  const gocharData = Object.values(result.macro_gochar);
+  return (
+    <div style={{ background: "#1e293b", borderRadius: 12, padding: "16px", border: "1px solid #334155", marginTop: 20 }}>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12, color: "#f59e0b" }}>🔄 Macro Gochar (Transits)</div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, color: "#cbd5e1" }}>
+        <thead>
+          <tr style={{ background: "#0f172a" }}>
+            {["Planet","Sign","Degree","Transit NL","℞"].map(h => (
+              <th key={h} style={{textAlign:"left",padding:"10px",color:"#94a3b8"}}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {gocharData.map((g) => (
+            <tr key={g.Planet} style={{ borderBottom: "1px solid #1e293b", background: g.is_retrograde ? "#ef444411" : "transparent" }}>
+              <td style={{padding:"10px",fontWeight:"bold",color:PLANET_COLORS[g.Planet]||"#fff"}}>{g.Planet}</td>
+              <td style={{padding:"10px"}}>{g.Current_Sign}</td>
+              <td style={{padding:"10px"}}>{g.Degree}</td>
+              <td style={{padding:"10px",color:"#10b981",fontWeight:"600"}}>{g.Transit_NL}</td>
+              <td style={{padding:"10px",color:"#ef4444",fontWeight:"bold"}}>{g.is_retrograde ? "℞" : ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 // ── Main Component ─────────────────────────────────────────────────────────
 export default function PrashnaKundli() {
   const [loading, setLoading]           = useState(false);
@@ -486,7 +1389,11 @@ export default function PrashnaKundli() {
   const [locName, setLocName]           = useState("");
   const [manualCity, setManualCity]     = useState("");
   const [manualLoading, setManualLoading] = useState(false);
+  const [customDate, setCustomDate] = useState("");
+  const [customTime, setCustomTime] = useState("");
   const [mode,    setMode]              = useState(null); // "kaksha" | "lost"
+  const [kpNumber, setKpNumber]         = useState(""); // KP Horary Number (1-249)
+  const [forWhom, setForWhom]           = useState("1"); // Chart rotation pivot house
 
   // ── Browser से location लो ───────────────────────────────────────────
   const getIpLocation = async () => {
@@ -597,11 +1504,12 @@ export default function PrashnaKundli() {
       const res = await fetch(`${API_BASE}/api/prashna_kundli`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ lat: coords.lat, lon: coords.lon, tz_offset: 5.5 }),
+        body: JSON.stringify({ lat: coords.lat, lon: coords.lon, tz_offset: 5.5, kp_number: kpNumber ? parseInt(kpNumber) : null, date: customDate, time: customTime, chart_pivot: parseInt(forWhom) || 1 }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Server error");
       setResult(data);
+      setMode(data.is_kp ? "kp_engine" : "kaksha");
       setMode("kaksha"); // default: Man ki baat
     } catch (e) {
       setError("API Error: " + e.message);
@@ -664,6 +1572,63 @@ export default function PrashnaKundli() {
             </button>
           </div>
         </div>
+
+        {/* NAYA KP AUR TIME WALA DIBBA YAHAN SE SHURU */}
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #334155" }}>
+          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>Custom Date & Time (वैकल्पिक):</div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <input type="date" value={customDate} onChange={(e) => setCustomDate(e.target.value)} style={{ flex: 1, padding: "8px 12px", background: "#0f172a", border: "1px solid #475569", borderRadius: 6, color: "#e2e8f0", fontSize: 13 }} />
+            <input type="time" value={customTime} onChange={(e) => setCustomTime(e.target.value)} style={{ flex: 1, padding: "8px 12px", background: "#0f172a", border: "1px solid #475569", borderRadius: 6, color: "#e2e8f0", fontSize: 13 }} />
+          </div>
+          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>🔢 KP Prashna Number (वैकल्पिक — 1-249):</div>
+          <input type="number" min="1" max="249" placeholder="जैसे: 108... (खाली छोड़ें = Vedic Mode)" value={kpNumber} onChange={(e) => setKpNumber(e.target.value)} style={{ width: "100%", padding: "8px 12px", background: "#0f172a", border: "1px solid #475569", borderRadius: 6, color: "#e2e8f0", fontSize: 13 }} />
+        </div>
+        {/* NAYA DIBBA YAHAN KHATAM */}
+
+        {/* KP Number Input */}
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #334155" }}>
+          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>
+            🔢 KP Prashna Number (वैकल्पिक — 1-249):
+          </div>
+          <input
+            type="number"
+            min="1"
+            max="249"
+            placeholder="जैसे: 108, 143... (खाली छोड़ें = Vedic Mode)"
+            value={kpNumber}
+            onChange={(e) => setKpNumber(e.target.value)}
+            style={{
+              width: "100%", padding: "8px 12px", background: "#0f172a",
+              border: "1px solid #475569", borderRadius: 6,
+              color: "#e2e8f0", fontSize: 13,
+            }}
+          />
+          <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>
+            💡 KP Number दें तो Placidus Houses + Fixed Lagna; खाली = Vedic Whole Sign
+          </div>
+        </div>
+        {/* Chart Rotation — Bhavat Bhavam */}
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #334155" }}>
+          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>🔄 प्रश्न किसके लिए? (Chart Rotation)</div>
+          <select value={forWhom} onChange={(e) => setForWhom(e.target.value)}
+            style={{ width: "100%", padding: "8px 12px", background: "#0f172a",
+              border: "1px solid #475569", borderRadius: 6, color: "#e2e8f0", fontSize: 13 }}>
+            <option value="1">स्वयं / Self (1st House)</option>
+            <option value="3">छोटे भाई/बहन (3rd)</option>
+            <option value="4">माता / Mother (4th)</option>
+            <option value="5">पुत्र/पुत्री (5th)</option>
+            <option value="6">मामा (6th)</option>
+            <option value="7">पति/पत्नी / Spouse (7th)</option>
+            <option value="9">पिता / Father (9th)</option>
+            <option value="11">बड़े भाई/दोस्त (11th)</option>
+            <option value="12">चाचा/ताऊ (12th)</option>
+          </select>
+          {forWhom !== "1" && (
+            <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 5 }}>
+              ⚠️ Chart भाव {forWhom} से rotate होगा
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Generate Button */}
@@ -689,6 +1654,11 @@ export default function PrashnaKundli() {
           <div style={styles.modeSelectorWrap}>
             <div style={styles.modeSelectorLabel}>आप क्या जानना चाहते हैं?</div>
             <div style={styles.modeBtnRow}>
+              {result.is_kp && (
+                <button onClick={() => setMode("kp_engine")} style={{ ...styles.modeBtn, ...(mode === "kp_engine" ? styles.modeBtnActive : {}) }}>
+                  📊 KP Engine
+                </button>
+              )}
               <button
                 onClick={() => setMode("kaksha")}
                 style={{
@@ -764,11 +1734,18 @@ export default function PrashnaKundli() {
               </div>
             </div>
           )}
-
+          {mode === "kp_engine" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              <KpTables result={result} />
+              <GocharTable result={result} />
+            </div>
+          )}
           {/* ── खोई वस्तु — only when mode === "lost" ───────────────────── */}
           {mode === "lost" && (
             <LostItemSection lostItem={result?.lost_item} result={result} />
           )}
+          {/* Gochar Table — Kaksha aur Lost mode mein bhi dikhao */}
+          {mode !== "kp_engine" && <GocharTable result={result} />}
 
           {/* All Kaksha Table */}
           <div style={styles.card}>

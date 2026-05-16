@@ -555,6 +555,103 @@ def build_bhav_sandhi_output(sandhis: List[float]) -> List[Dict]:
 
 
 # ═══════════════════════════════════════════════════════════════════
+# SECTION X — ADVANCED DRISHTI ENGINE
+# ═══════════════════════════════════════════════════════════════════
+
+def get_forward_distance(source_deg: float, target_deg: float) -> float:
+    """
+    Forward distance from source to target in zodiac direction (0-360).
+    """
+    return (target_deg - source_deg) % 360.0
+
+
+def calculate_aspect_strength(
+    planet: str,
+    source_deg: float,
+    target_deg: float,
+    is_combust: bool = False,
+    is_retrograde: bool = False,
+    max_orb: float = 12.0
+) -> Tuple[float, str | None]:
+    """
+    Calculate aspect strength of a planet on a house cusp (Bhav Madhya).
+
+    Parameters
+    ----------
+    planet        : Planet name (Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn, Rahu, Ketu)
+    source_deg    : Planet's ecliptic degree
+    target_deg    : House cusp degree (Bhav Madhya)
+    is_combust    : True if planet is combust → aspect is void
+    is_retrograde : True if retrograde → orb increased + strength boosted
+    max_orb       : Base orb in degrees (default 12°)
+
+    Returns
+    -------
+    (strength, aspect_name)
+        strength     : 0-100 (0 = no aspect, 100 = exact)
+        aspect_name  : "3rd", "4th", "5th", "7th", "8th", "9th", "10th" or None
+    """
+    # अस्त ग्रह → दृष्टि कमजोर/निष्फल
+    if is_combust:
+        return 0.0, None
+
+    # वक्री ग्रह → orb 1.5x
+    applied_orb = max_orb * 1.5 if is_retrograde else max_orb
+
+    forward_dist = get_forward_distance(source_deg, target_deg)
+
+    # सामान्य 7वीं दृष्टि (सभी ग्रहों के लिए)
+    aspect_map: Dict[int, str] = {
+        180: "7th"
+    }
+
+    # विशेष दृष्टियाँ
+    if planet == "Mars":
+        aspect_map[90]  = "4th"
+        aspect_map[210] = "8th"
+
+    elif planet == "Jupiter":
+        aspect_map[120] = "5th"
+        aspect_map[240] = "9th"
+
+    elif planet == "Saturn":
+        aspect_map[60]  = "3rd"
+        aspect_map[270] = "10th"
+
+    elif planet in ["Rahu", "Ketu"]:
+        aspect_map[120] = "5th"
+        aspect_map[240] = "9th"
+
+    best_strength = 0.0
+    best_aspect   = None
+
+    for angle, aspect_name in aspect_map.items():
+
+        # Forward distance vs aspect angle
+        delta = abs(forward_dist - angle)
+
+        # Handle wrap-around (e.g., 359° vs 1°)
+        if delta > 180:
+            delta = 360 - delta
+
+        if delta <= applied_orb:
+
+            # Linear strength: 100% at exact, 0% at orb boundary
+            strength = (1 - (delta / applied_orb)) * 100
+
+            # वक्री bonus: +20% (capped at 100)
+            if is_retrograde:
+                strength = min(100.0, strength + 20.0)
+
+            # Keep strongest aspect if multiple apply
+            if strength > best_strength:
+                best_strength = strength
+                best_aspect   = aspect_name
+
+    return round(best_strength, 2), best_aspect
+
+
+# ═══════════════════════════════════════════════════════════════════
 # SECTION 6 — MAIN PUBLIC API
 # ═══════════════════════════════════════════════════════════════════
 
@@ -621,6 +718,77 @@ def get_bhav_chalit(
     # ── Comparison ────────────────────────────────────────────────
     comparison = compare_d1_chalit(planets_d1, planet_list)
 
+    # ── Advanced Drishti Calculation ──────────────────────────────
+    bhav_madhya_dict = {
+        i + 1: house_data["madhyas"][i]
+        for i in range(12)
+    }
+
+    advanced_drishti = []
+
+    PLANET_NAME_MAP = {
+        "Su": "Sun",
+        "Mo": "Moon",
+        "Ma": "Mars",
+        "Me": "Mercury",
+        "Ju": "Jupiter",
+        "Ve": "Venus",
+        "Sa": "Saturn",
+        "Ra": "Rahu",
+        "Ke": "Ketu",
+    }
+
+    PLANET_HINDI_MAP = {
+        "Sun": "सूर्य",
+        "Moon": "चंद्र",
+        "Mars": "मंगल",
+        "Mercury": "बुध",
+        "Jupiter": "गुरु",
+        "Venus": "शुक्र",
+        "Saturn": "शनि",
+        "Rahu": "राहु",
+        "Ketu": "केतु"
+    }
+
+    for code, pdata in planets_d1.items():
+
+        if code not in PLANET_NAME_MAP:
+            continue
+
+        planet_name = PLANET_NAME_MAP[code]
+
+        p_deg = float(pdata.get("Degree", 0))
+
+        # future-safe flags
+        is_retro = pdata.get("Retrograde", False)
+        is_combust = pdata.get("Combust", False)
+
+        for house_num in range(1, 13):
+
+            cusp_deg = bhav_madhya_dict[house_num]
+
+            strength, aspect_name = calculate_aspect_strength(
+                planet=planet_name,
+                source_deg=p_deg,
+                target_deg=cusp_deg,
+                is_combust=is_combust,
+                is_retrograde=is_retro
+            )
+
+            if strength > 0:
+
+                advanced_drishti.append({
+                    "planet": planet_name,
+                    "planet_code": code,
+                    "planet_hi": PLANET_HINDI_MAP[planet_name],
+                    "aspect_name": aspect_name,
+                    "target_house": house_num,
+                    "target_cusp": round(cusp_deg, 4),
+                    "strength": strength,
+                    "is_retrograde": is_retro,
+                    "is_combust": is_combust
+                })
+
     # ── Bhav Sandhi boundaries (always included) ──────────────────
     flat_bhav_sandhi = build_bhav_sandhi_output(house_data["sandhis"])
 
@@ -658,12 +826,13 @@ def get_bhav_chalit(
 
     flat["_bhavSandhi"]     = flat_bhav_sandhi
     flat["_planetStrength"] = planet_strength
+    flat["_advancedDrishti"] = advanced_drishti
 
     return flat
 
 
 # ═══════════════════════════════════════════════════════════════════
-# SECTION 6 — FLASK / api.py CONVENIENCE WRAPPER
+# SECTION 7 — FLASK / api.py CONVENIENCE WRAPPER
 # ═══════════════════════════════════════════════════════════════════
 
 def build_chalit_for_api(
@@ -715,7 +884,7 @@ def build_chalit_for_api(
 
 
 # ═══════════════════════════════════════════════════════════════════
-# SECTION 7 — SELF TEST  (python chalit_engine.py)
+# SECTION 8 — SELF TEST  (python chalit_engine.py)
 # ═══════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":

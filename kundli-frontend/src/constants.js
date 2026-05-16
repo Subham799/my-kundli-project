@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────
 // DESIGN TOKENS
 // ─────────────────────────────────────────────────────────────
+import { HeartPulse } from "lucide-react";
 export const THEME = {
   // Backgrounds
   bg:          "bg-gray-950",          // #030712
@@ -99,6 +100,7 @@ export const TABS = [
   { id: "vivah",           label: "💍 विवाह",           phase: 2 },
   { id: "prashna",           label: "🔯 प्रश्न कुण्डली",           phase: 2 },
   { id: "chalit", label: "🔯 चलित कुण्डली", phase: 2 },
+  
    
 ];
 

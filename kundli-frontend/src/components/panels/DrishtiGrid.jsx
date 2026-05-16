@@ -235,9 +235,159 @@ function BhavDrishtiView({ bhavDrishti={}, planets={}, houses=[] }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// VIEW 3: Advanced Drishti — Aspect Strength Analysis
+// ─────────────────────────────────────────────────────────────
+function AdvancedDrishtiView({ advancedDrishti=[] }) {
+
+  const strengthColor = (s) => {
+    if (s >= 80) return "#22D3EE";
+    if (s >= 55) return "#4ADE80";
+    if (s >= 35) return "#F59E0B";
+    return "#FB7185";
+  };
+
+  return (
+    <div className="flex flex-col gap-2.5 pb-4">
+
+      {advancedDrishti.map((d, idx) => {
+
+        const pm = PLANET_META[d.planet_code] || {};
+
+        return (
+          <motion.div
+            key={idx}
+            initial={{ opacity:0, y:8 }}
+            animate={{ opacity:1, y:0 }}
+            transition={{ delay:idx*.03 }}
+            className="rounded-2xl border p-3"
+            style={{
+              background:"linear-gradient(135deg,rgba(10,14,32,.96),rgba(5,8,22,.98))",
+              borderColor:"rgba(255,255,255,.06)"
+            }}
+          >
+
+            <div className="flex items-center justify-between">
+
+              {/* Planet */}
+              <div className="flex items-center gap-3">
+
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center border text-lg font-black"
+                  style={{
+                    background:`${pm.color}15`,
+                    color:pm.color,
+                    borderColor:`${pm.color}30`
+                  }}
+                >
+                  {pm.symbol}
+                </div>
+
+                <div>
+                  <div
+                    className="text-[13px] font-black text-white"
+                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
+                  >
+                    {d.planet_hi}
+                  </div>
+
+                  <div
+                    className="text-[9px] text-slate-500"
+                    style={{ fontFamily:"'Cinzel',serif" }}
+                  >
+                    {d.aspect_name} Aspect
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Strength */}
+              <div className="text-right">
+
+                <div
+                  className="text-[18px] font-black"
+                  style={{ color:strengthColor(d.strength) }}
+                >
+                  {d.strength}%
+                </div>
+
+                <div
+                  className="text-[8px] text-slate-600"
+                  style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
+                >
+                  दृष्टि बल
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Bottom info */}
+            <div className="flex flex-wrap gap-2 mt-3">
+
+              <div
+                className="px-2 py-1 rounded-lg text-[9px] font-semibold"
+                style={{
+                  background:"rgba(245,158,11,.08)",
+                  border:"1px solid rgba(245,158,11,.2)",
+                  color:"#F59E0B",
+                  fontFamily:"'Noto Sans Devanagari',sans-serif"
+                }}
+              >
+                भाव {d.target_house}
+              </div>
+
+              <div
+                className="px-2 py-1 rounded-lg text-[9px] font-semibold"
+                style={{
+                  background:"rgba(255,255,255,.04)",
+                  border:"1px solid rgba(255,255,255,.06)",
+                  color:"#94A3B8",
+                  fontFamily:"'Cinzel',serif"
+                }}
+              >
+                Cusp {d.target_cusp}°
+              </div>
+
+              {d.is_retrograde && (
+                <div
+                  className="px-2 py-1 rounded-lg text-[9px] font-semibold"
+                  style={{
+                    background:"rgba(34,211,238,.08)",
+                    border:"1px solid rgba(34,211,238,.2)",
+                    color:"#22D3EE"
+                  }}
+                >
+                  Retrograde
+                </div>
+              )}
+
+              {d.is_combust && (
+                <div
+                  className="px-2 py-1 rounded-lg text-[9px] font-semibold"
+                  style={{
+                    background:"rgba(251,113,133,.08)",
+                    border:"1px solid rgba(251,113,133,.2)",
+                    color:"#FB7185"
+                  }}
+                >
+                  Combust
+                </div>
+              )}
+
+            </div>
+
+          </motion.div>
+        );
+      })}
+
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // MAIN EXPORT — Tab-switched dual view
 // ─────────────────────────────────────────────────────────────
-export default function DrishtiGrid({ drishti={}, bhavDrishti={}, planets={}, houses=[] }) {
+export default function DrishtiGrid({ drishti={}, bhavDrishti={}, advancedDrishti=[], planets={}, houses=[] }) {
   const [view, setView] = useState("graha"); // "graha" | "bhav"
 
   return (
@@ -249,6 +399,7 @@ export default function DrishtiGrid({ drishti={}, bhavDrishti={}, planets={}, ho
         {[
           { key:"graha", label:"ग्रह दृष्टि", sub:"ग्रह → भाव" },
           { key:"bhav",  label:"भाव दृष्टि",  sub:"भाव ← ग्रह" },
+          { key:"advanced", label:"सूक्ष्म दृष्टि", sub:"Aspect Strength" },
         ].map(tab => (
           <button key={tab.key}
             onClick={() => setView(tab.key)}
@@ -277,10 +428,26 @@ export default function DrishtiGrid({ drishti={}, bhavDrishti={}, planets={}, ho
         ))}
       </div>
 
-      {view === "graha"
-        ? <GrahaDrishtiView drishti={drishti} planets={planets}/>
-        : <BhavDrishtiView  bhavDrishti={bhavDrishti} planets={planets} houses={houses}/>
-      }
+      {view === "graha" && (
+        <GrahaDrishtiView
+          drishti={drishti}
+          planets={planets}
+        />
+      )}
+
+      {view === "bhav" && (
+        <BhavDrishtiView
+          bhavDrishti={bhavDrishti}
+          planets={planets}
+          houses={houses}
+        />
+      )}
+
+      {view === "advanced" && (
+        <AdvancedDrishtiView
+          advancedDrishti={advancedDrishti}
+        />
+      )}
     </div>
   );
 }
