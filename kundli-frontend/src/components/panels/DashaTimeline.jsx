@@ -70,35 +70,61 @@ function PlanetChip({code, hindi, small=false}) {
   );
 }
 
-// ── Level 3: Pratyantardasha Grid ────────────────────────────
-function PDGrid({adLord, pdData, curPD, isCurrentAD}) {
-  const list = getPDs(adLord);
+// ── Level 5: Pranadasha Grid ─────────────────────────────────────────
+function PRGrid({ sdLord, prData, curPR, isCurrentSD }) {
+  const list = getPDs(sdLord);
   return (
-    <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}}
-      exit={{height:0,opacity:0}} transition={{duration:0.2}}>
-      <div className="px-4 pb-3 pt-2 border-t border-slate-800/50">
-        <div className="text-[9px] text-slate-600 uppercase tracking-widest mb-2"
-          style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>प्रत्यंतर्दशा</div>
+    <motion.div
+      initial={{ height:0, opacity:0 }}
+      animate={{ height:"auto", opacity:1 }}
+      exit={{ height:0, opacity:0 }}
+      transition={{ duration:0.2 }}
+      className="mt-2"
+    >
+      <div className="px-2 pb-3 pt-2 border-t border-violet-900/40">
+        <div
+          className="text-[9px] text-violet-400/60 uppercase tracking-widest mb-2"
+          style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
+        >
+          प्राण दशा
+        </div>
         <div className="grid grid-cols-3 gap-1.5">
-          {list.map((lord,i) => {
-            const code = TO_CODE[lord]||"Su";
-            const meta = PLANET_META[code]||{};
+          {list.map((lord, i) => {
+            const code = TO_CODE[lord] || "Su";
+            const meta = PLANET_META[code] || {};
             const t = T(code);
-            const isCur = isCurrentAD && lord === curPD;
+            const isCur = isCurrentSD && lord === curPR;
+            const prEntry = prData?.find(p => p.lord === lord);
             return (
-              <motion.div key={i} initial={{opacity:0,scale:0.88}} animate={{opacity:1,scale:1}}
-                transition={{delay:i*0.03}}
-                className={`relative rounded-xl p-2 border ${isCur?"ring-1 ring-amber-400/50 shadow-sm shadow-amber-500/20":""}`}
-                style={{background:isCur?t.glow:t.bg, borderColor:isCur?t.border:"rgba(255,255,255,0.05)"}}>
+              <motion.div
+                key={i}
+                initial={{ opacity:0, scale:0.88 }}
+                animate={{ opacity:1, scale:1 }}
+                transition={{ delay:i*0.03 }}
+                className={`relative rounded-xl p-2 border ${
+                  isCur ? "ring-1 ring-violet-400/50 shadow-sm shadow-violet-500/20" : ""
+                }`}
+                style={{
+                  background: isCur ? t.glow : t.bg,
+                  borderColor: isCur ? t.border : "rgba(255,255,255,0.05)"
+                }}
+              >
                 <div className="flex items-center gap-1 mb-0.5">
-                  <span className="text-xs font-black" style={{color:meta.color}}>{meta.symbol}</span>
-                  <span className="text-[10px] font-semibold text-slate-300 truncate"
-                    style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</span>
+                  <span className="text-xs font-black" style={{ color:meta.color }}>{meta.symbol}</span>
+                  <span
+                    className="text-[10px] font-semibold text-slate-300 truncate"
+                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
+                  >{lord}</span>
                 </div>
-                {(()=>{const e=pdData?.find(p=>p.lord===lord);return e?<div className="text-[9px] text-slate-500">{e.start}–{e.end}</div>:<div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>})()}
+                {prEntry
+                  ? <div className="text-[9px] text-slate-500">{prEntry.start}–{prEntry.end}</div>
+                  : <div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>
+                }
                 {isCur && (
-                  <span className="absolute -top-1 -right-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-200 border border-amber-500/50"
-                    style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>चालू</span>
+                  <span
+                    className="absolute -top-1 -right-1 text-[7px] px-1 py-0.5 rounded-full bg-violet-500/30 text-violet-200 border border-violet-500/50"
+                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
+                  >चालू</span>
                 )}
               </motion.div>
             );
@@ -109,8 +135,184 @@ function PDGrid({adLord, pdData, curPD, isCurrentAD}) {
   );
 }
 
+// ── Level 4: Sookshmadasha Grid ─────────────────────────────────────────
+function SDGrid({ pdLord, sdData, curSD, curPR, isCurrentPD }) {
+  const list = getPDs(pdLord);
+  // Auto-open current SD if we are in the active PD, otherwise closed
+  const [openSD, setOpenSD] = useState(isCurrentPD ? curSD : null);
+  const openSDEntry = sdData?.find(p => p.lord === openSD);
+
+  return (
+    <motion.div
+      initial={{ height:0, opacity:0 }}
+      animate={{ height:"auto", opacity:1 }}
+      exit={{ height:0, opacity:0 }}
+      transition={{ duration:0.2 }}
+      className="mt-2"
+    >
+      <div className="px-2 pb-3 pt-2 border-t border-pink-900/40">
+        <div
+          className="text-[9px] text-pink-400/60 uppercase tracking-widest mb-2 flex justify-between"
+          style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
+        >
+          <span>सूक्ष्म दशा</span>
+          <span className="text-[8px] normal-case text-pink-500/50">प्राण दशा देखने के लिए क्लिक करें</span>
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {list.map((lord, i) => {
+            const code = TO_CODE[lord] || "Su";
+            const meta = PLANET_META[code] || {};
+            const t = T(code);
+            const isCur = isCurrentPD && lord === curSD;
+            const isSelected = openSD === lord;
+            const sdEntry = sdData?.find(p => p.lord === lord);
+            
+            return (
+              <motion.button
+                key={i}
+                onClick={() => setOpenSD(isSelected ? null : lord)}
+                initial={{ opacity:0, scale:0.88 }}
+                animate={{ opacity:1, scale:1 }}
+                transition={{ delay:i*0.03 }}
+                className={`relative w-full text-left rounded-xl p-2 border transition-all ${
+                  isCur ? "ring-1 ring-pink-400/50 shadow-sm shadow-pink-500/20" : ""
+                } ${isSelected && !isCur ? "ring-1 ring-white/30" : ""}`}
+                style={{
+                  background: isCur || isSelected ? t.glow : t.bg,
+                  borderColor: isCur || isSelected ? t.border : "rgba(255,255,255,0.05)"
+                }}
+              >
+                <div className="flex items-center gap-1 mb-0.5">
+                  <span className="text-xs font-black" style={{ color:meta.color }}>{meta.symbol}</span>
+                  <span
+                    className="text-[10px] font-semibold text-slate-300 truncate"
+                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
+                  >{lord}</span>
+                </div>
+                {sdEntry
+                  ? <div className="text-[9px] text-slate-500">{sdEntry.start}–{sdEntry.end}</div>
+                  : <div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>
+                }
+                {isCur && (
+                  <span
+                    className="absolute -top-1 -right-1 text-[7px] px-1 py-0.5 rounded-full bg-pink-500/30 text-pink-200 border border-pink-500/50"
+                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
+                  >चालू</span>
+                )}
+              </motion.button>
+            );
+          })}
+        </div>
+        {/* ───── PR GRID — Renders when an SD is clicked ───── */}
+        <AnimatePresence>
+          {openSD && (
+            <PRGrid
+              sdLord={openSD}
+              prData={openSDEntry?.pranadashas || []}
+              curPR={curPR}
+              isCurrentSD={isCurrentPD && openSD === curSD}
+            />
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Level 3: Pratyantardasha Grid ─────────────────────────────────────────
+function PDGrid({ adLord, pdData, curPD, curSD, curPR, isCurrentAD }) {
+  const list = getPDs(adLord);
+  // Auto-open current PD if we are in the active AD, otherwise closed
+  const [openPD, setOpenPD] = useState(isCurrentAD ? curPD : null);
+  const openPDEntry = pdData?.find(p => p.lord === openPD);
+
+  return (
+    <motion.div
+      initial={{ height:0, opacity:0 }}
+      animate={{ height:"auto", opacity:1 }}
+      exit={{ height:0, opacity:0 }}
+      transition={{ duration:0.2 }}
+    >
+      <div className="px-6 pb-3 pt-2 border-t border-slate-800/50">
+        <div
+          className="text-[9px] text-slate-600 uppercase tracking-widest mb-2 flex justify-between"
+          style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
+        >
+          <span>प्रत्यंतर्दशा</span>
+          <span className="text-[8px] normal-case text-slate-500">सूक्ष्म दशा देखने के लिए क्लिक करें</span>
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {list.map((lord, i) => {
+            const code = TO_CODE[lord] || "Su";
+            const meta = PLANET_META[code] || {};
+            const t = T(code);
+            const isCur = isCurrentAD && lord === curPD;
+            const isSelected = openPD === lord;
+            const pdEntry = pdData?.find(p => p.lord === lord);
+            
+            return (
+              <motion.button
+                key={i}
+                onClick={() => setOpenPD(isSelected ? null : lord)}
+                initial={{ opacity:0, scale:0.88 }}
+                animate={{ opacity:1, scale:1 }}
+                transition={{ delay:i*0.03 }}
+                className={`relative w-full text-left rounded-xl p-2 border transition-all ${
+                  isCur ? "ring-1 ring-amber-400/50 shadow-sm shadow-amber-500/20" : ""
+                } ${isSelected && !isCur ? "ring-1 ring-white/30" : ""}`}
+                style={{
+                  background: isCur || isSelected ? t.glow : t.bg,
+                  borderColor: isCur || isSelected ? t.border : "rgba(255,255,255,0.05)"
+                }}
+              >
+                <div className="flex items-center gap-1 mb-0.5">
+                  <span className="text-xs font-black" style={{ color:meta.color }}>{meta.symbol}</span>
+                  <span
+                    className="text-[10px] font-semibold text-slate-300 truncate"
+                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
+                  >{lord}</span>
+                </div>
+                {pdEntry
+                  ? <div className="text-[9px] text-slate-500">{pdEntry.start}–{pdEntry.end}</div>
+                  : <div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>
+                }
+                {isCur && (
+                  <span
+                    className="absolute -top-1 -right-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-200 border border-amber-500/50"
+                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
+                  >चालू</span>
+                )}
+              </motion.button>
+            );
+          })}
+        </div>
+        {/* ───── SD GRID — Renders when a PD is clicked ───── */}
+        <AnimatePresence>
+          {openPD && (
+            <SDGrid
+              pdLord={openPD}
+              sdData={openPDEntry?.sookshmadashas || []}
+              curSD={curSD}
+              curPR={curPR}
+              isCurrentPD={isCurrentAD && openPD === curPD}
+            />
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+}
+
 // ── Level 2: Antardasha Row ───────────────────────────────────
-function ADRow({lord, adData, isCurrentMD, curAD, curPD}) {
+function ADRow({
+  lord,
+  adData,
+  isCurrentMD,
+  curAD,
+  curPD,
+  curSD,
+  curPR
+}) {
   const [open, setOpen] = useState(false);
   const code = TO_CODE[lord]||"Su";
   const meta = PLANET_META[code]||{};
@@ -134,14 +336,21 @@ function ADRow({lord, adData, isCurrentMD, curAD, curPD}) {
              :<ChevronRight size={11} className="text-slate-700 flex-shrink-0"/>}
       </button>
       <AnimatePresence>
-        {open && <PDGrid adLord={lord} pdData={adData?.pratyantardashas||[]} curPD={curPD} isCurrentAD={isCur}/>}
+        {open && <PDGrid
+  adLord={lord}
+  pdData={adData?.pratyantardashas || []}
+  curPD={curPD}
+  curSD={curSD}
+  curPR={curPR}
+  isCurrentAD={isCur}
+/>}
       </AnimatePresence>
     </div>
   );
 }
 
 // ── Level 1: Mahadasha Card ───────────────────────────────────
-function MDCard({d, curMD, curAD, curPD, idx}) {
+function MDCard({d, curMD, curAD, curPD, curSD, curPR, idx}) {
   const lord = d.lord_hi || d.lord || "";
   const code = d.code || TO_CODE[lord] || "Su";
   const meta = PLANET_META[code]||{};
@@ -207,7 +416,16 @@ function MDCard({d, curMD, curAD, curPD, idx}) {
               <div className="px-10 py-1.5 text-[9px] text-slate-600 uppercase tracking-widest"
                 style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>अंतर्दशा</div>
               {adList.map((adLord,ai) => (
-                <ADRow key={ai} lord={adLord} adData={adDataMap[adLord]} isCurrentMD={isCur} curAD={curAD} curPD={curPD}/>
+                <ADRow
+  key={ai}
+  lord={adLord}
+  adData={adDataMap[adLord]}
+  isCurrentMD={isCur}
+  curAD={curAD}
+  curPD={curPD}
+  curSD={curSD}
+  curPR={curPR}
+/>
               ))}
             </div>
           </motion.div>
@@ -645,7 +863,14 @@ export default function DashaTimeline({ dasha, chartMeta }) {
   const curMD = current.mahadasha;
   const curAD = current.antardasha;
   const curPD = current.pratyantara;
+const curSD = current.sookshmadasha;
+const curPR = current.pranadasha;
 
+const curSDCode = TO_CODE[curSD] || "Su";
+const curPRCode = TO_CODE[curPR] || "Su";
+
+const m4 = PLANET_META[curSDCode] || {};
+const m5 = PLANET_META[curPRCode] || {};
   const curMDCode = TO_CODE[curMD] || "Su";
   const curADCode = TO_CODE[curAD] || "Su";
   const curPDCode = TO_CODE[curPD] || "Su";
@@ -664,12 +889,13 @@ export default function DashaTimeline({ dasha, chartMeta }) {
           <span style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>वर्तमान दशा काल</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          {[
-            {label:"महादशा",   lord:curMD, code:curMDCode, meta:m1},
-            {label:"अंतर्दशा", lord:curAD, code:curADCode, meta:m2},
-            {label:"प्रत्यंतर", lord:curPD, code:curPDCode, meta:m3},
-          ].map((d,i)=>{
+         <div className="grid grid-cols-5 gap-2 md:gap-3 mb-4">          {[
+              {label:"महादशा", lord:curMD, code:curMDCode, meta:m1},
+              {label:"अंतर्दशा", lord:curAD, code:curADCode, meta:m2},
+              {label:"प्रत्यंतर", lord:curPD, code:curPDCode, meta:m3},
+              {label:"सूक्ष्म", lord:curSD, code:curSDCode, meta:m4},
+              {label:"प्राण", lord:curPR, code:curPRCode, meta:m5},
+            ].map((d,i)=>{
             const t = T(d.code);
             return (
               <div key={i} className="text-center p-3 rounded-xl border"
@@ -708,7 +934,7 @@ export default function DashaTimeline({ dasha, chartMeta }) {
           </div>
           <div className="flex flex-col gap-3">
             {sequence.map((d,i) => (
-              <MDCard key={i} d={d} curMD={curMD} curAD={curAD} curPD={curPD} idx={i}/>
+              <MDCard key={i} d={d} curMD={curMD} curAD={curAD} curPD={curPD} curSD={curSD} curPR={curPR} idx={i}/>
             ))}
           </div>
         </div>

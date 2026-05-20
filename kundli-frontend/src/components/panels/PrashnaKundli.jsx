@@ -1284,7 +1284,7 @@ if (result.house_analysis?.length) {
           <thead>
             <tr>
               {["Planet","L1","L2","L3","L4","L5 (E)"].map(h => (
-                <th key={h} style={{textAlign:"left",padding:"8px",color:"#a78bfa",
+                <th key={h} style={{textAlign:"left",padding:"8px",
                   borderBottom:"1px solid #334155",
                   background: h==="L5 (E)" ? "#1e293b" : "transparent",
                   color: h==="L5 (E)" ? "#f59e0b" : "#a78bfa"}}>{h}</th>

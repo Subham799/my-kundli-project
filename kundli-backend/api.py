@@ -1042,9 +1042,45 @@ def get_pratyantardashas(md_lord_idx, ad_lord_idx, ad_start_date_str):
         pd_lord_idx = (ad_lord_idx + i) % 9; pd_years = DASHA_YEARS[pd_lord_idx]
         duration    = (md_years * ad_years * pd_years / (120.0 * 120.0)) * 365.25
         end_date    = current_date + timedelta(days=duration)
-        pds.append({"planet":DASHA_LORDS[pd_lord_idx],"start":current_date.strftime("%d-%m-%Y"),"end":end_date.strftime("%d-%m-%Y")})
+        pds.append({
+            "planet": DASHA_LORDS[pd_lord_idx],
+            "start": current_date.strftime("%d-%m-%Y"),
+            "end": end_date.strftime("%d-%m-%Y"),
+            "idx": pd_lord_idx, 
+            "duration_days": duration
+        })
         current_date = end_date
     return pds
+
+def get_sookshmadashas(pd_duration_days, pd_lord_idx, pd_start_date_str):
+    sds = []; current_date = datetime.strptime(pd_start_date_str, "%d-%m-%Y")
+    for i in range(9):
+        sd_lord_idx = (pd_lord_idx + i) % 9; sd_years = DASHA_YEARS[sd_lord_idx]
+        duration = pd_duration_days * (sd_years / 120.0)
+        end_date = current_date + timedelta(days=duration)
+        sds.append({
+            "lord": DASHA_LORDS[sd_lord_idx],
+            "start": current_date.strftime("%d-%m-%Y"),
+            "end": end_date.strftime("%d-%m-%Y"),
+            "idx": sd_lord_idx,
+            "duration_days": duration
+        })
+        current_date = end_date
+    return sds
+
+def get_pranadashas(sd_duration_days, sd_lord_idx, sd_start_date_str):
+    prs = []; current_date = datetime.strptime(sd_start_date_str, "%d-%m-%Y")
+    for i in range(9):
+        pr_lord_idx = (sd_lord_idx + i) % 9; pr_years = DASHA_YEARS[pr_lord_idx]
+        duration = sd_duration_days * (pr_years / 120.0)
+        end_date = current_date + timedelta(days=duration)
+        prs.append({
+            "lord": DASHA_LORDS[pr_lord_idx],
+            "start": current_date.strftime("%d-%m-%Y"),
+            "end": end_date.strftime("%d-%m-%Y")
+        })
+        current_date = end_date
+    return prs
 
 def get_dignity(planet, sign_idx):
     if planet == "La": return "-"
@@ -1066,13 +1102,16 @@ def get_all_dashas_for_year(moon_degree, birth_date, target_year):
     md_end = current_date + timedelta(days=first_md_duration * 365.25)
     mahadashas = [{"planet":DASHA_LORDS[lord_idx],"idx":lord_idx,"start":current_date,"end":md_end}]
     current_date = md_end
+    
     for i in range(1,9):
         md_idx = (lord_idx+i)%9; md_duration = DASHA_YEARS[md_idx]
         md_end = current_date + timedelta(days=md_duration*365.25)
         mahadashas.append({"planet":DASHA_LORDS[md_idx],"idx":md_idx,"start":current_date,"end":md_end})
         current_date = md_end
+        
     target_start = datetime(target_year,1,1); target_end = datetime(target_year,12,31)
     active_dashas = []
+    
     for md in mahadashas:
         if md['start'] <= target_end and md['end'] >= target_start:
             ad_current = md['start']; md_years = DASHA_YEARS[md['idx']]
@@ -1087,12 +1126,44 @@ def get_all_dashas_for_year(moon_degree, birth_date, target_year):
                         pd_duration = (md_years*ad_years*pd_years/(120.0*120.0))*365.25
                         pd_end = pd_current + timedelta(days=pd_duration)
                         if pd_current <= target_end and pd_end >= target_start:
-                            active_dashas.append({'mahadasha':md['planet'],'antardasha':DASHA_LORDS[ad_idx],'pratyantardasha':DASHA_LORDS[pd_idx],'start':pd_current,'end':pd_end})
+                            sd_current = pd_current
+                            
+                            # --- सूक्ष्म दशा (SD) लूप ---
+                            for k in range(9):
+                                sd_idx = (pd_idx+k)%9; sd_years = DASHA_YEARS[sd_idx]
+                                sd_duration = pd_duration * (sd_years / 120.0)
+                                sd_end = sd_current + timedelta(days=sd_duration)
+                                if sd_current <= target_end and sd_end >= target_start:
+                                    prd_current = sd_current
+                                    
+                                    # --- प्राण दशा (PrD) लूप ---
+                                    for l in range(9):
+                                        prd_idx = (sd_idx+l)%9; prd_years = DASHA_YEARS[prd_idx]
+                                        prd_duration = sd_duration * (prd_years / 120.0)
+                                        prd_end = prd_current + timedelta(days=prd_duration)
+                                        
+                                        if prd_current <= target_end and prd_end >= target_start:
+                                            active_dashas.append({
+                                                'mahadasha': md['planet'],
+                                                'antardasha': DASHA_LORDS[ad_idx],
+                                                'pratyantardasha': DASHA_LORDS[pd_idx],
+                                                'sookshmadasha': DASHA_LORDS[sd_idx],
+                                                'pranadasha': DASHA_LORDS[prd_idx],
+                                                'start': prd_current,
+                                                'end': prd_end
+                                            })
+                                        prd_current = prd_end
+                                        if prd_current > target_end: break
+                                        
+                                sd_current = sd_end
+                                if sd_current > target_end: break
+                                
                         pd_current = pd_end
                         if pd_current > target_end: break
                 ad_current = ad_end
                 if ad_current > target_end: break
     return active_dashas
+
 
 def search_dasha_alignments(moon_degree, birth_date, search_criteria):
     nak_idx = int(moon_degree/(360/27)); lord_idx = nak_idx % 9
@@ -1102,14 +1173,17 @@ def search_dasha_alignments(moon_degree, birth_date, search_criteria):
     md_end = current_date + timedelta(days=first_md_duration*365.25)
     mahadashas = [{"planet":DASHA_LORDS[lord_idx],"idx":lord_idx,"start":current_date,"end":md_end}]
     current_date = md_end
+    
     for i in range(1,9):
         md_idx = (lord_idx+i)%9
         md_end = current_date + timedelta(days=DASHA_YEARS[md_idx]*365.25)
         mahadashas.append({"planet":DASHA_LORDS[md_idx],"idx":md_idx,"start":current_date,"end":md_end})
         current_date = md_end
+        
     for md in mahadashas:
         if search_criteria.get('mahadasha') and md['planet'] != search_criteria['mahadasha']: continue
         ad_current = md['start']; md_years = DASHA_YEARS[md['idx']]
+        
         for i in range(9):
             ad_idx = (md['idx']+i)%9; ad_planet = DASHA_LORDS[ad_idx]
             ad_years = DASHA_YEARS[ad_idx]; ad_duration = (md_years*ad_years)/120.0
@@ -1117,17 +1191,53 @@ def search_dasha_alignments(moon_degree, birth_date, search_criteria):
                 ad_current += timedelta(days=ad_duration*365.25); continue
             ad_end = ad_current + timedelta(days=ad_duration*365.25)
             pd_current = ad_current
+            
             for j in range(9):
                 pd_idx = (ad_idx+j)%9; pd_planet = DASHA_LORDS[pd_idx]
                 pd_years = DASHA_YEARS[pd_idx]; pd_duration = (md_years*ad_years*pd_years/(120.0*120.0))*365.25
                 if search_criteria.get('pratyantardasha') and pd_planet != search_criteria['pratyantardasha']:
                     pd_current += timedelta(days=pd_duration); continue
                 pd_end = pd_current + timedelta(days=pd_duration)
-                matches.append({'mahadasha':md['planet'],'antardasha':ad_planet,'pratyantardasha':pd_planet,'start_date':pd_current,'end_date':pd_end,'duration_days':int((pd_end-pd_current).days)})
+                sd_current = pd_current
+                
+                # --- सूक्ष्म दशा (SD) सर्च लूप ---
+                for k in range(9):
+                    sd_idx = (pd_idx+k)%9; sd_planet = DASHA_LORDS[sd_idx]
+                    sd_years = DASHA_YEARS[sd_idx]
+                    sd_duration = pd_duration * (sd_years / 120.0)
+                    
+                    if search_criteria.get('sookshmadasha') and sd_planet != search_criteria['sookshmadasha']:
+                        sd_current += timedelta(days=sd_duration); continue
+                    sd_end = sd_current + timedelta(days=sd_duration)
+                    prd_current = sd_current
+                    
+                    # --- प्राण दशा (PrD) सर्च लूप ---
+                    for l in range(9):
+                        prd_idx = (sd_idx+l)%9; prd_planet = DASHA_LORDS[prd_idx]
+                        prd_years = DASHA_YEARS[prd_idx]
+                        prd_duration = sd_duration * (prd_years / 120.0)
+                        
+                        if search_criteria.get('pranadasha') and prd_planet != search_criteria['pranadasha']:
+                            prd_current += timedelta(days=prd_duration); continue
+                            
+                        prd_end = prd_current + timedelta(days=prd_duration)
+                        
+                        matches.append({
+                            'mahadasha': md['planet'],
+                            'antardasha': ad_planet,
+                            'pratyantardasha': pd_planet,
+                            'sookshmadasha': sd_planet,
+                            'pranadasha': prd_planet,
+                            'start_date': prd_current,
+                            'end_date': prd_end,
+                            # प्राण दशा घंटों में होती है, इसलिए इसे float रखा है
+                            'duration_days': round((prd_end - prd_current).total_seconds() / 86400.0, 4) 
+                        })
+                        prd_current = prd_end
+                    sd_current = sd_end
                 pd_current = pd_end
             ad_current = ad_end
     return matches
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ██  SECTION 3 — JSON API ROUTES  (replaces render_template_string)
@@ -1226,6 +1336,22 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         pd['is_current'] = datetime.strptime(pd['start'], "%d-%m-%Y") <= now < datetime.strptime(pd['end'], "%d-%m-%Y")
         if pd['is_current']: 
             current_pd = pd
+
+    # 👇 ADD THIS BLOCK DIRECTLY BELOW THE PD LOOP 👇
+    current_sds = get_sookshmadashas(current_pd['duration_days'], current_pd['idx'], current_pd['start'])
+    current_sd = current_sds[0]
+    for sd in current_sds:
+        sd['is_current'] = datetime.strptime(sd['start'], "%d-%m-%Y") <= now < datetime.strptime(sd['end'], "%d-%m-%Y")
+        if sd['is_current']:
+            current_sd = sd
+
+    current_prs = get_pranadashas(current_sd['duration_days'], current_sd['idx'], current_sd['start'])
+    current_pr = current_prs[0]
+    for pr in current_prs:
+        pr['is_current'] = datetime.strptime(pr['start'], "%d-%m-%Y") <= now < datetime.strptime(pr['end'], "%d-%m-%Y")
+        if pr['is_current']:
+            current_pr = pr
+    # 👆 END OF NEW BLOCK 👆
 
     # ── Houses ────────────────────────────────────────────────────
     houses     = {i: {"sign": "", "sign_index": 0, "planets": "", "av": 0} for i in range(1, 13)}
@@ -1482,27 +1608,42 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
 
     PLANET_CODE_MAP = {v:k for k,v in {"Su":"सूर्य","Mo":"चंद्र","Ma":"मंगल","Me":"बुध","Ju":"गुरु","Ve":"शुक्र","Sa":"शनि","Ra":"राहु","Ke":"केतु"}.items()}
     dasha_sequence = []
+    
     for d in dashas:
-        # ── Get full antardashas for this mahadasha ──
+        is_active_md = (d["planet"] == current_md["planet"])
         ads_raw = get_antardashas(d["idx"], d["start"])
         antardashas = []
         
         for ad in ads_raw:
-            # ── Get pratyantardashas for each antardasha ──
             pds_raw = get_pratyantardashas(d["idx"], ad["idx"], ad["start"])
+            pd_list = []
             
+            for pd in pds_raw:
+                sd_list = []
+                # Performance lock: Only compute SD/PR for the user's current Mahadasha
+                if is_active_md:
+                    sds_raw = get_sookshmadashas(pd["duration_days"], pd["idx"], pd["start"])
+                    for sd in sds_raw:
+                        prs_raw = get_pranadashas(sd["duration_days"], sd["idx"], sd["start"])
+                        sd_list.append({
+                            "lord": sd["lord"],
+                            "start": sd["start"],
+                            "end": sd["end"],
+                            "pranadashas": prs_raw
+                        })
+                
+                pd_list.append({
+                    "lord": pd["planet"],
+                    "start": pd["start"],
+                    "end": pd["end"],
+                    "sookshmadashas": sd_list
+                })
+                
             antardashas.append({
                 "lord": ad["planet"],
                 "start": ad["start"],
                 "end": ad["end"],
-                "pratyantardashas": [
-                    {
-                        "lord": pd["planet"],
-                        "start": pd["start"],
-                        "end": pd["end"]
-                    }
-                    for pd in pds_raw
-                ]
+                "pratyantardashas": pd_list
             })
         
         dasha_sequence.append({
@@ -1511,9 +1652,9 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             "start": d["start"].split("-")[2] if "-" in d["start"] else d["start"][:4],
             "end":   d["end"].split("-")[2]   if "-" in d["end"]   else d["end"][:4],
             "years": DASHA_YEARS[d["idx"]],
-            "active": d["planet"] == current_md["planet"],
-            "pct":  md_pct if d["planet"] == current_md["planet"] else 0,
-            "antardashas": antardashas  # ← NEW FIELD
+            "active": is_active_md,
+            "pct":  md_pct if is_active_md else 0,
+            "antardashas": antardashas
         })
 
     # ── Drishti for React ─────────────────────────────────────────
@@ -1777,6 +1918,8 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
                 "mahadasha":       current_md["planet"],
                 "antardasha":      current_ad["planet"],
                 "pratyantara":     current_pd["planet"] if current_pds else "",
+                "sookshmadasha":   current_sd["lord"],  # 👈 Added
+                "pranadasha":      current_pr["lord"],
                 "endDate":         current_md["end"][-4:] + "-" + current_md["end"][3:5],
                 "progressPercent": md_pct,
             },
