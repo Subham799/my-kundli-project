@@ -73,6 +73,15 @@ function PlanetChip({code, hindi, small=false}) {
 // ── Level 5: Pranadasha Grid ─────────────────────────────────────────
 function PRGrid({ sdLord, prData, curPR, isCurrentSD }) {
   const list = getPDs(sdLord);
+  // Debug: log what backend sends
+  if (prData?.length) console.log("[PRGrid] sdLord:", sdLord, "| prData[0] keys:", Object.keys(prData[0]), "| sample:", prData[0]);
+
+  // Robust lord-match
+  const findPR = (lord) => prData?.find(p =>
+    p.lord === lord || p.lord_hi === lord ||
+    p.lord === TO_CODE[lord] || p.planet === lord
+  );
+
   return (
     <motion.div
       initial={{ height:0, opacity:0 }}
@@ -94,7 +103,9 @@ function PRGrid({ sdLord, prData, curPR, isCurrentSD }) {
             const meta = PLANET_META[code] || {};
             const t = T(code);
             const isCur = isCurrentSD && lord === curPR;
-            const prEntry = prData?.find(p => p.lord === lord);
+            const prEntry = findPR(lord);
+            const prStart = prEntry?.start || prEntry?.start_date || prEntry?.startDate;
+            const prEnd   = prEntry?.end   || prEntry?.end_date   || prEntry?.endDate;
             return (
               <motion.div
                 key={i}
@@ -117,7 +128,7 @@ function PRGrid({ sdLord, prData, curPR, isCurrentSD }) {
                   >{lord}</span>
                 </div>
                 {prEntry
-                  ? <div className="text-[9px] text-slate-500">{prEntry.start}–{prEntry.end}</div>
+                  ? <div className="text-[9px] text-slate-500">{prStart}–{prEnd}</div>
                   : <div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>
                 }
                 {isCur && (
@@ -138,9 +149,17 @@ function PRGrid({ sdLord, prData, curPR, isCurrentSD }) {
 // ── Level 4: Sookshmadasha Grid ─────────────────────────────────────────
 function SDGrid({ pdLord, sdData, curSD, curPR, isCurrentPD }) {
   const list = getPDs(pdLord);
-  // Auto-open current SD if we are in the active PD, otherwise closed
+  // Debug: log what backend sends so we can see field names
+  if (sdData?.length) console.log("[SDGrid] pdLord:", pdLord, "| sdData[0] keys:", Object.keys(sdData[0]), "| sample:", sdData[0]);
+
+  // Robust lord-match: handles Hindi name OR English code from backend
+  const findSD = (lord) => sdData?.find(p =>
+    p.lord === lord || p.lord_hi === lord ||
+    p.lord === TO_CODE[lord] || p.planet === lord
+  );
+
   const [openSD, setOpenSD] = useState(isCurrentPD ? curSD : null);
-  const openSDEntry = sdData?.find(p => p.lord === openSD);
+  const openSDEntry = findSD(openSD);
 
   return (
     <motion.div
@@ -165,7 +184,9 @@ function SDGrid({ pdLord, sdData, curSD, curPR, isCurrentPD }) {
             const t = T(code);
             const isCur = isCurrentPD && lord === curSD;
             const isSelected = openSD === lord;
-            const sdEntry = sdData?.find(p => p.lord === lord);
+            const sdEntry = findSD(lord);
+            const sdStart = sdEntry?.start || sdEntry?.start_date || sdEntry?.startDate;
+            const sdEnd   = sdEntry?.end   || sdEntry?.end_date   || sdEntry?.endDate;
             
             return (
               <motion.button
@@ -190,7 +211,7 @@ function SDGrid({ pdLord, sdData, curSD, curPR, isCurrentPD }) {
                   >{lord}</span>
                 </div>
                 {sdEntry
-                  ? <div className="text-[9px] text-slate-500">{sdEntry.start}–{sdEntry.end}</div>
+                  ? <div className="text-[9px] text-slate-500">{sdStart}–{sdEnd}</div>
                   : <div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>
                 }
                 {isCur && (
@@ -826,13 +847,370 @@ function DashaPredictions({ curMD, curAD, curMDCode, curADCode, chartMeta }) {
 // Tabs: दशा क्रम | फलादेश | 🔢 AV विश्लेषण | वर्ष चयन | संरेखण खोज
 // ════════════════════════════════════════════════════════════
 
+// ── योगिनी दशा Grid ──────────────────────────────────────────
+// योगिनी ग्रह → TINTS कोड मैपिंग
+const YOGINI_PLANET_CODE = {
+  "Mo":"Mo", "Su":"Su", "Ju":"Ju", "Ma":"Ma",
+  "Me":"Me", "Sa":"Sa", "Ve":"Ve", "Ra/Ke":"Ra",
+};
+// ग्रह कोड → योगिनी नाम (AD/PD/SD में दिखाने के लिए)
+const YOGINI_NAMES = {
+  "Mo":"मंगला", "Su":"पिंगला", "Ju":"धान्या", "Ma":"भ्रामरी",
+  "Me":"भद्रिका", "Sa":"उल्का", "Ve":"सिद्धा",
+  "Ra/Ke":"संकटा", "Ra":"संकटा", "Ke":"संकटा",
+};
+// योगिनी दशाओं के लिए रंग — नाम आधारित
+const YOGINI_ACCENT = {
+  "संकटा":"#818CF8","मंगला":"#94A3B8","पिंगला":"#F59E0B",
+  "धान्या":"#FB923C","भ्रामरी":"#F87171","भद्रिका":"#34D399",
+  "उल्का":"#A78BFA","सिद्धा":"#F472B6",
+};
+// planet string → accent color (AD/PD/SD के लिए shortcut)
+const yAccent = (planet) => YOGINI_ACCENT[YOGINI_NAMES[planet]] || "#94A3B8";
+
+// ── Helper: date string "DD-MM-YYYY" → Date object ───────────
+function yParse(s) {
+  if (!s) return null;
+  const p = s.split(" ")[0].split("-"); // ignore time part if present
+  if (p.length === 3) return new Date(`${p[2]}-${p[1]}-${p[0]}`);
+  return null;
+}
+function yIsCur(start, end, now) {
+  const s = yParse(start); const e = yParse(end);
+  return s && e && now >= s && now < e;
+}
+
+// ── Level 4 (SD): सूक्ष्म दशा mini grid ──────────────────────
+function YoginiSDRow({ pds, isCurAD, now }) {
+  return (
+    <div className="mt-2 pt-2 border-t border-white/5">
+      <div className="text-[9px] text-pink-400/50 uppercase tracking-widest mb-1.5"
+        style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>सूक्ष्म दशा</div>
+      <div className="grid grid-cols-4 gap-1">
+        {pds.map((sd, k) => {
+          const sdCode   = YOGINI_PLANET_CODE[sd.planet] || "Su";
+          const sdMeta   = PLANET_META[sdCode] || {};
+          const isSdCur  = isCurAD && yIsCur(sd.start, sd.end, now);
+          return (
+            <div key={k}
+              className={`p-1.5 rounded-lg border text-center ${isSdCur ? "ring-1" : ""}`}
+              style={{
+                background:  isSdCur ? `${sdMeta.color}20` : "rgba(255,255,255,0.02)",
+                borderColor: isSdCur ? sdMeta.color : "rgba(255,255,255,0.05)",
+              }}
+            >
+              <div className="text-xs font-black" style={{ color: sdMeta.color }}>{sdMeta.symbol}</div>
+              <div className="text-[8px] font-bold truncate"
+                style={{ color: yAccent(sd.planet), fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
+                {YOGINI_NAMES[sd.planet] || sd.planet}
+              </div>
+              <div className="text-[8px] text-slate-500 truncate"
+                style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>{sd.planet}</div>
+              <div className="text-[7px] text-slate-600 font-mono leading-tight mt-0.5">
+                {sd.start?.slice(0,5)}<br/>{sd.end?.slice(0,5)}
+              </div>
+              {isSdCur && (
+                <div className="text-[7px] mt-0.5 rounded-full px-1"
+                  style={{ background:`${sdMeta.color}30`, color:sdMeta.color,
+                    fontFamily:"'Noto Sans Devanagari',sans-serif" }}>चालू</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Level 3 (PD): प्रत्यंतर दशा accordion rows ───────────────
+function YoginiPDSection({ pratyantardashas, isCurAD, now, accentColor }) {
+  const [openPD, setOpenPD] = useState(() => {
+    if (!isCurAD) return null;
+    const idx = pratyantardashas?.findIndex(pd => yIsCur(pd.start, pd.end, now));
+    return idx >= 0 ? idx : null;
+  });
+
+  if (!pratyantardashas?.length) return null;
+
+  return (
+    <div className="mt-2 pt-2 border-t border-white/5">
+      <div className="text-[9px] text-violet-400/50 uppercase tracking-widest mb-1.5"
+        style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
+        प्रत्यंतर दशा
+      </div>
+      <div className="flex flex-col gap-1">
+        {pratyantardashas.map((pd, k) => {
+          const pdCode   = YOGINI_PLANET_CODE[pd.planet] || "Su";
+          const pdMeta   = PLANET_META[pdCode] || {};
+          const isPdCur  = isCurAD && yIsCur(pd.start, pd.end, now);
+          const isPdOpen = openPD === k;
+          const hasSDs   = pd.sookshmadashas?.length > 0;
+
+          return (
+            <div key={k}
+              className={`rounded-xl border overflow-hidden ${isPdCur ? "ring-1" : ""}`}
+              style={{
+                background:  isPdCur ? `${pdMeta.color}12` : "rgba(255,255,255,0.02)",
+                borderColor: isPdCur ? pdMeta.color : "rgba(255,255,255,0.06)",
+              }}
+            >
+              {/* PD row — click to open SD */}
+              <button
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left"
+                onClick={() => hasSDs && setOpenPD(isPdOpen ? null : k)}
+              >
+                <span className="text-xs font-black flex-shrink-0" style={{ color:pdMeta.color }}>
+                  {pdMeta.symbol}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-bold truncate"
+                    style={{ color: yAccent(pd.planet), fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
+                    {YOGINI_NAMES[pd.planet] || pd.planet}
+                  </div>
+                  <div className="text-[9px] text-slate-500"
+                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>{pd.planet}</div>
+                </div>
+                {isPdCur && (
+                  <span className="text-[8px] px-1 rounded-full flex-shrink-0"
+                    style={{ background:`${pdMeta.color}30`, color:pdMeta.color,
+                      fontFamily:"'Noto Sans Devanagari',sans-serif" }}>चालू</span>
+                )}
+                <span className="text-[9px] text-slate-600 font-mono flex-shrink-0">
+                  {pd.start?.slice(0,5)} – {pd.end?.slice(0,5)}
+                </span>
+                {hasSDs && (
+                  <motion.div animate={{ rotate: isPdOpen ? 90 : 0 }} transition={{ duration:0.15 }}>
+                    <ChevronRight size={11} className="text-slate-600 flex-shrink-0" />
+                  </motion.div>
+                )}
+              </button>
+
+              {/* SD sub-section */}
+              <AnimatePresence>
+                {isPdOpen && hasSDs && (
+                  <motion.div
+                    initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }}
+                    exit={{ height:0, opacity:0 }} transition={{ duration:0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-2.5 pb-2">
+                      <YoginiSDRow pds={pd.sookshmadashas} isCurAD={isPdCur} now={now} />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Main YoginiGrid: MD → AD → PD → SD ───────────────────────
+function YoginiGrid({ yoginiData }) {
+  const [openMD, setOpenMD] = useState(null);
+  const [openAD, setOpenAD] = useState({});   // key: "mdIdx-adIdx"
+
+  if (!yoginiData || yoginiData.length === 0) {
+    return (
+      <div className="text-center text-slate-500 text-sm py-12"
+        style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
+        योगिनी दशा डेटा उपलब्ध नहीं है
+      </div>
+    );
+  }
+
+  const now = new Date();
+
+  const toggleAD = (key) =>
+    setOpenAD(prev => ({ ...prev, [key]: !prev[key] }));
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Header */}
+      <div className="text-[10px] text-slate-600 uppercase tracking-widest mb-1 flex items-center gap-2">
+        <span className="w-3 h-px bg-slate-700 inline-block"/>
+        <span style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
+          योगिनी महादशा — अंतर्दशा — प्रत्यंतर — सूक्ष्म (4 स्तर)
+        </span>
+        <span className="flex-1 h-px bg-slate-800 inline-block"/>
+      </div>
+
+      {yoginiData.map((md, i) => {
+        const accent  = YOGINI_ACCENT[md.name] || "#F59E0B";
+        const pCode   = YOGINI_PLANET_CODE[md.planet] || "Su";
+        const t       = T(pCode);
+        const meta    = PLANET_META[pCode] || {};
+        const isMdCur = yIsCur(md.start, md.end, now);
+        const isMdOpen = openMD === i;
+        const ads     = md.antardashas || [];
+
+        return (
+          <motion.div key={i}
+            initial={{ opacity:0, y:6 }} animate={{ opacity:1, y:0 }}
+            transition={{ delay: i * 0.04 }}
+            className={`rounded-2xl border overflow-hidden ${isMdCur ? "ring-1 shadow-md" : ""}`}
+            style={{
+              background:  isMdCur ? t.glow : t.bg,
+              borderColor: isMdCur ? accent : t.border,
+              boxShadow:   isMdCur ? `0 0 18px ${accent}22` : "none",
+            }}
+          >
+            {/* ── MD Row ── */}
+            <button className="w-full flex items-center gap-3 p-3.5 text-left"
+              onClick={() => setOpenMD(isMdOpen ? null : i)}>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border"
+                style={{ background:`${accent}18`, borderColor:`${accent}40` }}>
+                <span className="text-lg font-black" style={{ color:accent }}>
+                  {meta.symbol || md.planet[0]}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-sm font-bold"
+                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif", color:accent }}>
+                    {md.name}
+                  </span>
+                  {isMdCur && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full border animate-pulse"
+                      style={{ background:`${accent}25`, borderColor:`${accent}60`, color:accent,
+                        fontFamily:"'Noto Sans Devanagari',sans-serif" }}>● चालू</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-400"
+                  style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
+                  {md.planet} · {md.duration_years} वर्ष
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0 mr-2">
+                <div className="text-[10px] text-slate-400 font-mono">{md.start}</div>
+                <div className="text-[10px] text-slate-600 font-mono">{md.end}</div>
+              </div>
+              {isMdCur && (() => {
+                const s = yParse(md.start); const e = yParse(md.end);
+                const pct = s && e ? Math.round(Math.min(100,((now-s)/(e-s))*100)) : 0;
+                return (
+                  <div className="w-12 flex-shrink-0">
+                    <div className="text-[9px] text-center mb-1" style={{ color:accent }}>{pct}%</div>
+                    <div className="h-1 rounded-full overflow-hidden bg-white/5">
+                      <motion.div className="h-full rounded-full" style={{ background:accent }}
+                        initial={{ width:0 }} animate={{ width:`${pct}%` }}
+                        transition={{ duration:1, ease:"easeOut" }}/>
+                    </div>
+                  </div>
+                );
+              })()}
+              <motion.div animate={{ rotate: isMdOpen ? 90 : 0 }} transition={{ duration:0.2 }}>
+                <ChevronRight size={14} className="text-slate-600" />
+              </motion.div>
+            </button>
+
+            {/* ── AD Accordion ── */}
+            <AnimatePresence>
+              {isMdOpen && ads.length > 0 && (
+                <motion.div
+                  initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }}
+                  exit={{ height:0, opacity:0 }} transition={{ duration:0.25 }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-3 pb-3 pt-1 border-t" style={{ borderColor:`${accent}25` }}>
+                    <div className="text-[9px] uppercase tracking-widest mb-2"
+                      style={{ color:`${accent}80`, fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
+                      अंतर्दशा — क्लिक करें → प्रत्यंतर देखें
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      {ads.map((ad, j) => {
+                        const adCode   = YOGINI_PLANET_CODE[ad.planet] || "Su";
+                        const adMeta   = PLANET_META[adCode] || {};
+                        const adAccent = adMeta.color || "#94A3B8";
+                        const isAdCur  = isMdCur && yIsCur(ad.start, ad.end, now);
+                        const adKey    = `${i}-${j}`;
+                        const isAdOpen = !!openAD[adKey];
+                        const hasPDs   = ad.pratyantardashas?.length > 0;
+
+                        return (
+                          <div key={j}
+                            className={`rounded-xl border overflow-hidden ${isAdCur ? "ring-1" : ""}`}
+                            style={{
+                              background:  isAdCur ? `${adAccent}12` : "rgba(255,255,255,0.02)",
+                              borderColor: isAdCur ? adAccent : "rgba(255,255,255,0.06)",
+                              boxShadow:   isAdCur ? `0 0 8px ${adAccent}18` : "none",
+                            }}
+                          >
+                            {/* AD row */}
+                            <button
+                              className="w-full flex items-center gap-2 px-3 py-2 text-left"
+                              onClick={() => hasPDs && toggleAD(adKey)}
+                            >
+                              <span className="text-sm font-black flex-shrink-0" style={{ color:adAccent }}>
+                                {adMeta.symbol}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-[11px] font-bold truncate"
+                                  style={{ color: yAccent(ad.planet), fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
+                                  {YOGINI_NAMES[ad.planet] || ad.planet}
+                                </div>
+                                <div className="text-[9px] text-slate-500"
+                                  style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>{ad.planet}</div>
+                              </div>
+                              {isAdCur && (
+                                <span className="text-[8px] px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                  style={{ background:`${adAccent}30`, color:adAccent,
+                                    fontFamily:"'Noto Sans Devanagari',sans-serif" }}>चालू</span>
+                              )}
+                              <span className="text-[9px] text-slate-500 font-mono flex-shrink-0">
+                                {ad.start} – {ad.end}
+                              </span>
+                              {hasPDs && (
+                                <motion.div animate={{ rotate: isAdOpen ? 90 : 0 }} transition={{ duration:0.15 }}>
+                                  <ChevronRight size={12} className="text-slate-600 flex-shrink-0" />
+                                </motion.div>
+                              )}
+                            </button>
+
+                            {/* PD + SD sub-section */}
+                            <AnimatePresence>
+                              {isAdOpen && hasPDs && (
+                                <motion.div
+                                  initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }}
+                                  exit={{ height:0, opacity:0 }} transition={{ duration:0.2 }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="px-3 pb-3">
+                                    <YoginiPDSection
+                                      pratyantardashas={ad.pratyantardashas}
+                                      isCurAD={isAdCur}
+                                      now={now}
+                                      accentColor={adAccent}
+                                    />
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Inner Tab Bar ────────────────────────────────────────────
 const DASHA_TABS = [
   { id: "timeline",    label: "📅 दशा क्रम" },
   { id: "predictions", label: "📖 फलादेश" },
-  { id: "dasha_av",   label: "🔢 AV विश्लेषण" },   // ← NEW TAB
+  { id: "dasha_av",   label: "🔢 AV विश्लेषण" },
   { id: "year",        label: "🔍 वर्ष चयन" },
   { id: "alignment",   label: "🎯 संरेखण" },
+  { id: "yogini",      label: "✨ योगिनी दशा" },
 ];
 
 function DashaInnerTabs({ active, onChange }) {
@@ -856,7 +1234,7 @@ function DashaInnerTabs({ active, onChange }) {
 
 export default function DashaTimeline({ dasha, chartMeta }) {
   if (!dasha) return null;
-  const { current, sequence } = dasha;
+  const { current, sequence, yogini } = dasha;
 
   const [activeTab, setActiveTab] = useState("timeline");
 
@@ -962,6 +1340,11 @@ const m5 = PLANET_META[curPRCode] || {};
       {/* ── Tab: संरेखण खोज ──────────────────────────────────── */}
       {activeTab === "alignment" && (
         <AlignmentSearch sequence={sequence}/>
+      )}
+
+      {/* ── Tab: ✨ योगिनी दशा ───────────────────────────────── */}
+      {activeTab === "yogini" && (
+        <YoginiGrid yoginiData={yogini} />
       )}
 
     </div>

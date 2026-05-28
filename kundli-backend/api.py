@@ -127,6 +127,19 @@ AVAILABLE_CHARTS = {
 DASHA_LORDS = ["केतु", "शुक्र", "सूर्य", "चंद्र", "मंगल", "राहु", "गुरु", "शनि", "बुध"]
 DASHA_YEARS = [7, 20, 6, 10, 7, 18, 16, 19, 17]
 
+# ── योगिनी दशा — 36 वर्ष का चक्र ───────────────────────────────────────
+# क्रम: शेषफल 0 = संकटा (इंडेक्स 0), सूत्र: (नक्षत्र + 3) % 8
+YOGINI_DASHAS = [
+    {"name": "संकटा",   "duration": 8, "planet": "Ra/Ke", "idx": 0},
+    {"name": "मंगला",   "duration": 1, "planet": "Mo",    "idx": 1},
+    {"name": "पिंगला",  "duration": 2, "planet": "Su",    "idx": 2},
+    {"name": "धान्या",  "duration": 3, "planet": "Ju",    "idx": 3},
+    {"name": "भ्रामरी", "duration": 4, "planet": "Ma",    "idx": 4},
+    {"name": "भद्रिका", "duration": 5, "planet": "Me",    "idx": 5},
+    {"name": "उल्का",   "duration": 6, "planet": "Sa",    "idx": 6},
+    {"name": "सिद्धा",  "duration": 7, "planet": "Ve",    "idx": 7},
+]
+
 AV_RULES = {
     "Su": {"Su":[1,2,4,7,8,9,10,11],"Mo":[3,6,10,11],"Ma":[1,2,4,7,8,9,10,11],"Me":[3,5,6,9,10,11,12],"Ju":[5,6,9,11],"Ve":[6,7,12],"Sa":[1,2,4,7,8,9,10,11],"La":[3,4,6,10,11,12]},
     "Mo": {"Su":[3,6,7,8,10,11],"Mo":[1,3,6,7,10,11],"Ma":[2,3,5,6,9,10,11],"Me":[1,3,4,5,7,8,10,11],"Ju":[1,4,7,8,10,11,12],"Ve":[3,4,5,7,9,10,11],"Sa":[3,5,6,11],"La":[3,6,10,11]},
@@ -1023,6 +1036,123 @@ def calculate_vimshottari(moon_degree, birth_date):
         current_date = end
     return dashas
 
+def calculate_yogini_dasha(moon_degree, birth_date):
+    """
+    योगिनी दशा — 36 वर्ष का चक्र (5 स्तर: MD → AD → PD → SD → PrD)
+    सूत्र: पहली दशा = (नक्षत्र_संख्या + 3) % 8
+    Absolute-start trick: पहले 'virtual start' निकालो, फिर birth_date से filter करो।
+    """
+    nak_idx        = int(moon_degree / (360 / 27))
+    nak_number     = nak_idx + 1
+    first_md_idx   = (nak_number + 3) % 8
+
+    fraction_elapsed  = (moon_degree % (360 / 27)) / (360 / 27)
+    first_md_total_days = YOGINI_DASHAS[first_md_idx]["duration"] * 365.2425
+    elapsed_days      = fraction_elapsed * first_md_total_days
+
+    # पहली महादशा का असली start — जन्म से पहले का वो दिन जब वह शुरू हुई थी
+    absolute_start = birth_date - timedelta(days=elapsed_days)
+
+    dashas       = []
+    current_date = absolute_start
+    current_md_idx = first_md_idx
+
+    # 3 साइकिल (~108 वर्ष): 3 × 8 = 24 महादशाएँ (पर्याप्त जीवनकाल कवरेज)
+    for cycle in range(3):
+        for m in range(8):
+            md_idx = (current_md_idx + m) % 8
+            md     = YOGINI_DASHAS[md_idx]
+            md_days = md["duration"] * 365.2425
+            md_end  = current_date + timedelta(days=md_days)
+
+            # --- अंतर्दशा (AD) ---
+            antardashas = []
+            ad_start    = current_date
+            for a in range(8):
+                ad_idx  = (md_idx + a) % 8
+                ad      = YOGINI_DASHAS[ad_idx]
+                ad_days = (md_days * ad["duration"]) / 36
+                ad_end  = ad_start + timedelta(days=ad_days)
+
+                # --- प्रत्यंतर दशा (PD) ---
+                pratyantardashas = []
+                pd_start = ad_start
+                for p in range(8):
+                    pd_idx  = (ad_idx + p) % 8
+                    pd      = YOGINI_DASHAS[pd_idx]
+                    pd_days = (ad_days * pd["duration"]) / 36
+                    pd_end  = pd_start + timedelta(days=pd_days)
+
+                    # --- सूक्ष्म दशा (SD) ---
+                    sookshmadashas = []
+                    sd_start = pd_start
+                    for s in range(8):
+                        sd_idx  = (pd_idx + s) % 8
+                        sd      = YOGINI_DASHAS[sd_idx]
+                        sd_days = (pd_days * sd["duration"]) / 36
+                        sd_end  = sd_start + timedelta(days=sd_days)
+
+                        # --- प्राण दशा (PrD) ---
+                        pranadashas = []
+                        pr_start = sd_start
+                        for pr in range(8):
+                            pr_idx  = (sd_idx + pr) % 8
+                            pr_node = YOGINI_DASHAS[pr_idx]
+                            pr_days = (sd_days * pr_node["duration"]) / 36
+                            pr_end  = pr_start + timedelta(days=pr_days)
+                            if pr_end > birth_date:
+                                pranadashas.append({
+                                    "planet": pr_node["planet"],
+                                    "start":  max(pr_start, birth_date).strftime("%d-%m-%Y %H:%M"),
+                                    "end":    pr_end.strftime("%d-%m-%Y %H:%M"),
+                                })
+                            pr_start = pr_end
+
+                        if sd_end > birth_date:
+                            sookshmadashas.append({
+                                "planet":     sd["planet"],
+                                "start":      max(sd_start, birth_date).strftime("%d-%m-%Y %H:%M"),
+                                "end":        sd_end.strftime("%d-%m-%Y %H:%M"),
+                                "pranadashas": pranadashas,
+                            })
+                        sd_start = sd_end
+
+                    if pd_end > birth_date:
+                        pratyantardashas.append({
+                            "planet":          pd["planet"],
+                            "start":           max(pd_start, birth_date).strftime("%d-%m-%Y"),
+                            "end":             pd_end.strftime("%d-%m-%Y"),
+                            "sookshmadashas":  sookshmadashas,
+                        })
+                    pd_start = pd_end
+
+                if ad_end > birth_date:
+                    antardashas.append({
+                        "planet":            ad["planet"],
+                        "start":             max(ad_start, birth_date).strftime("%d-%m-%Y"),
+                        "end":               ad_end.strftime("%d-%m-%Y"),
+                        "pratyantardashas":  pratyantardashas,
+                    })
+                ad_start = ad_end
+
+            if md_end > birth_date:
+                dashas.append({
+                    "name":        md["name"],
+                    "planet":      md["planet"],
+                    "start":       max(current_date, birth_date).strftime("%d-%m-%Y"),
+                    "end":         md_end.strftime("%d-%m-%Y"),
+                    "duration_years": md["duration"],
+                    "idx":         md_idx,
+                    "antardashas": antardashas,
+                })
+
+            current_date = md_end
+
+        current_md_idx = (current_md_idx + 8) % 8  # एक पूरा cycle बाद वही idx
+
+    return dashas
+
+
 def get_antardashas(md_lord_idx, md_start_date_str):
     ads = []; current_date = datetime.strptime(md_start_date_str, "%d-%m-%Y")
     md_years = DASHA_YEARS[md_lord_idx]
@@ -1257,8 +1387,9 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
     dt   = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
     astro      = calculate_astrology(dt, lat, lon)
     sav_points = calculate_sav(astro)
-    dashas     = calculate_vimshottari(astro["Mo"]["Degree"], dt)
-    now        = datetime.now()
+    dashas        = calculate_vimshottari(astro["Mo"]["Degree"], dt)
+    yogini_dashas = calculate_yogini_dasha(astro["Mo"]["Degree"], dt)
+    now           = datetime.now()
 
     # ── Bhav Chalit (Sri Pati Paddhati) ──────────────────────────
     try:
@@ -1924,6 +2055,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
                 "progressPercent": md_pct,
             },
             "sequence": dasha_sequence,
+            "yogini":   yogini_dashas,   # ← योगिनी दशा (5-level deep)
         },
         "drishti":          drishti_out,
         "bhavDrishti":      bhav_drishti,
