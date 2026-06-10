@@ -2179,6 +2179,7 @@ function RightPanel({ chartData }) {
     sav={chartData.sav || []}
     houses={chartData.houses || []}
     ashtakavargaSpecial={chartData.ashtakavargaSpecial || ""}
+    chartData={chartData}  // <--- यह लाइन जोड़नी है
   />
 )}
 

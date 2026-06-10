@@ -1009,7 +1009,7 @@ function YoginiPDSection({ pratyantardashas, isCurAD, now, accentColor }) {
 
 // ── Main YoginiGrid: MD → AD → PD → SD ───────────────────────
 function YoginiGrid({ yoginiData }) {
-  const [openMD, setOpenMD] = useState(null);
+  const [openMD, setOpenMD] = useState({});   // object — multiple MDs एक साथ open
   const [openAD, setOpenAD] = useState({});   // key: "mdIdx-adIdx"
 
   if (!yoginiData || yoginiData.length === 0) {
@@ -1023,6 +1023,8 @@ function YoginiGrid({ yoginiData }) {
 
   const now = new Date();
 
+  const toggleMD = (i) =>
+    setOpenMD(prev => ({ ...prev, [i]: !prev[i] }));
   const toggleAD = (key) =>
     setOpenAD(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -1043,7 +1045,7 @@ function YoginiGrid({ yoginiData }) {
         const t       = T(pCode);
         const meta    = PLANET_META[pCode] || {};
         const isMdCur = yIsCur(md.start, md.end, now);
-        const isMdOpen = openMD === i;
+        const isMdOpen = !!openMD[i];
         const ads     = md.antardashas || [];
 
         return (
@@ -1059,7 +1061,7 @@ function YoginiGrid({ yoginiData }) {
           >
             {/* ── MD Row ── */}
             <button className="w-full flex items-center gap-3 p-3.5 text-left"
-              onClick={() => setOpenMD(isMdOpen ? null : i)}>
+              onClick={() => toggleMD(i)}>
               <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border"
                 style={{ background:`${accent}18`, borderColor:`${accent}40` }}>
                 <span className="text-lg font-black" style={{ color:accent }}>
@@ -1067,20 +1069,38 @@ function YoginiGrid({ yoginiData }) {
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
+                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-sm font-bold"
                     style={{ fontFamily:"'Noto Sans Devanagari',sans-serif", color:accent }}>
                     {md.name}
                   </span>
+                  {/* नक्षत्र badge — VP Goyal table */}
+                  {md.nakshatra && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full border"
+                      style={{ background:`${accent}12`, borderColor:`${accent}35`, color:`${accent}cc`,
+                        fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
+                      ★ {md.nakshatra}
+                    </span>
+                  )}
                   {isMdCur && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded-full border animate-pulse"
                       style={{ background:`${accent}25`, borderColor:`${accent}60`, color:accent,
                         fontFamily:"'Noto Sans Devanagari',sans-serif" }}>● चालू</span>
                   )}
                 </div>
-                <div className="text-[10px] text-slate-400"
+                <div className="text-[10px] text-slate-400 flex items-center gap-2 flex-wrap"
                   style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
-                  {md.planet} · {md.duration_years} वर्ष
+                  <span>{md.planet} · {md.duration_years} वर्ष</span>
+                  {md.star_lord && (
+                    <span className="text-slate-600">
+                      नक्षत्र स्वामी: <span className="text-slate-400">{md.star_lord}</span>
+                    </span>
+                  )}
+                  {md.prog_lagna && (
+                    <span className="text-slate-600">
+                      प्र॰ लग्न: <span style={{ color:`${accent}99` }}>{md.prog_lagna}</span>
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="text-right flex-shrink-0 mr-2">

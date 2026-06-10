@@ -140,6 +140,38 @@ YOGINI_DASHAS = [
     {"name": "सिद्धा",  "duration": 7, "planet": "Ve",    "idx": 7},
 ]
 
+# ── VP Goyal Revised Table — 24 नक्षत्र → योगिनी दशा अनुक्रम ──────────────
+# (3 नक्षत्र clubbed: अश्विनी+पूर्वाभाद्र, भरणी+उत्तरभाद्र, कृत्तिका+रेवती)
+# प्रत्येक entry: (nakshatra_name, star_lord, sign_0indexed, yogini_dasha_idx)
+# sign: 0=Ar,1=Ta,2=Ge,3=Ca,4=Le,5=Vi,6=Li,7=Sc,8=Sa,9=Cp,10=Aq,11=Pi
+YOGINI_NAK_SEQUENCE = [
+    # nak_name,            star_lord, sign, yogini_idx
+    ("आर्द्रा",             "Ra",  2,  1),   # मंगला
+    ("पुनर्वसु",            "Ju",  2,  2),   # पिंगला
+    ("पुष्य",               "Sa",  3,  3),   # धान्या
+    ("अश्लेषा",             "Me",  3,  4),   # भ्रामरी
+    ("मघा",                 "Ke",  4,  5),   # भद्रिका
+    ("पूर्वा फाल्गुनी",     "Ve",  4,  6),   # उल्का
+    ("उत्तरा फाल्गुनी",     "Su",  4,  7),   # सिद्धा
+    ("हस्त",                "Mo",  5,  0),   # संकटा
+    ("चित्रा",              "Ma",  5,  1),   # मंगला
+    ("स्वाति",              "Ra",  6,  2),   # पिंगला
+    ("विशाखा",              "Ju",  6,  3),   # धान्या
+    ("अनुराधा",             "Sa",  7,  4),   # भ्रामरी
+    ("ज्येष्ठा",            "Me",  7,  5),   # भद्रिका
+    ("मूल",                 "Ke",  8,  6),   # उल्का
+    ("पूर्वाषाढ़ा",          "Ve",  8,  7),   # सिद्धा
+    ("उत्तराषाढ़ा",          "Su",  8,  0),   # संकटा
+    ("श्रवण",               "Mo",  9,  1),   # मंगला
+    ("धनिष्ठा",             "Ma",  9,  2),   # पिंगला
+    ("शतभिषा",              "Ra", 10,  3),   # धान्या
+    ("पूर्वा भाद्र/अश्विनी","Ju", 10,  4),   # भ्रामरी  ← clubbed
+    ("उत्तर भाद्र/भरणी",    "Sa", 11,  5),   # भद्रिका  ← clubbed
+    ("रेवती/कृत्तिका",      "Me", 11,  6),   # उल्का    ← clubbed
+    ("रोहिणी",              "Mo",  1,  7),   # सिद्धा
+    ("मृगशिरा",             "Ma",  2,  0),   # संकटा
+]
+
 AV_RULES = {
     "Su": {"Su":[1,2,4,7,8,9,10,11],"Mo":[3,6,10,11],"Ma":[1,2,4,7,8,9,10,11],"Me":[3,5,6,9,10,11,12],"Ju":[5,6,9,11],"Ve":[6,7,12],"Sa":[1,2,4,7,8,9,10,11],"La":[3,4,6,10,11,12]},
     "Mo": {"Su":[3,6,7,8,10,11],"Mo":[1,3,6,7,10,11],"Ma":[2,3,5,6,9,10,11],"Me":[1,3,4,5,7,8,10,11],"Ju":[1,4,7,8,10,11,12],"Ve":[3,4,5,7,9,10,11],"Sa":[3,5,6,11],"La":[3,6,10,11]},
@@ -1039,8 +1071,7 @@ def calculate_vimshottari(moon_degree, birth_date):
 def calculate_yogini_dasha(moon_degree, birth_date):
     """
     योगिनी दशा — 36 वर्ष का चक्र (5 स्तर: MD → AD → PD → SD → PrD)
-    सूत्र: पहली दशा = (नक्षत्र_संख्या + 3) % 8
-    Absolute-start trick: पहले 'virtual start' निकालो, फिर birth_date से filter करो।
+    VP Goyal revised table: हर MD के साथ नक्षत्र नाम + Star Lord भी।
     """
     nak_idx        = int(moon_degree / (360 / 27))
     nak_number     = nak_idx + 1
@@ -1050,20 +1081,54 @@ def calculate_yogini_dasha(moon_degree, birth_date):
     first_md_total_days = YOGINI_DASHAS[first_md_idx]["duration"] * 365.2425
     elapsed_days      = fraction_elapsed * first_md_total_days
 
-    # पहली महादशा का असली start — जन्म से पहले का वो दिन जब वह शुरू हुई थी
     absolute_start = birth_date - timedelta(days=elapsed_days)
+
+    # ── VP Goyal table में जन्म नक्षत्र की position ढूँढें ──────
+    # YOGINI_NAK_SEQUENCE में उस entry को खोजें जिसका yogini_idx == first_md_idx
+    # और जो जन्म नक्षत्र (nak_idx 0-26) से match करे
+    # Table में 24 entries हैं; हम birth nak को table position में map करते हैं
+    birth_nak_name = ["अश्विनी","भरणी","कृत्तिका","रोहिणी","मृगशिरा","आर्द्रा",
+                      "पुनर्वसु","पुष्य","अश्लेषा","मघा","पूर्वा फाल्गुनी","उत्तरा फाल्गुनी",
+                      "हस्त","चित्रा","स्वाति","विशाखा","अनुराधा","ज्येष्ठा",
+                      "मूल","पूर्वाषाढ़ा","उत्तराषाढ़ा","श्रवण","धनिष्ठा","शतभिषा",
+                      "पूर्वा भाद्रपद","उत्तरा भाद्रपद","रेवती"][nak_idx]
+
+    # Clubbing map: 27 नक्षत्र → 24 table entries
+    NAK_TO_TABLE = {
+        "आर्द्रा":0,"पुनर्वसु":1,"पुष्य":2,"अश्लेषा":3,"मघा":4,
+        "पूर्वा फाल्गुनी":5,"उत्तरा फाल्गुनी":6,"हस्त":7,"चित्रा":8,
+        "स्वाति":9,"विशाखा":10,"अनुराधा":11,"ज्येष्ठा":12,"मूल":13,
+        "पूर्वाषाढ़ा":14,"उत्तराषाढ़ा":15,"श्रवण":16,"धनिष्ठा":17,
+        "शतभिषा":18,
+        # clubbed nakshatras
+        "पूर्वा भाद्रपद":19,"अश्विनी":19,
+        "उत्तरा भाद्रपद":20,"भरणी":20,
+        "रेवती":21,"कृत्तिका":21,
+        "रोहिणी":22,"मृगशिरा":23,
+    }
+    table_start_pos = NAK_TO_TABLE.get(birth_nak_name, 0)
+
+    SIGN_NAMES = ["मेष","वृष","मिथुन","कर्क","सिंह","कन्या",
+                  "तुला","वृश्चिक","धनु","मकर","कुम्भ","मीन"]
 
     dashas       = []
     current_date = absolute_start
     current_md_idx = first_md_idx
+    nak_table_pos  = table_start_pos   # 24-entry table में current position
 
-    # 3 साइकिल (~108 वर्ष): 3 × 8 = 24 महादशाएँ (पर्याप्त जीवनकाल कवरेज)
     for cycle in range(3):
         for m in range(8):
             md_idx = (current_md_idx + m) % 8
             md     = YOGINI_DASHAS[md_idx]
             md_days = md["duration"] * 365.2425
             md_end  = current_date + timedelta(days=md_days)
+
+            # VP Goyal table से नक्षत्र info
+            nak_entry    = YOGINI_NAK_SEQUENCE[nak_table_pos % 24]
+            nak_name     = nak_entry[0]
+            star_lord    = nak_entry[1]
+            prog_lagna   = SIGN_NAMES[nak_entry[2]]
+            nak_table_pos += 1
 
             # --- अंतर्दशा (AD) ---
             antardashas = []
@@ -1137,18 +1202,22 @@ def calculate_yogini_dasha(moon_degree, birth_date):
 
             if md_end > birth_date:
                 dashas.append({
-                    "name":        md["name"],
-                    "planet":      md["planet"],
-                    "start":       max(current_date, birth_date).strftime("%d-%m-%Y"),
-                    "end":         md_end.strftime("%d-%m-%Y"),
+                    "name":           md["name"],
+                    "planet":         md["planet"],
+                    "start":          max(current_date, birth_date).strftime("%d-%m-%Y"),
+                    "end":            md_end.strftime("%d-%m-%Y"),
                     "duration_years": md["duration"],
-                    "idx":         md_idx,
-                    "antardashas": antardashas,
+                    "idx":            md_idx,
+                    "nakshatra":      nak_name,      # VP Goyal table नक्षत्र
+                    "star_lord":      star_lord,     # नक्षत्र स्वामी
+                    "prog_lagna":     prog_lagna,    # प्रोग्रेस्ड लग्न (राशि)
+                    "antardashas":    antardashas,
                 })
 
             current_date = md_end
 
-        current_md_idx = (current_md_idx + 8) % 8  # एक पूरा cycle बाद वही idx
+        current_md_idx = (current_md_idx + 8) % 8  # cycle end — idx same रहता है (8%8=0 bug fix)
+        # nak_table_pos अपने आप mod 24 से cycle करता है
 
     return dashas
 

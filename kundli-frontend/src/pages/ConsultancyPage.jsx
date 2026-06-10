@@ -11,6 +11,7 @@ const REVIEWS = [
   { id: 5, src: "/reviews/5.png", alt: "Success Story" },
   { id: 6, src: "/reviews/6.png", alt: "Success Story" },
   { id: 7, src: "/reviews/7.png", alt: "Success Story" },
+  { id: 8, src: "/reviews/8.png", alt: "Success Story" },
 ];
 
 export default function ConsultancyPage() {
