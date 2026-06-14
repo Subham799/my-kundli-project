@@ -10,18 +10,15 @@ const HOUSE_SIGNIFICANCES = {
   9: "भाग्य/धर्म", 10: "करियर/कर्म", 11: "आय/लाभ", 12: "व्यय/हानि"
 };
 
-// फिक्स ज्योतिषीय वैश्विक नियम: 0-इंडेक्स आधारित राशियों के स्वामी (0=मेष का Ma, 1=वृषभ का Ve, 2=मिथुन का Me...)
+// फिक्स ज्योतिषीय वैश्विक नियम: 0-इंडेक्स आधारित राशियों के स्वामी
 const RASHI_LORDS = ["Ma", "Ve", "Me", "Mo", "Su", "Me", "Ve", "Ma", "Ju", "Sa", "Sa", "Ju"];
 
 // ============================================================
 // SHASTRA POINTS — शास्त्र-निर्धारित बिंदु (हर भाव के लिए)
 // ============================================================
 const SHASTRA_POINTS = [25, 22, 29, 24, 25, 34, 19, 24, 29, 36, 54, 16];
-
-// त्रिक भाव (6, 8, 12) — Index: 5, 7, 11
 const TRIK_HOUSES = new Set([5, 7, 11]); // 0-indexed
 
-// Three Stages of Life (4-4 houses each)
 const STAGES = [
   { label: "बचपन (0–22 वर्ष)",    emoji: "🌱", houseRange: "भाव 1–4",   indices: [0,1,2,3] },
   { label: "कामकाजी (22–60 वर्ष)", emoji: "💼", houseRange: "भाव 5–8",   indices: [4,5,6,7] },
@@ -82,22 +79,14 @@ function ThreeStagesPanel({ houseAlignedSav }) {
           const isGood = total >= STAGE_AVG;
           const pct = Math.min(100, Math.round((total / (STAGE_AVG * 1.5)) * 100));
           return (
-            <motion.div
-              key={si}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: si * 0.1 }}
-              className={`rounded-xl p-3 border text-center ${
-                isGood ? "bg-emerald-900/20 border-emerald-500/35" : "bg-red-900/15 border-red-500/30"
-              }`}
+            <motion.div key={si} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: si * 0.1 }}
+              className={`rounded-xl p-3 border text-center ${isGood ? "bg-emerald-900/20 border-emerald-500/35" : "bg-red-900/15 border-red-500/30"}`}
             >
               <div className="text-lg mb-1">{stage.emoji}</div>
               <div className="text-[10px] font-bold text-slate-300 leading-tight mb-0.5" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{stage.label}</div>
               <div className="text-[9px] text-slate-500 mb-2" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{stage.houseRange}</div>
               <div className={`text-3xl font-black mb-1 ${isGood ? "text-emerald-400" : "text-red-400"}`} style={{ textShadow: isGood ? "0 0 12px #34d39980" : "0 0 12px #f8717180" }}>{total}</div>
-              <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mb-2 ${
-                isGood ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-red-500/15 text-red-300 border border-red-500/25"
-              }`} style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{isGood ? "✓ सुखी जीवन" : "⚡ संघर्ष"}</div>
+              <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mb-2 ${isGood ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-red-500/15 text-red-300 border border-red-500/25"}`} style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{isGood ? "✓ सुखी जीवन" : "⚡ संघर्ष"}</div>
               <div className="text-[9px] text-slate-600">{isGood ? `+${total - STAGE_AVG} अधिक` : `${total - STAGE_AVG} कम`}</div>
               <div className="h-1 rounded-full mt-2 overflow-hidden bg-slate-700/50">
                 <motion.div className="h-full rounded-full" style={{ background: isGood ? "#34D399" : "#F87171", boxShadow: isGood ? "0 0 6px #34D39960" : "0 0 6px #F8717160" }} initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.9, delay: 0.3 + si * 0.1 }} />
@@ -164,7 +153,7 @@ function NorthIndianAVChart({ title, pointsArray, total, isSav = false, lagnaSig
             const pos = TPOS[houseNum];
             const isTrik = TRIK_HOUSES.has(arrayIndex);
             
-            // [सुधार 3]: चक्र ग्रिड में त्रिक भावों (6,8,12) पर विशेष नारंगी (Orange) बॉर्डर संकेत मार्कर
+            // चक्र ग्रिड में त्रिक भावों (6,8,12) पर विशेष नारंगी (Orange) बॉर्डर
             const strokeColor = isTrik ? "#fb923c" : "rgba(245,158,11,0.1)";
             const strokeW = isTrik ? "1.5" : "0.5";
 
@@ -228,6 +217,10 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
   const [transitResult, setTransitResult] = useState(null);
   const [loadingTransit, setLoadingTransit] = useState(false);
   const [transitError, setTransitError] = useState("");
+  
+  // LIVE BACKEND DEBUGGING CONSOLE STATES
+  const [debugLog, setDebugLog] = useState([]);
+  const [showConsole, setShowConsole] = useState(false);
 
   // SAV: Lagna के अनुसार rotate करें
   const houseAlignedSav = sav.length === 12
@@ -242,7 +235,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
                  ed.ashtakvarga_complete?.bav || chartData?.bav ||
                  chartData?.ashtakavarga?.bav || null;
 
-  // BAV: raw rashi-indexed (बिल्कुल rotate नहीं करना)
+  // BAV: raw rashi-indexed
   const bavByHouse = {};
   const bavTotals = {};
   if (rawBav) {
@@ -252,9 +245,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
     });
   }
 
-  // ------------------------------------------------------------
-  // BIRTH BASE SAV का प्रामाणिक डायनामिक जोड़ (7-ग्रह नियम)
-  // ------------------------------------------------------------
+  // BIRTH BASE SAV का प्रामाणिक जोड़ (7-ग्रह नियम)
   let birthBaseSavScore = 0;
   if (sav.length === 12 && chartData?.planets) {
     PLANET_KEYS.forEach(p => {
@@ -266,7 +257,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
     });
   }
 
-  // 🎯 [लॉजिक सुधार]: जन्म कुंडली के वास्तविक लग्न के अनुसार ग्रहों के स्वामित्व (Lordship) की लाइव गणना
+  // जन्म कुंडली के वास्तविक लग्न के अनुसार ग्रहों के स्वामित्व (Lordship) की लाइव गणना
   const getPlanetLordships = (planetKey) => {
     const ownedHouses = [];
     for (let bhava = 1; bhava <= 12; bhava++) {
@@ -287,25 +278,49 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
     }
     setLoadingTransit(true);
     setTransitError("");
+    
+    const targetUrl = '/api/monthly_transit_bav';
+    const requestPayload = { transit_date: transitDate, base_bav: rawBav };
+    
+    const logs = [];
+    logs.push(`[${new Date().toLocaleTimeString()}] 🚀 Initiating transit calculation...`);
+    logs.push(`[URL]: POST ${targetUrl}`);
+    logs.push(`[Payload]: ${JSON.stringify(requestPayload)}`);
+    setDebugLog(logs);
+
     try {
-      const response = await fetch('/api/monthly_transit_bav', {
+      const response = await fetch(targetUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transit_date: transitDate,
-          base_bav: rawBav
-        })
+        body: JSON.stringify(requestPayload)
       });
+      
+      logs.push(`[Response Status]: ${response.status} ${response.statusText}`);
+
+      if (response.status === 405) {
+        logs.push(`[❌ ERROR 405]: Method Not Allowed. Online router blocking POST/OPTIONS.`);
+        setTransitError("ऑनलाइन सर्वर ने सुरक्षा कारणों (CORS/405) से इस अनुरोध को ब्लॉक कर दिया है। कृपया डिबग कंसोल देखें।");
+        setTransitResult(null);
+        setDebugLog([...logs]);
+        return;
+      }
+
       const resData = await response.json();
+      logs.push(`[Data Received]: ${JSON.stringify(resData)}`);
+
       if (resData.success) {
+        logs.push(`[✅ SUCCESS]: Transit calculated successfully using Solar Ingress!`);
         setTransitResult(resData);
       } else {
+        logs.push(`[⚠️ SERVER ERROR]: ${resData.error || "Unknown server fault."}`);
         setTransitError(resData.error || "गणना करने में विफल।");
       }
     } catch (err) {
-      setTransitError("सर्वर से कनेक्ट करने में त्रुटि आई।");
+      logs.push(`[❌ NETWORK CRASH]: Failed to hit server endpoint. Exception: ${err.message}`);
+      setTransitError("सर्वर से कनेक्ट करने में नेटवर्क त्रुटि आई।");
     } finally {
       setLoadingTransit(false);
+      setDebugLog([...logs]);
     }
   };
 
@@ -326,7 +341,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
             </h3>
             <p className="text-[10px] text-slate-500">गोचर ग्रहों की लाइव स्थिति का जन्म कुंडली (D1-D9-D10) के SAV और BAV से सीधा मिलान</p>
           </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
             <input 
               type="date" 
               value={transitDate}
@@ -338,13 +353,48 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
               whileTap={{ scale: 0.98 }}
               onClick={handleCalculateTransit}
               disabled={loadingTransit}
-              className="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-xs font-bold px-4 py-1.5 rounded-xl transition-all whitespace-nowrap disabled:opacity-50"
+              className="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-xs font-bold px-4 py-1.5 rounded-xl disabled:opacity-50"
               style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}
             >
               {loadingTransit ? "गणना जारी..." : "गोचर जाँचें"}
             </motion.button>
+            
+            {/* 🛠️ डिबग कंसोल टॉगल बटन */}
+            <button 
+              onClick={() => setShowConsole(!showConsole)}
+              className="text-[10px] px-2 py-1.5 rounded bg-slate-800 text-slate-400 border border-slate-700 hover:text-white"
+            >
+              {showConsole ? "Hide Console ✕" : "🔍 Open Debug Console"}
+            </button>
           </div>
         </div>
+
+        {/* 📟 LIVE BACKEND DEBUGGING CONSOLE PANEL */}
+        {showConsole && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="mb-4 p-3 rounded-xl bg-slate-950 border border-slate-800 font-mono text-[10px] leading-relaxed text-slate-300"
+          >
+            <div className="flex justify-between items-center text-slate-500 pb-1 mb-2 border-b border-slate-900">
+              <span>🖥️ LIVE API TRACE CONSOLE (Vercel & Local Sync)</span>
+              <button onClick={() => setDebugLog([])} className="hover:text-red-400">Clear Logs 🗑️</button>
+            </div>
+            <div className="max-h-[180px] overflow-y-auto flex flex-col gap-1">
+              {debugLog.length === 0 ? (
+                <span className="text-slate-600 italic">No logs generated yet. Click "गोचर जाँचें" to trace request packets...</span>
+              ) : (
+                debugLog.map((log, idx) => {
+                  let logColor = "text-slate-400";
+                  if (log.includes("❌") || log.includes("405")) logColor = "text-rose-400 font-bold";
+                  if (log.includes("✅")) logColor = "text-emerald-400 font-bold";
+                  if (log.includes("[Payload]")) logColor = "text-cyan-400/70";
+                  return <div key={idx} className={logColor}>{log}</div>;
+                })
+              )}
+            </div>
+          </motion.div>
+        )}
 
         {transitError && (
           <div className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 p-2.5 rounded-xl mb-2">
@@ -352,7 +402,6 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
           </div>
         )}
 
-        {/* सूर्य के राशि संक्रांति प्रवेश क्षण का डायनामिक लाइव अलर्ट बॉक्स */}
         {transitResult?.exact_ingress_time && (
           <div className="mb-3 text-[10px] bg-cyan-950/40 border border-cyan-800/40 text-cyan-300 px-3 py-1.5 rounded-xl">
             ☀️ <strong>सूर्य प्रवेश क्षण (Exact Ingress):</strong> इस महीने सूर्य का 0° संक्रांति प्रवेश <strong>{transitResult.exact_ingress_time}</strong> पर हुआ है। संपूर्ण कुंडली विश्लेषण इसी क्षण का है।
@@ -382,7 +431,6 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
                 </div>
               </div>
 
-              {/* सातों ग्रहों के गोचर स्थान के SAV का जोड़ बनाम जन्म बेस जोड़ */}
               {(() => {
                 let currentTransitSavTotal = 0;
                 transitResult.transit_details.forEach(pt => {
@@ -437,7 +485,6 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
                     const d10Bav = (d10Idx !== null && bavByHouse[pk]) ? bavByHouse[pk][d10Idx] : "-";
                     const currentGocharSav = sav[transitSign] || 0;
 
-                    // वास्तविक लग्न के रोटेशन के आधार पर भाव स्वामित्व विवरण लोड करना
                     const lords = getPlanetLordships(pk);
                     const lordshipText = lords.length > 0 ? lords.map(h => `भाव ${h} (${HOUSE_SIGNIFICANCES[h]})`).join(" व ") : "कोई विशेष नहीं";
 
@@ -459,7 +506,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
                           ) : ptDetail.is_caution ? (
                             <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-300 font-bold border border-red-500/30">⚠️ कमजोर/पीड़ा योग → {lordshipText} के फलों में रुकावट या कष्ट की चेतावनी।</span>
                           ) : (
-                            <span className="text-slate-400">सामान्य प्रभाव ({lordshipText})</span>
+                            <span className="text-slate-500">सामान्य प्रभाव ({lordshipText})</span>
                           )}
                         </td>
                       </tr>
@@ -472,9 +519,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
         )}
       </div>
 
-      {/* ============================================================ */}
-      {/* === SAV 12 CARDS GRID ===================================== */}
-      {/* ============================================================ */}
+      {/* SAV 12 CARDS GRID */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -493,13 +538,11 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
         <div className="grid grid-cols-3 gap-2.5">
           {houseAlignedSav.map((av, i) => {
             const hNum = i + 1;
-            const h = houses.find(x => x.num === hNum) || {};
             const target = SHASTRA_POINTS[i];
             const c = getSavColor(av, i);
             const pct = Math.min(100, Math.round((av / Math.max(target * 1.5, 1)) * 100));
             const isMax = av === maxAV;
             const isTrik = TRIK_HOUSES.has(i);
-            const isSpecial8 = i === 7 && av >= 40;
 
             return (
               <motion.div key={i}
@@ -537,24 +580,17 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
                   {av}
                 </div>
 
-                {/* Shastra target badge */}
                 <div className="flex items-center gap-1 mb-1">
                   <span className="text-[9px] text-slate-600" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
                     लक्ष्य:
                   </span>
                   <span className="text-[9px] font-bold" style={{color: c.bar}}>{target}</span>
-                  {isSpecial8 && (
-                    <span className="text-[8px] text-purple-300 ml-1" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
-                      दीर्घायु ✦
-                    </span>
-                  )}
                 </div>
 
                 <div className="text-[9px] text-slate-600 mb-1.5" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
-                  {h.signHindi || RASHIS[(lagnaSignIdx + i) % 12]}
+                  {RASHIS[(lagnaSignIdx + i) % 12]}
                 </div>
 
-                {/* Status label */}
                 <div className="text-[8px] font-bold mb-1.5 px-1.5 py-0.5 rounded-full inline-block"
                   style={{background: c.bg, color: c.text, border:`1px solid ${c.border}`, fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
                   {c.label}
@@ -571,9 +607,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
         </div>
       </div>
 
-      {/* ============================================================ */}
-      {/* === D1 BAV TABLE =========================================== */}
-      {/* ============================================================ */}
+      {/* D1 BAV TABLE */}
       {rawBav && (
         <div className="border-t border-slate-700/50 pt-6">
           <div className="mb-3">
@@ -658,9 +692,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* === D9 BAV TABLE =========================================== */}
-      {/* ============================================================ */}
+      {/* D9 BAV TABLE */}
       {rawBav && chartData?.planets && (
         <div className="border-t border-slate-700/50 pt-6">
           <div className="mb-3">
@@ -732,9 +764,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* === D10 BAV TABLE ========================================== */}
-      {/* ============================================================ */}
+      {/* D10 BAV TABLE */}
       {rawBav && chartData?.planets && (
         <div className="border-t border-slate-700/50 pt-6">
           <div className="mb-3">
@@ -806,9 +836,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* === NORTH INDIAN SVG CHARTS ================================ */}
-      {/* ============================================================ */}
+      {/* NORTH INDIAN SVG CHARTS */}
       <div className="mt-4 pt-6 border-t border-slate-700/50">
         <div className="mb-4 text-center">
           <h3 className="text-lg font-bold text-amber-400" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
@@ -851,9 +879,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
         )}
       </div>
 
-      {/* ============================================================ */}
-      {/* === V.P. GOEL MAGIC ======================================== */}
-      {/* ============================================================ */}
+      {/* V.P. GOEL MAGIC */}
       {chartData?.planets && rawBav && sav.length >= 12 && (() => {
         const RASHIS_H = ["मेष","वृषभ","मिथुन","कर्क","सिंह","कन्या","तुला","वृश्चिक","धनु","मकर","कुंभ","मीन"];
         const getVal = (vargaObj, p) => {
@@ -904,7 +930,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
           <div className="mt-8 pt-6 border-t border-slate-700/50">
             <div className="mb-5">
               <h3 className="text-lg font-bold text-amber-400" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
-                 वर्ग कुंडलियों पर अष्टकवर्ग का जादू (V.P. Goel Rule)
+                वर्ग कुंडलियों पर अष्टकवर्ग का जादू (V.P. Goel Rule)
               </h3>
               <p className="text-xs text-slate-400 mt-1">D1 (बेस) की तुलना में D9 और D10 के बिंदु</p>
             </div>
@@ -992,7 +1018,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
                     </td>
                     <td className="p-2 border-r border-slate-700 text-right text-indigo-400 bg-indigo-900/30 text-[10px]">D10 योग:</td>
                     <td className="p-2 bg-indigo-900/30">
-                      <span className={`text-[13px] ${t.d10Bav>t.d1Bav?'text-indigo-400':'text-amber-500'}`}>{t.d10Bav} {t.d10Bav>t.d1Sav?"🚀":""}</span>
+                      <span className={`text-[13px] ${t.d10Bav>t.d1Bav?'text-indigo-400':'text-amber-500'}`}>{t.d10Bav} {t.d10Bav>t.d1Bav?"🚀":""}</span>
                     </td>
                   </tr>
                 </tbody>

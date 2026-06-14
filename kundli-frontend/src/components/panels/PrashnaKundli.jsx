@@ -1242,7 +1242,7 @@ if (result.house_analysis?.length) {
       {/* DBA */}
       <DbaCard result={result} />
       {/* House Analysis */}
-      <HouseAnalysisCard result={result} />
+      {/* <HouseAnalysisCard result={result} /> */}
 
       {/* CSL Table */}
       <div style={{ background: "#1e293b", borderRadius: 12, padding: "16px", border: "1px solid #334155" }}>
@@ -1680,49 +1680,54 @@ export default function PrashnaKundli() {
             </div>
           </div>
 
-          {/* Dial + Lagna Info — always visible */}
-          <div style={styles.topRow}>
-            <div style={styles.dialCard}>
-              <div style={styles.cardTitle}>कक्षा चक्र</div>
-              <KakshaDial
-                allKaksha={result.all_kaksha}
-                activeKaksha={result.kaksha}
-                lagnaDeg={result.lagna_degree_in_sign}
-              />
-            </div>
+          {/* 🔴 FIX: यहाँ से Dial, Lagna Info और Kaksha Banner को Wrap किया गया है ताकि KP Mode में छुप जाएं */}
+          {mode !== "kp_engine" && (
+            <>
+              {/* Dial + Lagna Info */}
+              <div style={styles.topRow}>
+                <div style={styles.dialCard}>
+                  <div style={styles.cardTitle}>कक्षा चक्र</div>
+                  <KakshaDial
+                    allKaksha={result.all_kaksha}
+                    activeKaksha={result.kaksha}
+                    lagnaDeg={result.lagna_degree_in_sign}
+                  />
+                </div>
 
-            <div style={{ flex: 1 }}>
-              <div style={styles.infoCard}>
-                <div style={styles.infoLabel}>⬡ प्रश्न लग्न राशि</div>
-                <div style={styles.infoBig}>{result.lagna_rashi_name}</div>
-                <div style={styles.infoSub}>राशि क्रमांक: {result.lagna_rashi + 1}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={styles.infoCard}>
+                    <div style={styles.infoLabel}>⬡ प्रश्न लग्न राशि</div>
+                    <div style={styles.infoBig}>{result.lagna_rashi_name}</div>
+                    <div style={styles.infoSub}>राशि क्रमांक: {result.lagna_rashi + 1}</div>
+                  </div>
+                  <div style={styles.infoCard}>
+                    <div style={styles.infoLabel}>📐 लग्न डिग्री</div>
+                    <div style={styles.infoBig}>{result.lagna_degree_in_sign.toFixed(2)}°</div>
+                    <div style={styles.infoSub}>राशि में डिग्री (0–30°)</div>
+                  </div>
+                  <div style={styles.infoCard}>
+                    <div style={styles.infoLabel}>⭐ नक्षत्र</div>
+                    <div style={styles.infoBig}>{result.nakshatra}</div>
+                    <div style={styles.infoSub}>स्वामी: {result.nakshatra_lord}</div>
+                  </div>
+                </div>
               </div>
-              <div style={styles.infoCard}>
-                <div style={styles.infoLabel}>📐 लग्न डिग्री</div>
-                <div style={styles.infoBig}>{result.lagna_degree_in_sign.toFixed(2)}°</div>
-                <div style={styles.infoSub}>राशि में डिग्री (0–30°)</div>
-              </div>
-              <div style={styles.infoCard}>
-                <div style={styles.infoLabel}>⭐ नक्षत्र</div>
-                <div style={styles.infoBig}>{result.nakshatra}</div>
-                <div style={styles.infoSub}>स्वामी: {result.nakshatra_lord}</div>
-              </div>
-            </div>
-          </div>
 
-          {/* Kaksha Banner — always visible */}
-          <div style={{
-            ...styles.kakshaBanner,
-            borderColor: PLANET_COLORS[result.kaksha_lord] || "#f59e0b",
-            background: (PLANET_COLORS[result.kaksha_lord] || "#f59e0b") + "18",
-          }}>
-            <div style={styles.kakshaLabel}>सक्रिय कक्षा</div>
-            <div style={styles.kakshaNum}>{result.kaksha}</div>
-            <div style={{ color: PLANET_COLORS[result.kaksha_lord] || "#f59e0b", fontSize: 15, fontWeight: 600 }}>
-              स्वामी: {result.kaksha_lord}
-            </div>
-            <div style={styles.kakshaVishay}>{result.kaksha_vishay}</div>
-          </div>
+              {/* Kaksha Banner */}
+              <div style={{
+                ...styles.kakshaBanner,
+                borderColor: PLANET_COLORS[result.kaksha_lord] || "#f59e0b",
+                background: (PLANET_COLORS[result.kaksha_lord] || "#f59e0b") + "18",
+              }}>
+                <div style={styles.kakshaLabel}>सक्रिय कक्षा</div>
+                <div style={styles.kakshaNum}>{result.kaksha}</div>
+                <div style={{ color: PLANET_COLORS[result.kaksha_lord] || "#f59e0b", fontSize: 15, fontWeight: 600 }}>
+                  स्वामी: {result.kaksha_lord}
+                </div>
+                <div style={styles.kakshaVishay}>{result.kaksha_vishay}</div>
+              </div>
+            </>
+          )}
 
           {/* ── मन की बात — only when mode === "kaksha" ─────────────────── */}
           {mode === "kaksha" && (
@@ -1734,56 +1739,61 @@ export default function PrashnaKundli() {
               </div>
             </div>
           )}
+
+          {/* ── KP Engine Mode ──────────────────────────────────────────── */}
           {mode === "kp_engine" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
               <KpTables result={result} />
-              <GocharTable result={result} />
+              {/* <GocharTable result={result} /> */}
             </div>
           )}
+
           {/* ── खोई वस्तु — only when mode === "lost" ───────────────────── */}
           {mode === "lost" && (
             <LostItemSection lostItem={result?.lost_item} result={result} />
           )}
+
           {/* Gochar Table — Kaksha aur Lost mode mein bhi dikhao */}
           {mode !== "kp_engine" && <GocharTable result={result} />}
 
-          {/* All Kaksha Table */}
-          <div style={styles.card}>
-            <div style={styles.cardTitle}>📊 सभी 8 कक्षाएं</div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    {["कक्षा", "स्वामी", "डिग्री (राशि में)", "विषय"].map((h) => (
-                      <th key={h} style={styles.th}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.all_kaksha.map((k) => (
-                    <tr key={k.kaksha} style={{
-                      background: k.active ? (PLANET_COLORS[k.lord] || "#f59e0b") + "22" : "transparent",
-                      fontWeight: k.active ? "bold" : "normal",
-                    }}>
-                      <td style={styles.td}>{k.active ? "▶ " : ""}{k.kaksha}</td>
-                      <td style={{ ...styles.td, color: PLANET_COLORS[k.lord] || "#94a3b8" }}>
-                        {k.lord}
-                      </td>
-                      <td style={styles.td}>{k.start_deg}° – {k.end_deg}°</td>
-                      <td style={styles.td}>{k.vishay}</td>
+          {/* 🔴 FIX: All Kaksha Table को Wrap किया गया है ताकि KP Mode में छुप जाए */}
+          {mode !== "kp_engine" && (
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>📊 सभी 8 कक्षाएं</div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      {["कक्षा", "स्वामी", "डिग्री (राशि में)", "विषय"].map((h) => (
+                        <th key={h} style={styles.th}>{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {result.all_kaksha.map((k) => (
+                      <tr key={k.kaksha} style={{
+                        background: k.active ? (PLANET_COLORS[k.lord] || "#f59e0b") + "22" : "transparent",
+                        fontWeight: k.active ? "bold" : "normal",
+                      }}>
+                        <td style={styles.td}>{k.active ? "▶ " : ""}{k.kaksha}</td>
+                        <td style={{ ...styles.td, color: PLANET_COLORS[k.lord] || "#94a3b8" }}>
+                          {k.lord}
+                        </td>
+                        <td style={styles.td}>{k.start_deg}° – {k.end_deg}°</td>
+                        <td style={styles.td}>{k.vishay}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
 
         </div>
       )}
     </div>
   );
 }
-
 // ── Styles ──────────────────────────────────────────────────────────────────
 const styles = {
   page: {

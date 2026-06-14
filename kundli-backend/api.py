@@ -1057,14 +1057,17 @@ def calculate_sav(data):
 def calculate_vimshottari(moon_degree, birth_date):
     nak_idx = int(moon_degree / (360/27)); lord_idx = nak_idx % 9
     fraction_remaining = 1.0 - (moon_degree % (360/27)) / (360/27)
+    fraction_elapsed = 1.0 - fraction_remaining  # <-- नया
     current_date = birth_date; dashas = []
     first_end = current_date + timedelta(days=fraction_remaining * DASHA_YEARS[lord_idx] * 360.0)
-    dashas.append({"planet":DASHA_LORDS[lord_idx],"start":current_date.strftime("%d-%m-%Y"),"end":first_end.strftime("%d-%m-%Y"),"idx":lord_idx})
+    absolute_start = current_date - timedelta(days=fraction_elapsed * DASHA_YEARS[lord_idx] * 360.0) # <-- नया
+    dashas.append({"planet":DASHA_LORDS[lord_idx],"start":current_date.strftime("%d-%m-%Y"),"end":first_end.strftime("%d-%m-%Y"),"idx":lord_idx,"absolute_start": absolute_start.strftime("%d-%m-%Y")})
     current_date = first_end
     for i in range(1, 9):
         idx = (lord_idx + i) % 9
         end  = current_date + timedelta(days=DASHA_YEARS[idx] * 360.0)
-        dashas.append({"planet":DASHA_LORDS[idx],"start":current_date.strftime("%d-%m-%Y"),"end":end.strftime("%d-%m-%Y"),"idx":idx})
+        dashas.append({"planet":DASHA_LORDS[idx],"start":current_date.strftime("%d-%m-%Y"),"absolute_start": current_date.strftime("%d-%m-%Y"),
+                       "end":end.strftime("%d-%m-%Y"),"idx":idx})
         current_date = end
     return dashas
 
@@ -1534,7 +1537,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         if datetime.strptime(d['start'], "%d-%m-%Y") <= now < datetime.strptime(d['end'], "%d-%m-%Y"):
             current_md = d; break
 
-    current_ads = get_antardashas(current_md['idx'], current_md['start'])
+    current_ads = get_antardashas(current_md['idx'], current_md.get('absolute_start', current_md['start']))
     current_ad  = current_ads[0]
     for ad in current_ads:
         ad['is_current'] = datetime.strptime(ad['start'], "%d-%m-%Y") <= now < datetime.strptime(ad['end'], "%d-%m-%Y")
@@ -1832,51 +1835,74 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         md_code = PLANET_CODE_MAP.get(d["planet"], "")
         md_nak_idx = planet_nak_indices.get(md_code, 0)
         
-        # महादशा का तारा (चंद्र से)
         md_tara_moon = get_tara_name(moon_nak_idx, md_nak_idx)
 
-        ads_raw = get_antardashas(d["idx"], d["start"])
+        # Absolute start for antardashas loop
+        ads_raw = get_antardashas(d["idx"], d.get("absolute_start", d["start"]))
         antardashas = []
         
         for ad in ads_raw:
+            # 1. Skip if Antardasha ended before/on birth
+            ad_end_dt = datetime.strptime(ad["end"], "%d-%m-%Y")
+            if ad_end_dt <= dt:
+                continue
+                
+            # 2. Cap start date to Birth Date if it started before birth
+            ad_start_dt = datetime.strptime(ad["start"], "%d-%m-%Y")
+            display_ad_start = dt if ad_start_dt < dt else ad_start_dt
+            
             ad_code = PLANET_CODE_MAP.get(ad["planet"], "")
             ad_nak_idx = planet_nak_indices.get(ad_code, 0)
-            
-            # अंतर्दशा का तारा
             ad_tara_moon = get_tara_name(moon_nak_idx, ad_nak_idx)
             ad_tara_lord = get_tara_name(md_nak_idx, ad_nak_idx)
             
-            pds_raw = get_pratyantardashas(d["idx"], ad["idx"], ad["start"])
+            pds_raw = get_pratyantardashas(d["idx"], ad["idx"], ad["start"]) # Math uses original raw start
             pd_list = []
             
             for pd in pds_raw:
+                # Skip/Cap PD
+                pd_end_dt = datetime.strptime(pd["end"], "%d-%m-%Y")
+                if pd_end_dt <= dt:
+                    continue
+                pd_start_dt = datetime.strptime(pd["start"], "%d-%m-%Y")
+                display_pd_start = dt if pd_start_dt < dt else pd_start_dt
+
                 pd_code = PLANET_CODE_MAP.get(pd["planet"], "")
                 pd_nak_idx = planet_nak_indices.get(pd_code, 0)
-                
-                # प्रत्यंतर तारा
                 pd_tara_moon = get_tara_name(moon_nak_idx, pd_nak_idx)
                 pd_tara_lord = get_tara_name(ad_nak_idx, pd_nak_idx)
                 
                 sd_list = []
-                # Performance lock: Only compute SD/PR for the user's current Mahadasha
                 if is_active_md:
                     sds_raw = get_sookshmadashas(pd["duration_days"], pd["idx"], pd["start"])
                     for sd in sds_raw:
+                        # Skip/Cap SD
+                        sd_end_dt = datetime.strptime(sd["end"], "%d-%m-%Y")
+                        if sd_end_dt <= dt:
+                            continue
+                        sd_start_dt = datetime.strptime(sd["start"], "%d-%m-%Y")
+                        display_sd_start = dt if sd_start_dt < dt else sd_start_dt
+
                         sd_code = PLANET_CODE_MAP.get(sd["lord"], "")
                         sd_nak_idx = planet_nak_indices.get(sd_code, 0)
-                        
-                        # सूक्ष्म तारा
                         sd_tara_moon = get_tara_name(moon_nak_idx, sd_nak_idx)
                         sd_tara_lord = get_tara_name(pd_nak_idx, sd_nak_idx)
 
                         prs_raw = get_pranadashas(sd["duration_days"], sd["idx"], sd["start"])
                         pr_list = []
                         for pr in prs_raw:
+                            # Skip/Cap PrD
+                            pr_end_dt = datetime.strptime(pr["end"], "%d-%m-%Y")
+                            if pr_end_dt <= dt:
+                                continue
+                            pr_start_dt = datetime.strptime(pr["start"], "%d-%m-%Y")
+                            display_pr_start = dt if pr_start_dt < dt else pr_start_dt
+
                             pr_code = PLANET_CODE_MAP.get(pr["lord"], "")
                             pr_nak_idx = planet_nak_indices.get(pr_code, 0)
                             pr_list.append({
                                 "lord": pr["lord"],
-                                "start": pr["start"],
+                                "start": display_pr_start.strftime("%d-%m-%Y"),
                                 "end": pr["end"],
                                 "taraMoon": get_tara_name(moon_nak_idx, pr_nak_idx),
                                 "taraLord": get_tara_name(sd_nak_idx, pr_nak_idx)
@@ -1884,7 +1910,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
 
                         sd_list.append({
                             "lord": sd["lord"],
-                            "start": sd["start"],
+                            "start": display_sd_start.strftime("%d-%m-%Y"),
                             "end": sd["end"],
                             "taraMoon": sd_tara_moon,
                             "taraLord": sd_tara_lord,
@@ -1893,7 +1919,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
                 
                 pd_list.append({
                     "lord": pd["planet"],
-                    "start": pd["start"],
+                    "start": display_pd_start.strftime("%d-%m-%Y"),
                     "end": pd["end"],
                     "taraMoon": pd_tara_moon,
                     "taraLord": pd_tara_lord,
@@ -1902,7 +1928,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
                 
             antardashas.append({
                 "lord": ad["planet"],
-                "start": ad["start"],
+                "start": display_ad_start.strftime("%d-%m-%Y"),
                 "end": ad["end"],
                 "taraMoon": ad_tara_moon,
                 "taraLord": ad_tara_lord,
@@ -1920,7 +1946,6 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             "taraMoon": md_tara_moon,
             "antardashas": antardashas
         })
-
     # ── Drishti for React ─────────────────────────────────────────
     drishti_out = {}
     for p_code, dm_data in jyotish_evaluation.get("drishti_matrix", {}).items():
@@ -2286,14 +2311,15 @@ def find_exact_sun_ingress(year, month, day):
         
     return exact_jd
 
+
+# 🌟 ध्यान दें: 'POST' के साथ 'OPTIONS' होना अनिवार्य है और मेथड्स कैपिटल में होने चाहिए
 @app.route('/api/monthly_transit_bav', methods=['POST', 'OPTIONS'])
 def api_monthly_transit_bav():
     """
-    V.P. Goel जी के असली सॉफ्टवेयर स्तर का गोचर:
-    1. सूर्य के 0 डिग्री राशि प्रवेश (Exact Sun Ingress) के सटीक समय पर गोचर गणना।
-    2. थ्रेशोल्ड लक्ष्य = 25 बिंदु (भिन्नाष्टक)।
+    V.P. Goel जी के प्रामाणिक अष्टकवर्ग गोचर विधा पर आधारित एंडपॉइंट।
     """
-    # 🌟 वेंडर/क्लाउड सर्वर्स (Vercel/Render) पर 405 और CORS एरर रोकने के लिए OPTIONS प्री-फ्लाइट को मैन्युअली हैंडल करें
+    
+    # 🌟 [CRITICAL FIX]: ऑनलाइन (Vercel/Render) पर 405 एरर को रोकने के लिए प्री-फ्लाइट रिक्वेस्ट का जवाब मैन्युअली दें
     if request.method == 'OPTIONS':
         response = jsonify({"success": True})
         response.headers.add('Access-Control-Allow-Origin', '*')
@@ -2317,6 +2343,7 @@ def api_monthly_transit_bav():
         except ValueError:
             return jsonify({"success": False, "error": "तारीख का फॉर्मेट YYYY-MM-DD होना चाहिए।"}), 400
 
+        # सूर्य का प्रवेश क्षण निकालें
         ingress_jd = find_exact_sun_ingress(input_dt.year, input_dt.month, input_dt.day)
         
         greg_time = swe.revjul(ingress_jd)
@@ -2358,7 +2385,7 @@ def api_monthly_transit_bav():
         bav_threshold = 25
         is_bav_auspicious = total_bav_transit_points >= bav_threshold
 
-        # 🌟 क्लाउड रिस्पॉन्स में CORS हेडर्स जोड़ें
+        # 🌟 लाइव प्रोडक्शन सर्वर के लिए JSON बनाते समय CORS ऑरिजिन को स्पष्ट रूप से इंजेक्ट करें
         res = jsonify({
             "success": True,
             "is_auspicious": is_bav_auspicious,
@@ -2373,7 +2400,10 @@ def api_monthly_transit_bav():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        # एरर ब्लॉक में भी CORS सुनिश्चित करें ताकि क्रैश होने पर भी 405 न आए
+        err_res = jsonify({"success": False, "error": str(e)})
+        err_res.headers.add('Access-Control-Allow-Origin', '*')
+        return err_res, 500
 
 # ── MAIN API ENDPOINT ────────────────────────────────────────────────────
 # api.py में अन्य @app.route के साथ इसे जोड़ें
@@ -2509,18 +2539,37 @@ def api_chart_engines():
                                     "Ju":"गुरु","Ve":"शुक्र","Sa":"शनि","Ra":"राहु","Ke":"केतु"}.items()}
         _dasha_seq_full = []
         for _d in dashas:
-            _ads_raw = get_antardashas(_d["idx"], _d["start"])
+            _ads_raw = get_antardashas(_d["idx"], _d.get("absolute_start", _d["start"]))
             _antardashas = []
             for _ad in _ads_raw:
+                # Skip/Cap AD
+                _ad_end_dt = datetime.strptime(_ad["end"], "%d-%m-%Y")
+                if _ad_end_dt <= dt: continue
+                
+                _ad_start_dt = datetime.strptime(_ad["start"], "%d-%m-%Y")
+                _disp_ad_start = dt if _ad_start_dt < dt else _ad_start_dt
+
                 _pds_raw = get_pratyantardashas(_d["idx"], _ad["idx"], _ad["start"])
+                _pd_list = []
+                for _pd in _pds_raw:
+                    # Skip/Cap PD
+                    _pd_end_dt = datetime.strptime(_pd["end"], "%d-%m-%Y")
+                    if _pd_end_dt <= dt: continue
+                    
+                    _pd_start_dt = datetime.strptime(_pd["start"], "%d-%m-%Y")
+                    _disp_pd_start = dt if _pd_start_dt < dt else _pd_start_dt
+                    
+                    _pd_list.append({
+                        "lord": _pd["planet"], 
+                        "start": _disp_pd_start.strftime("%d-%m-%Y"), 
+                        "end": _pd["end"]
+                    })
+
                 _antardashas.append({
                     "lord":  _ad["planet"],
-                    "start": _ad["start"],
+                    "start": _disp_ad_start.strftime("%d-%m-%Y"),
                     "end":   _ad["end"],
-                    "pratyantardashas": [
-                        {"lord": _pd["planet"], "start": _pd["start"], "end": _pd["end"]}
-                        for _pd in _pds_raw
-                    ],
+                    "pratyantardashas": _pd_list,
                 })
             _dasha_seq_full.append({
                 "lord":        _d["planet"],
