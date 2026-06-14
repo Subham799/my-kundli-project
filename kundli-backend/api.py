@@ -1293,6 +1293,16 @@ def get_dignity(planet, sign_idx):
     if lord in RELATIONSHIPS[planet]["Enemies"]: return "⚔️ शत्रु (Enemy)"
     return "😐 सम (Neutral)"
 
+# --- तारा मिलान (Tara Chakra) Helper ---
+TARA_NAMES = ["जन्म", "सम्पत", "विपत", "क्षेम", "प्रत्यरि", "साधक", "वध", "मित्र", "अतिमित्र"]
+
+def get_tara_name(from_nak_idx, to_nak_idx):
+    """
+    0-based नक्षत्र इंडेक्स लेता है और तारा का नाम लौटाता है।
+    """
+    tara_idx = (to_nak_idx - from_nak_idx) % 9
+    return TARA_NAMES[tara_idx]
+
 def get_all_dashas_for_year(moon_degree, birth_date, target_year):
     nak_idx = int(moon_degree/(360/27)); lord_idx = nak_idx % 9
     fraction_remaining = 1.0 - (moon_degree%(360/27))/(360/27)
@@ -1799,7 +1809,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             "vargas":         p.get("Vargas", {}),
         }
 
-    # ── Dasha response ─────────────────────────────────────────────
+   # ── Dasha response ─────────────────────────────────────────────
     md_start = datetime.strptime(current_md['start'], "%d-%m-%Y")
     md_end   = datetime.strptime(current_md['end'],   "%d-%m-%Y")
     md_total = (md_end - md_start).days
@@ -1807,35 +1817,86 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
     md_pct   = int(min(100, (md_done / md_total * 100))) if md_total > 0 else 0
 
     PLANET_CODE_MAP = {v:k for k,v in {"Su":"सूर्य","Mo":"चंद्र","Ma":"मंगल","Me":"बुध","Ju":"गुरु","Ve":"शुक्र","Sa":"शनि","Ra":"राहु","Ke":"केतु"}.items()}
+    
+    # 🌟 OPTIMIZATION: astro से एक ही बार नक्षत्र निकाल कर डिक्शनरी में रख लें
+    planet_nak_indices = {}
+    for p_code in ["Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa", "Ra", "Ke"]:
+        if p_code in astro:
+            planet_nak_indices[p_code] = int(astro[p_code]["Degree"] / (360.0 / 27.0))
+    moon_nak_idx = planet_nak_indices.get("Mo", 0)
+
     dasha_sequence = []
     
     for d in dashas:
         is_active_md = (d["planet"] == current_md["planet"])
+        md_code = PLANET_CODE_MAP.get(d["planet"], "")
+        md_nak_idx = planet_nak_indices.get(md_code, 0)
+        
+        # महादशा का तारा (चंद्र से)
+        md_tara_moon = get_tara_name(moon_nak_idx, md_nak_idx)
+
         ads_raw = get_antardashas(d["idx"], d["start"])
         antardashas = []
         
         for ad in ads_raw:
+            ad_code = PLANET_CODE_MAP.get(ad["planet"], "")
+            ad_nak_idx = planet_nak_indices.get(ad_code, 0)
+            
+            # अंतर्दशा का तारा
+            ad_tara_moon = get_tara_name(moon_nak_idx, ad_nak_idx)
+            ad_tara_lord = get_tara_name(md_nak_idx, ad_nak_idx)
+            
             pds_raw = get_pratyantardashas(d["idx"], ad["idx"], ad["start"])
             pd_list = []
             
             for pd in pds_raw:
+                pd_code = PLANET_CODE_MAP.get(pd["planet"], "")
+                pd_nak_idx = planet_nak_indices.get(pd_code, 0)
+                
+                # प्रत्यंतर तारा
+                pd_tara_moon = get_tara_name(moon_nak_idx, pd_nak_idx)
+                pd_tara_lord = get_tara_name(ad_nak_idx, pd_nak_idx)
+                
                 sd_list = []
                 # Performance lock: Only compute SD/PR for the user's current Mahadasha
                 if is_active_md:
                     sds_raw = get_sookshmadashas(pd["duration_days"], pd["idx"], pd["start"])
                     for sd in sds_raw:
+                        sd_code = PLANET_CODE_MAP.get(sd["lord"], "")
+                        sd_nak_idx = planet_nak_indices.get(sd_code, 0)
+                        
+                        # सूक्ष्म तारा
+                        sd_tara_moon = get_tara_name(moon_nak_idx, sd_nak_idx)
+                        sd_tara_lord = get_tara_name(pd_nak_idx, sd_nak_idx)
+
                         prs_raw = get_pranadashas(sd["duration_days"], sd["idx"], sd["start"])
+                        pr_list = []
+                        for pr in prs_raw:
+                            pr_code = PLANET_CODE_MAP.get(pr["lord"], "")
+                            pr_nak_idx = planet_nak_indices.get(pr_code, 0)
+                            pr_list.append({
+                                "lord": pr["lord"],
+                                "start": pr["start"],
+                                "end": pr["end"],
+                                "taraMoon": get_tara_name(moon_nak_idx, pr_nak_idx),
+                                "taraLord": get_tara_name(sd_nak_idx, pr_nak_idx)
+                            })
+
                         sd_list.append({
                             "lord": sd["lord"],
                             "start": sd["start"],
                             "end": sd["end"],
-                            "pranadashas": prs_raw
+                            "taraMoon": sd_tara_moon,
+                            "taraLord": sd_tara_lord,
+                            "pranadashas": pr_list
                         })
                 
                 pd_list.append({
                     "lord": pd["planet"],
                     "start": pd["start"],
                     "end": pd["end"],
+                    "taraMoon": pd_tara_moon,
+                    "taraLord": pd_tara_lord,
                     "sookshmadashas": sd_list
                 })
                 
@@ -1843,17 +1904,20 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
                 "lord": ad["planet"],
                 "start": ad["start"],
                 "end": ad["end"],
+                "taraMoon": ad_tara_moon,
+                "taraLord": ad_tara_lord,
                 "pratyantardashas": pd_list
             })
         
         dasha_sequence.append({
             "lord": d["planet"],
-            "code": PLANET_CODE_MAP.get(d["planet"], ""),
+            "code": md_code,
             "start": d["start"].split("-")[2] if "-" in d["start"] else d["start"][:4],
             "end":   d["end"].split("-")[2]   if "-" in d["end"]   else d["end"][:4],
             "years": DASHA_YEARS[d["idx"]],
             "active": is_active_md,
             "pct":  md_pct if is_active_md else 0,
+            "taraMoon": md_tara_moon,
             "antardashas": antardashas
         })
 
@@ -2088,6 +2152,37 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
 
     # kp_btr_data yahan define nahi tha — NameError fix
     kp_btr_data = {}
+    
+    # ════════════════════════════════════════════════════════════════════════════
+    # 🌟 TARA MATRIX (9×9 Lookup Table) — Frontend Lazy Loading के लिए
+    # ════════════════════════════════════════════════════════════════════════════
+    # यह मैट्रिक्स frontend को दिया जाता है ताकि वह किसी भी PD को expand करते समय
+    # SD/PR को on-the-fly calculate कर सके। सभी 120 सालों का data backend से
+    # नहीं भेजना पड़ता (payload bloat नहीं होता, Render timeout नहीं होता)
+    # 
+    # Structure: {"Su": {"Su": "जन्म", "Mo": "सम्पत", ...}, "Mo": {...}, ...}
+    # हर source planet के लिए, हर target planet के लिए एक tara value
+    
+    TARA_NAMES = ["जन्म", "सम्पत", "विपत", "क्षेम", "प्रत्यरि", "साधक", "वध", "मित्र", "अतिमित्र"]
+    tara_matrix = {}
+    planet_nak_indices = {}
+    
+    # Step 1: Calculate each planet's Nakshatra index (0-26)
+    # Nakshatra index = Degree / (360 / 27 nakshatras)
+    for p_code in ["Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa", "Ra", "Ke"]:
+        if p_code in astro:
+            deg = astro[p_code].get("Degree", 0)
+            planet_nak_indices[p_code] = int(deg / (360.0 / 27.0))
+    
+    # Step 2: Build 9×9 matrix — हर source planet से हर target planet को तारा
+    # Formula: tara_idx = (Target_Nak - Source_Nak) % 9
+    for p1, nak1 in planet_nak_indices.items():
+        tara_matrix[p1] = {}
+        for p2, nak2 in planet_nak_indices.items():
+            tara_idx = (nak2 - nak1) % 9  # Python's % handles negative numbers correctly
+            tara_matrix[p1][p2] = TARA_NAMES[tara_idx]
+    
+    print(f"[Tara Matrix] ✅ Generated 9×9 matrix for frontend lazy loading")
 
     return {
         "meta": {
@@ -2149,6 +2244,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         "shodhana":          shodhana_data,
         "sudarshan":         sudarshan_data,
         "yearly":            yearly_data,
+        "taraMatrix": tara_matrix,
     }, None
 
 # ══════════════════════════════════════════════════════════════════════════

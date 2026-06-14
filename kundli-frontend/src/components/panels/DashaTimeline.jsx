@@ -1,11 +1,9 @@
-// DashaTimeline — Premium Accordion Dasha Explorer with API-powered Year Selector + Alignment Search
-// ✅ Updated: DashaAVTab ("🔢 AV विश्लेषण") tab added
-import { useState } from "react";
+// DashaTimeline — Premium Accordion Dasha Explorer with Complete Lazy Loading + Backend Tara Matrix
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ChevronRight, Search, Calendar, Loader2 } from "lucide-react";
 import { PLANET_META } from "../../constants";
-import { fetchDashasForYear, fetchDashaAlignment } from "../../api/kundliApi";
-import DashaAVTab from "./DashaAVTab";   // ← NEW IMPORT
+import DashaAVTab from "./DashaAVTab";   
 
 // ── Planet constants ─────────────────────────────────────────
 const LORDS    = ["केतु","शुक्र","सूर्य","चंद्र","मंगल","राहु","गुरु","शनि","बुध"];
@@ -25,7 +23,6 @@ const TINTS = {
 };
 const T = c => TINTS[c] || TINTS.Su;
 
-// Calculate progress % between two year strings
 function calcPct(start, end) {
   const s = new Date(parseInt(start),0,1);
   const e = new Date(parseInt(end),0,1);
@@ -35,7 +32,6 @@ function calcPct(start, end) {
   return Math.round(((now-s)/(e-s))*100);
 }
 
-// Get circular AD sequence starting from lord
 function getADs(lord) {
   const i = LORDS.indexOf(lord); if(i<0) return [];
   return LORDS.map((_,j)=>LORDS[(i+j)%9]);
@@ -45,7 +41,6 @@ function getPDs(lord) {
   return LORDS.map((_,j)=>LORDS[(i+j)%9]);
 }
 
-// ── Helpers ───────────────────────────────────────────────────
 function ProgressBar({pct, color="#F59E0B", delay=0}) {
   return (
     <div className="relative h-1.5 rounded-full overflow-hidden bg-white/5">
@@ -57,44 +52,199 @@ function ProgressBar({pct, color="#F59E0B", delay=0}) {
   );
 }
 
-function PlanetChip({code, hindi, small=false}) {
-  const meta = PLANET_META[code]||{};
-  const t = T(code);
+// 🌟 TARA LOOKUP ENGINE — Uses Backend Matrix OR Falls Back to Pure Calculation
+const TARA_NAMES = ["जन्म", "सम्पत", "विपत", "क्षेम", "प्रत्यरि", "साधक", "वध", "मित्र", "अतिमित्र"];
+
+function getTaraFromMatrix(fromCode, toCode, taraMatrix) {
+  // Try backend taraMatrix first (PREFERRED)
+  if (taraMatrix && taraMatrix[fromCode] && taraMatrix[fromCode][toCode]) {
+    return taraMatrix[fromCode][toCode];
+  }
+  return null;
+}
+
+function getTaraFallback(fromCode, toCode, planetsObj) {
+  // Fallback: Pure frontend calculation using degrees
+  if (!planetsObj || !planetsObj[fromCode] || !planetsObj[toCode]) return null;
+  const d1 = planetsObj[fromCode].fullDegree !== undefined ? planetsObj[fromCode].fullDegree : planetsObj[fromCode].Degree;
+  const d2 = planetsObj[toCode].fullDegree !== undefined ? planetsObj[toCode].fullDegree : planetsObj[toCode].Degree;
+  if (d1 === undefined || d2 === undefined) return null;
+
+  const fromNak = Math.floor(d1 / (360/27));
+  const toNak = Math.floor(d2 / (360/27));
+  let diff = (toNak - fromNak) % 9;
+  if (diff < 0) diff += 9;
+  return TARA_NAMES[diff];
+}
+
+function getTara(fromCode, toCode, taraMatrix, planetsObj) {
+  // PRIMARY: Use backend matrix
+  let tara = getTaraFromMatrix(fromCode, toCode, taraMatrix);
+  // FALLBACK: Use degree-based calculation
+  if (!tara) tara = getTaraFallback(fromCode, toCode, planetsObj);
+  return tara;
+}
+
+function TaraBadge({ label, tara }) {
+  if (!tara) return null;
+  let colorClass = "text-slate-300";
+  if (["वध", "विपत", "प्रत्यरि"].includes(tara)) colorClass = "text-rose-400 font-bold";
+  else if (["सम्पत", "क्षेम", "साधक", "मित्र", "अतिमित्र"].includes(tara)) colorClass = "text-emerald-400 font-bold";
+  else if (tara === "जन्म") colorClass = "text-cyan-400 font-bold";
+
   return (
-    <div className={`flex items-center gap-1.5 rounded-lg ${small?"px-1.5 py-1":"px-2 py-1.5"} border`}
-      style={{background:t.bg, borderColor:t.border}}>
-      <span className={`font-black ${small?"text-xs":"text-sm"}`} style={{color:meta.color}}>{meta.symbol}</span>
-      <span className={`font-semibold text-slate-200 ${small?"text-[10px]":"text-xs"}`}
-        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{hindi}</span>
-    </div>
+    <span className="whitespace-nowrap flex gap-1">
+      <span className="text-slate-500">{label}:</span> <span className={colorClass}>{tara}</span>
+    </span>
   );
 }
 
-// ── Level 5: Pranadasha Grid ─────────────────────────────────────────
-function PRGrid({ sdLord, prData, curPR, isCurrentSD }) {
-  const list = getPDs(sdLord);
-  // Debug: log what backend sends
-  if (prData?.length) console.log("[PRGrid] sdLord:", sdLord, "| prData[0] keys:", Object.keys(prData[0]), "| sample:", prData[0]);
+// 🌟 LAZY LOADING CALCULATION ENGINES (360-Day Saavan Year)
+function generateADsLazy(mdLord, mdStartStr, mdDurDays) {
+  if (!mdStartStr || !mdLord) return [];
+  let [d, m, y] = mdStartStr.split('-');
+  let curTimeMs = Date.UTC(y, m - 1, d);
 
-  // Robust lord-match
-  const findPR = (lord) => prData?.find(p =>
-    p.lord === lord || p.lord_hi === lord ||
-    p.lord === TO_CODE[lord] || p.planet === lord
-  );
+  const ads = [];
+  const startIdx = LORDS.indexOf(mdLord);
+
+  for (let i = 0; i < 9; i++) {
+    const adLord = LORDS[(startIdx + i) % 9];
+    const adDurDays = (mdDurDays / 360.0) * YEARS[adLord] * 360.0;
+    const nextTimeMs = curTimeMs + (adDurDays * 86400000);
+
+    const curDt = new Date(curTimeMs);
+    const nextDt = new Date(nextTimeMs);
+
+    ads.push({
+      lord: adLord,
+      start: `${String(curDt.getUTCDate()).padStart(2,'0')}-${String(curDt.getUTCMonth()+1).padStart(2,'0')}-${curDt.getUTCFullYear()}`,
+      end: `${String(nextDt.getUTCDate()).padStart(2,'0')}-${String(nextDt.getUTCMonth()+1).padStart(2,'0')}-${nextDt.getUTCFullYear()}`,
+      duration_days: adDurDays
+    });
+    curTimeMs = nextTimeMs;
+  }
+  return ads;
+}
+
+function generatePDsLazy(adLord, adStartStr, adDurDays, mdLord, mdDurDays) {
+  if (!adStartStr || !adLord) return [];
+  let [d, m, y] = adStartStr.split('-');
+  let curTimeMs = Date.UTC(y, m - 1, d);
+
+  const pds = [];
+  const startIdx = LORDS.indexOf(adLord);
+
+  for (let i = 0; i < 9; i++) {
+    const pdLord = LORDS[(startIdx + i) % 9];
+    const pdDurDays = (mdDurDays * YEARS[adLord] * YEARS[pdLord] / 14400.0) * 360.0;
+    const nextTimeMs = curTimeMs + (pdDurDays * 86400000);
+
+    const curDt = new Date(curTimeMs);
+    const nextDt = new Date(nextTimeMs);
+
+    pds.push({
+      lord: pdLord,
+      start: `${String(curDt.getUTCDate()).padStart(2,'0')}-${String(curDt.getUTCMonth()+1).padStart(2,'0')}-${curDt.getUTCFullYear()}`,
+      end: `${String(nextDt.getUTCDate()).padStart(2,'0')}-${String(nextDt.getUTCMonth()+1).padStart(2,'0')}-${nextDt.getUTCFullYear()}`,
+      duration_days: pdDurDays
+    });
+    curTimeMs = nextTimeMs;
+  }
+  return pds;
+}
+
+// 🔥 FIX: Added taraMatrix parameter to correctly fetch Tara during lazy load
+function generateSDsLazy(mdLord, adLord, pdLord, pdStartStr, taraMatrix) {
+  if (!pdStartStr || !mdLord || !adLord || !pdLord) return [];
+  const pdDurDays = (YEARS[mdLord] * YEARS[adLord] * YEARS[pdLord] / 14400.0) * 360.0;
+  
+  let [d, m, y] = pdStartStr.split('-');
+  let curTimeMs = Date.UTC(y, m - 1, d);
+  
+  const sds = [];
+  const startIdx = LORDS.indexOf(pdLord);
+  const pdLordCode = TO_CODE[pdLord] || "Su";
+  
+  for (let i = 0; i < 9; i++) {
+      const sdLord = LORDS[(startIdx + i) % 9];
+      const sdLordCode = TO_CODE[sdLord] || "Su";
+      const sdDurDays = pdDurDays * (YEARS[sdLord] / 120.0);
+      const nextTimeMs = curTimeMs + (sdDurDays * 86400000); 
+      
+      const curDt = new Date(curTimeMs);
+      const nextDt = new Date(nextTimeMs);
+      
+      // 🔥 TARA: तुरंत matrix से निकाल दो
+      const taraMoon = taraMatrix?.["Mo"]?.[sdLordCode] || null;
+      const taraLord = taraMatrix?.[pdLordCode]?.[sdLordCode] || null;
+      
+      sds.push({
+          lord: sdLord,
+          start: `${String(curDt.getUTCDate()).padStart(2,'0')}-${String(curDt.getUTCMonth()+1).padStart(2,'0')}-${curDt.getUTCFullYear()}`,
+          end: `${String(nextDt.getUTCDate()).padStart(2,'0')}-${String(nextDt.getUTCMonth()+1).padStart(2,'0')}-${nextDt.getUTCFullYear()}`,
+          duration_days: sdDurDays,
+          taraMoon: taraMoon,
+          taraLord: taraLord
+      });
+      curTimeMs = nextTimeMs;
+  }
+  return sds;
+}
+
+// 🔥 FIX: Added taraMatrix parameter to correctly fetch Tara during lazy load
+function generatePRsLazy(sdLord, sdStartStr, sdDurDays, taraMatrix) {
+  if (!sdStartStr || !sdLord) return [];
+  let [d, m, y] = sdStartStr.split('-');
+  let curTimeMs = Date.UTC(y, m - 1, d);
+  
+  const prs = [];
+  const startIdx = LORDS.indexOf(sdLord);
+  const sdLordCode = TO_CODE[sdLord] || "Su";
+  
+  for (let i = 0; i < 9; i++) {
+      const prLord = LORDS[(startIdx + i) % 9];
+      const prLordCode = TO_CODE[prLord] || "Su";
+      const prDurDays = sdDurDays * (YEARS[prLord] / 120.0);
+      const nextTimeMs = curTimeMs + (prDurDays * 86400000);
+      
+      const curDt = new Date(curTimeMs);
+      const nextDt = new Date(nextTimeMs);
+      
+      // 🔥 TARA: तुरंत matrix से निकाल दो
+      const taraMoon = taraMatrix?.["Mo"]?.[prLordCode] || null;
+      const taraLord = taraMatrix?.[sdLordCode]?.[prLordCode] || null;
+      
+      prs.push({
+          lord: prLord,
+          start: `${String(curDt.getUTCDate()).padStart(2,'0')}-${String(curDt.getUTCMonth()+1).padStart(2,'0')}-${curDt.getUTCFullYear()}`,
+          end: `${String(nextDt.getUTCDate()).padStart(2,'0')}-${String(nextDt.getUTCMonth()+1).padStart(2,'0')}-${nextDt.getUTCFullYear()}`,
+          taraMoon: taraMoon,
+          taraLord: taraLord
+      });
+      curTimeMs = nextTimeMs;
+  }
+  return prs;
+}
+
+// ── Level 5: Pranadasha Grid ─────────────────────────────────────────
+function PRGrid({ sdLord, prData, curPR, isCurrentSD, chartMeta, sdStart, sdDurDays }) {
+  const list = getPDs(sdLord);
+  const sdLordCode = TO_CODE[sdLord] || "Su";
+  const taraMatrix = chartMeta?.taraMatrix;
+  
+  // ⚡ LAZY LOAD DATES: Passed taraMatrix to generatePRsLazy
+  const resolvedPrData = useMemo(() => {
+      if (prData && prData.length > 0) return prData;
+      return generatePRsLazy(sdLord, sdStart, sdDurDays, taraMatrix);
+  }, [prData, sdLord, sdStart, sdDurDays, taraMatrix]);
+
+  const findPR = (lord) => resolvedPrData?.find(p => p.lord === lord || p.lord_hi === lord || p.planet === lord);
 
   return (
-    <motion.div
-      initial={{ height:0, opacity:0 }}
-      animate={{ height:"auto", opacity:1 }}
-      exit={{ height:0, opacity:0 }}
-      transition={{ duration:0.2 }}
-      className="mt-2"
-    >
+    <motion.div initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }} exit={{ height:0, opacity:0 }} transition={{ duration:0.2 }} className="mt-2">
       <div className="px-2 pb-3 pt-2 border-t border-violet-900/40">
-        <div
-          className="text-[9px] text-violet-400/60 uppercase tracking-widest mb-2"
-          style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
-        >
+        <div className="text-[9px] text-violet-400/60 uppercase tracking-widest mb-2" style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
           प्राण दशा
         </div>
         <div className="grid grid-cols-3 gap-1.5">
@@ -104,38 +254,33 @@ function PRGrid({ sdLord, prData, curPR, isCurrentSD }) {
             const t = T(code);
             const isCur = isCurrentSD && lord === curPR;
             const prEntry = findPR(lord);
-            const prStart = prEntry?.start || prEntry?.start_date || prEntry?.startDate;
-            const prEnd   = prEntry?.end   || prEntry?.end_date   || prEntry?.endDate;
+            
+            // 🔥 Tara Logic: Use Backend Matrix + Fallback
+            const taraMoon = prEntry?.taraMoon || getTara("Mo", code, taraMatrix, chartMeta?.planets);
+            const taraLord = prEntry?.taraLord || getTara(sdLordCode, code, taraMatrix, chartMeta?.planets);
+
             return (
-              <motion.div
-                key={i}
-                initial={{ opacity:0, scale:0.88 }}
-                animate={{ opacity:1, scale:1 }}
-                transition={{ delay:i*0.03 }}
-                className={`relative rounded-xl p-2 border ${
-                  isCur ? "ring-1 ring-violet-400/50 shadow-sm shadow-violet-500/20" : ""
-                }`}
+              <motion.div key={i} initial={{ opacity:0, scale:0.88 }} animate={{ opacity:1, scale:1 }} transition={{ delay:i*0.03 }}
+                className="p-2 rounded-lg border transition-all"
                 style={{
-                  background: isCur ? t.glow : t.bg,
-                  borderColor: isCur ? t.border : "rgba(255,255,255,0.05)"
-                }}
-              >
-                <div className="flex items-center gap-1 mb-0.5">
-                  <span className="text-xs font-black" style={{ color:meta.color }}>{meta.symbol}</span>
-                  <span
-                    className="text-[10px] font-semibold text-slate-300 truncate"
-                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
-                  >{lord}</span>
+                  background: isCur ? `${t.bg}` : "rgba(0,0,0,0.2)",
+                  borderColor: isCur ? t.border : "rgba(255,255,255,0.08)",
+                  boxShadow: isCur ? `0 0 12px ${t.glow}` : "none",
+                }}>
+                <div className="text-[11px] font-bold text-slate-100 mb-1" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</div>
+                <div className="text-[7.5px] text-slate-500 mb-1.5 font-mono">{prEntry?.start} → {prEntry?.end}</div>
+                
+                {/* Tara Badges */}
+                <div className="flex gap-1 flex-wrap mb-1">
+                  <TaraBadge label="चं" tara={taraMoon} />
+                  <TaraBadge label="प्र" tara={taraLord} />
                 </div>
-                {prEntry
-                  ? <div className="text-[9px] text-slate-500">{prStart}–{prEnd}</div>
-                  : <div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>
-                }
+
                 {isCur && (
-                  <span
-                    className="absolute -top-1 -right-1 text-[7px] px-1 py-0.5 rounded-full bg-violet-500/30 text-violet-200 border border-violet-500/50"
-                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
-                  >चालू</span>
+                  <div className="text-[7px] px-1 py-0.5 rounded-full text-center"
+                    style={{background:`${meta.color}40`, color:meta.color, fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+                    चालू
+                  </div>
                 )}
               </motion.div>
             );
@@ -146,36 +291,28 @@ function PRGrid({ sdLord, prData, curPR, isCurrentSD }) {
   );
 }
 
-// ── Level 4: Sookshmadasha Grid ─────────────────────────────────────────
-function SDGrid({ pdLord, sdData, curSD, curPR, isCurrentPD }) {
+// ── Level 4: Sookshma Dasha Grid ─────────────────────────────────────────
+function SDGrid({ pdLord, sdData, curSD, curPR, isCurrentPD, chartMeta, mdLord, adLord, pdStart, pdDurDays }) {
   const list = getPDs(pdLord);
-  // Debug: log what backend sends so we can see field names
-  if (sdData?.length) console.log("[SDGrid] pdLord:", pdLord, "| sdData[0] keys:", Object.keys(sdData[0]), "| sample:", sdData[0]);
+  const pdLordCode = TO_CODE[pdLord] || "Su";
+  const taraMatrix = chartMeta?.taraMatrix;
+  
+  // ⚡ LAZY LOAD DATES: Passed taraMatrix to generateSDsLazy
+  const resolvedSdData = useMemo(() => {
+      if (sdData && sdData.length > 0) return sdData;
+      return generateSDsLazy(mdLord, adLord, pdLord, pdStart, taraMatrix);
+  }, [sdData, mdLord, adLord, pdLord, pdStart, taraMatrix]);
 
-  // Robust lord-match: handles Hindi name OR English code from backend
-  const findSD = (lord) => sdData?.find(p =>
-    p.lord === lord || p.lord_hi === lord ||
-    p.lord === TO_CODE[lord] || p.planet === lord
-  );
+  const findSD = (lord) => resolvedSdData?.find(s => s.lord === lord || s.lord_hi === lord || s.planet === lord);
 
   const [openSD, setOpenSD] = useState(isCurrentPD ? curSD : null);
   const openSDEntry = findSD(openSD);
 
   return (
-    <motion.div
-      initial={{ height:0, opacity:0 }}
-      animate={{ height:"auto", opacity:1 }}
-      exit={{ height:0, opacity:0 }}
-      transition={{ duration:0.2 }}
-      className="mt-2"
-    >
-      <div className="px-2 pb-3 pt-2 border-t border-pink-900/40">
-        <div
-          className="text-[9px] text-pink-400/60 uppercase tracking-widest mb-2 flex justify-between"
-          style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
-        >
-          <span>सूक्ष्म दशा</span>
-          <span className="text-[8px] normal-case text-pink-500/50">प्राण दशा देखने के लिए क्लिक करें</span>
+    <motion.div initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }} exit={{ height:0, opacity:0 }} transition={{ duration:0.2 }} className="mt-2">
+      <div className="px-2 pb-3 pt-2 border-t border-indigo-900/40">
+        <div className="text-[9px] text-indigo-400/60 uppercase tracking-widest mb-2" style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
+          सूक्ष्म दशा
         </div>
         <div className="grid grid-cols-3 gap-1.5">
           {list.map((lord, i) => {
@@ -185,53 +322,42 @@ function SDGrid({ pdLord, sdData, curSD, curPR, isCurrentPD }) {
             const isCur = isCurrentPD && lord === curSD;
             const isSelected = openSD === lord;
             const sdEntry = findSD(lord);
-            const sdStart = sdEntry?.start || sdEntry?.start_date || sdEntry?.startDate;
-            const sdEnd   = sdEntry?.end   || sdEntry?.end_date   || sdEntry?.endDate;
             
+            // 🔥 Tara Logic: Use Backend Matrix + Fallback
+            const taraMoon = sdEntry?.taraMoon || getTara("Mo", code, taraMatrix, chartMeta?.planets);
+            const taraLord = sdEntry?.taraLord || getTara(pdLordCode, code, taraMatrix, chartMeta?.planets);
+
             return (
-              <motion.button
-                key={i}
-                onClick={() => setOpenSD(isSelected ? null : lord)}
-                initial={{ opacity:0, scale:0.88 }}
-                animate={{ opacity:1, scale:1 }}
-                transition={{ delay:i*0.03 }}
-                className={`relative w-full text-left rounded-xl p-2 border transition-all ${
-                  isCur ? "ring-1 ring-pink-400/50 shadow-sm shadow-pink-500/20" : ""
-                } ${isSelected && !isCur ? "ring-1 ring-white/30" : ""}`}
-                style={{
-                  background: isCur || isSelected ? t.glow : t.bg,
-                  borderColor: isCur || isSelected ? t.border : "rgba(255,255,255,0.05)"
-                }}
-              >
+              <motion.button key={i} onClick={() => setOpenSD(isSelected ? null : lord)} initial={{ opacity:0, scale:0.88 }} animate={{ opacity:1, scale:1 }} transition={{ delay:i*0.03 }}
+                className={`relative w-full text-left rounded-xl p-2 border transition-all ${isCur ? "ring-1 ring-indigo-400/50 shadow-sm shadow-indigo-500/20" : ""} ${isSelected && !isCur ? "ring-1 ring-white/30" : ""}`}
+                style={{ background: isCur || isSelected ? t.glow : t.bg, borderColor: isCur || isSelected ? t.border : "rgba(255,255,255,0.05)" }}>
                 <div className="flex items-center gap-1 mb-0.5">
                   <span className="text-xs font-black" style={{ color:meta.color }}>{meta.symbol}</span>
-                  <span
-                    className="text-[10px] font-semibold text-slate-300 truncate"
-                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
-                  >{lord}</span>
+                  <span className="text-[10px] font-semibold text-slate-300 truncate" style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>{lord}</span>
                 </div>
-                {sdEntry
-                  ? <div className="text-[9px] text-slate-500">{sdStart}–{sdEnd}</div>
-                  : <div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>
-                }
-                {isCur && (
-                  <span
-                    className="absolute -top-1 -right-1 text-[7px] px-1 py-0.5 rounded-full bg-pink-500/30 text-pink-200 border border-pink-500/50"
-                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
-                  >चालू</span>
-                )}
+                {sdEntry ? <div className="text-[9px] text-slate-500">{sdEntry.start}–{sdEntry.end}</div> : <div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>}
+
+                {/* Tara Badges */}
+                <div className="mt-1 flex items-center justify-between px-1.5 py-0.5 rounded text-[7.5px] bg-black/20 border border-white/5" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+                   <TaraBadge label="चं" tara={taraMoon} />
+                   <TaraBadge label="ना" tara={taraLord} />
+                </div>
+
+                {isCur && <span className="absolute -top-1 -right-1 text-[7px] px-1 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-500/50" style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>चालू</span>}
               </motion.button>
             );
           })}
         </div>
-        {/* ───── PR GRID — Renders when an SD is clicked ───── */}
         <AnimatePresence>
           {openSD && (
             <PRGrid
               sdLord={openSD}
-              prData={openSDEntry?.pranadashas || []}
+              prData={openSDEntry?.pranadashas}
               curPR={curPR}
               isCurrentSD={isCurrentPD && openSD === curSD}
+              chartMeta={chartMeta}
+              sdStart={openSDEntry?.start}
+              sdDurDays={openSDEntry?.duration_days}
             />
           )}
         </AnimatePresence>
@@ -240,25 +366,27 @@ function SDGrid({ pdLord, sdData, curSD, curPR, isCurrentPD }) {
   );
 }
 
-// ── Level 3: Pratyantardasha Grid ─────────────────────────────────────────
-function PDGrid({ adLord, pdData, curPD, curSD, curPR, isCurrentAD }) {
+// ── Level 3: Pratyantara Grid ─────────────────────────────────────────
+function PDGrid({ adLord, pdData, curPD, curSD, curPR, isCurrentAD, chartMeta, mdLord, adStart, adDurDays }) {
   const list = getPDs(adLord);
-  // Auto-open current PD if we are in the active AD, otherwise closed
+  const adLordCode = TO_CODE[adLord] || "Su";
+  const taraMatrix = chartMeta?.taraMatrix;
+  
+  // ⚡ LAZY LOAD DATES
+  const resolvedPdData = useMemo(() => {
+      if (pdData && pdData.length > 0) return pdData;
+      return generatePDsLazy(adLord, adStart, adDurDays, mdLord, YEARS[mdLord]);
+  }, [pdData, adLord, adStart, adDurDays, mdLord]);
+
+  const findPD = (lord) => resolvedPdData?.find(p => p.lord === lord || p.lord_hi === lord || p.planet === lord);
+
   const [openPD, setOpenPD] = useState(isCurrentAD ? curPD : null);
-  const openPDEntry = pdData?.find(p => p.lord === openPD);
+  const openPDEntry = findPD(openPD);
 
   return (
-    <motion.div
-      initial={{ height:0, opacity:0 }}
-      animate={{ height:"auto", opacity:1 }}
-      exit={{ height:0, opacity:0 }}
-      transition={{ duration:0.2 }}
-    >
+    <motion.div initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }} exit={{ height:0, opacity:0 }} transition={{ duration:0.2 }} className="mt-2">
       <div className="px-6 pb-3 pt-2 border-t border-slate-800/50">
-        <div
-          className="text-[9px] text-slate-600 uppercase tracking-widest mb-2 flex justify-between"
-          style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
-        >
+        <div className="text-[9px] text-slate-600 uppercase tracking-widest mb-2 flex justify-between" style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
           <span>प्रत्यंतर्दशा</span>
           <span className="text-[8px] normal-case text-slate-500">सूक्ष्म दशा देखने के लिए क्लिक करें</span>
         </div>
@@ -269,45 +397,33 @@ function PDGrid({ adLord, pdData, curPD, curSD, curPR, isCurrentAD }) {
             const t = T(code);
             const isCur = isCurrentAD && lord === curPD;
             const isSelected = openPD === lord;
-            const pdEntry = pdData?.find(p => p.lord === lord);
+            const pdEntry = findPD(lord);
             
+            // 🔥 Tara Logic: Use Backend Matrix + Fallback
+            const taraMoon = pdEntry?.taraMoon || getTara("Mo", code, taraMatrix, chartMeta?.planets);
+            const taraLord = pdEntry?.taraLord || getTara(adLordCode, code, taraMatrix, chartMeta?.planets);
+
             return (
-              <motion.button
-                key={i}
-                onClick={() => setOpenPD(isSelected ? null : lord)}
-                initial={{ opacity:0, scale:0.88 }}
-                animate={{ opacity:1, scale:1 }}
-                transition={{ delay:i*0.03 }}
-                className={`relative w-full text-left rounded-xl p-2 border transition-all ${
-                  isCur ? "ring-1 ring-amber-400/50 shadow-sm shadow-amber-500/20" : ""
-                } ${isSelected && !isCur ? "ring-1 ring-white/30" : ""}`}
-                style={{
-                  background: isCur || isSelected ? t.glow : t.bg,
-                  borderColor: isCur || isSelected ? t.border : "rgba(255,255,255,0.05)"
-                }}
-              >
+              <motion.button key={i} onClick={() => setOpenPD(isSelected ? null : lord)} initial={{ opacity:0, scale:0.88 }} animate={{ opacity:1, scale:1 }} transition={{ delay:i*0.03 }}
+                className={`relative w-full text-left rounded-xl p-2 border transition-all ${isCur ? "ring-1 ring-amber-400/50 shadow-sm shadow-amber-500/20" : ""} ${isSelected && !isCur ? "ring-1 ring-white/30" : ""}`}
+                style={{ background: isCur || isSelected ? t.glow : t.bg, borderColor: isCur || isSelected ? t.border : "rgba(255,255,255,0.05)" }}>
                 <div className="flex items-center gap-1 mb-0.5">
                   <span className="text-xs font-black" style={{ color:meta.color }}>{meta.symbol}</span>
-                  <span
-                    className="text-[10px] font-semibold text-slate-300 truncate"
-                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
-                  >{lord}</span>
+                  <span className="text-[10px] font-semibold text-slate-300 truncate" style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>{lord}</span>
                 </div>
-                {pdEntry
-                  ? <div className="text-[9px] text-slate-500">{pdEntry.start}–{pdEntry.end}</div>
-                  : <div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>
-                }
-                {isCur && (
-                  <span
-                    className="absolute -top-1 -right-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-200 border border-amber-500/50"
-                    style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}
-                  >चालू</span>
-                )}
+                {pdEntry ? <div className="text-[9px] text-slate-500">{pdEntry.start}–{pdEntry.end}</div> : <div className="text-[9px] text-slate-600">{YEARS[lord]}y</div>}
+
+                {/* Tara Badges */}
+                <div className="mt-1 flex items-center justify-between px-1.5 py-0.5 rounded text-[8px] bg-black/20 border border-white/5" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+                   <TaraBadge label="चं" tara={taraMoon} />
+                   <TaraBadge label="ना" tara={taraLord} />
+                </div>
+
+                {isCur && <span className="absolute -top-1 -right-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-200 border border-amber-500/50" style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>चालू</span>}
               </motion.button>
             );
           })}
         </div>
-        {/* ───── SD GRID — Renders when a PD is clicked ───── */}
         <AnimatePresence>
           {openPD && (
             <SDGrid
@@ -316,6 +432,11 @@ function PDGrid({ adLord, pdData, curPD, curSD, curPR, isCurrentAD }) {
               curSD={curSD}
               curPR={curPR}
               isCurrentPD={isCurrentAD && openPD === curPD}
+              chartMeta={chartMeta}
+              mdLord={mdLord}
+              adLord={adLord}
+              pdStart={openPDEntry?.start}
+              pdDurDays={openPDEntry?.duration_days}
             />
           )}
         </AnimatePresence>
@@ -325,128 +446,140 @@ function PDGrid({ adLord, pdData, curPD, curSD, curPR, isCurrentAD }) {
 }
 
 // ── Level 2: Antardasha Row ───────────────────────────────────
-function ADRow({
-  lord,
-  adData,
-  isCurrentMD,
-  curAD,
-  curPD,
-  curSD,
-  curPR
-}) {
+function ADRow({ lord, adData, isCurrentMD, curAD, curPD, curSD, curPR, mdLord, mdLordCode, chartMeta }) {
   const [open, setOpen] = useState(false);
   const code = TO_CODE[lord]||"Su";
   const meta = PLANET_META[code]||{};
   const t = T(code);
   const isCur = isCurrentMD && lord===curAD;
+  const taraMatrix = chartMeta?.taraMatrix;
+  
+  // 🔥 Tara Logic: Use Backend Matrix + Fallback
+  const taraMoon = adData?.taraMoon || getTara("Mo", code, taraMatrix, chartMeta?.planets);
+  const taraLord = adData?.taraLord || getTara(mdLordCode, code, taraMatrix, chartMeta?.planets);
 
   return (
     <div className={`border-b border-slate-800/40 last:border-0 ${isCur?"border-l-2 border-l-cyan-400/60":""}`}>
       <button onClick={()=>setOpen(o=>!o)}
         className={`w-full flex items-center gap-2.5 pl-10 pr-4 py-2.5 text-left transition-colors hover:bg-white/3 ${open?"bg-white/3":""}`}>
+        
         <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0 border"
           style={{background:t.bg, color:meta.color, borderColor:t.border}}>{meta.symbol}</div>
-        <span className="text-xs font-semibold text-slate-300 flex-1"
-          style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</span>
-        {adData ? <span className="text-[10px] text-slate-500">{adData.start} – {adData.end}</span> : <span className="text-[10px] text-slate-600">{YEARS[lord]} वर्ष</span>}
+        
+        <div className="flex-1 flex flex-col justify-center min-w-0">
+           <span className="text-xs font-semibold text-slate-300" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</span>
+           {/* TARA INFO */}
+           {(taraMoon || taraLord) && (
+              <div className="text-[8.5px] mt-0.5 flex gap-1.5" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+                 {taraMoon && <TaraBadge label="चंद्र" tara={taraMoon} />}
+                 {taraMoon && taraLord && <span className="text-slate-700">|</span>}
+                 {taraLord && <TaraBadge label="नाथ" tara={taraLord} />}
+              </div>
+           )}
+        </div>
+
+        <div className="text-right flex flex-col items-end mr-2">
+            {adData ? <span className="text-[10px] text-slate-500">{adData.start} – {adData.end}</span> : <span className="text-[10px] text-slate-600">{YEARS[lord]} वर्ष</span>}
+        </div>
+        
         {isCur && (
-          <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
+          <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 flex-shrink-0"
             style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>वर्तमान</span>
         )}
-        {open?<ChevronDown size={11} className="text-slate-600 flex-shrink-0"/>
-             :<ChevronRight size={11} className="text-slate-700 flex-shrink-0"/>}
+        {open?<ChevronDown size={11} className="text-slate-600 flex-shrink-0 ml-2"/> :<ChevronRight size={11} className="text-slate-700 flex-shrink-0 ml-2"/>}
       </button>
       <AnimatePresence>
-        {open && <PDGrid
-  adLord={lord}
-  pdData={adData?.pratyantardashas || []}
-  curPD={curPD}
-  curSD={curSD}
-  curPR={curPR}
-  isCurrentAD={isCur}
-/>}
+        {open && <PDGrid adLord={lord} pdData={adData?.pratyantardashas || []} curPD={curPD} curSD={curSD} curPR={curPR} isCurrentAD={isCur} chartMeta={chartMeta} mdLord={mdLord} adStart={adData?.start} adDurDays={adData?.duration_days} />}
       </AnimatePresence>
     </div>
   );
 }
 
 // ── Level 1: Mahadasha Card ───────────────────────────────────
-function MDCard({d, curMD, curAD, curPD, curSD, curPR, idx}) {
-  const lord = d.lord_hi || d.lord || "";
-  const code = d.code || TO_CODE[lord] || "Su";
-  const meta = PLANET_META[code]||{};
+function MDCard({ d, curMD, curAD, curPD, curSD, curPR, idx, chartMeta }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const code = TO_CODE[d.lord] || "Su";
+  const meta = PLANET_META[code] || {};
   const t = T(code);
-  const isCur = lord===curMD || code===curMD;
-  const pct = isCur ? (d.pct||calcPct(d.start,d.end)) : 0;
-  const [open, setOpen] = useState(isCur);
-  const adList = getADs(lord);
-  const adDataMap = {};
-  (d.antardashas||[]).forEach(ad => { adDataMap[ad.lord] = ad; });
+  const isCur = d.lord === curMD;
+  const hasADs = d.antardashas && d.antardashas.length > 0;
+  const taraMatrix = chartMeta?.taraMatrix;
+  
+  // 🔥 Tara Logic: Use Backend Matrix + Fallback
+  const taraMoon = d.taraMoon || getTara("Mo", code, taraMatrix, chartMeta?.planets);
 
   return (
-    <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:idx*0.05}}
-      className={`rounded-2xl border overflow-hidden transition-all duration-300 ${isCur?"ring-2 ring-amber-500/40 shadow-lg shadow-amber-500/10":""}`}
-      style={{background:isCur?t.glow:t.bg, borderColor:t.border}}>
-
-      {/* Header row */}
-      <button onClick={()=>setOpen(o=>!o)}
-        className="w-full flex items-center gap-3 p-4 text-left hover:brightness-110 transition-all">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black flex-shrink-0 border"
-          style={{background:`${meta.color}20`,color:meta.color,borderColor:`${meta.color}35`,
-            boxShadow:isCur?`0 0 14px ${meta.color}30`:"none"}}>
+    <motion.div
+      className="border rounded-lg overflow-hidden transition-all"
+      style={{
+        background: isCur ? `${t.glow}` : "rgba(0,0,0,0.1)",
+        borderColor: isCur ? t.border : "rgba(255,255,255,0.08)",
+        boxShadow: isCur ? `0 0 24px ${t.glow}` : "none",
+      }}
+      initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.3, delay:idx*0.05 }}>
+      
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full p-4 flex items-center gap-3 hover:bg-white/5 transition-colors text-left">
+        
+        {/* Planet Icon */}
+        <div className="text-2xl" style={{ color: meta.color, filter:`drop-shadow(0 0 8px ${meta.color}70)` }}>
           {meta.symbol}
         </div>
+
+        {/* Lord Name & Duration */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <span className="text-sm font-bold text-slate-100"
-              style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord} महादशा</span>
-            {isCur && (
-              <span className="text-[8px] px-2 py-0.5 rounded-full font-bold bg-amber-500/25 text-amber-200 border border-amber-500/40 animate-pulse"
-                style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>● वर्तमान</span>
-            )}
+          <div className="text-base font-bold text-slate-100 mb-1" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+            {d.lord}
           </div>
-          <div className="text-[10px] text-slate-500 flex gap-2">
-            <span>आरंभ: <span className="text-slate-400">{d.start}</span></span>
-            <span>·</span>
-            <span>अंत: <span className="text-slate-400">{d.end}</span></span>
-            <span>·</span>
-            <span className="text-slate-600">{d.years} वर्ष</span>
+          <div className="text-[11px] text-slate-500 font-mono">
+            {d.start} → {d.end}
           </div>
+          {taraMoon && (
+            <div className="mt-1.5 flex gap-2 text-[10px]" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+              <div className="px-2 py-0.5 rounded bg-black/20 border border-white/5 inline-flex items-center">
+                <TaraBadge label="चंद्र से तारा" tara={taraMoon} />
+              </div>
+            </div>
+          )}
         </div>
-        {open?<ChevronDown size={15} className="text-slate-500 flex-shrink-0"/>
-             :<ChevronRight size={15} className="text-slate-600 flex-shrink-0"/>}
+
+        {/* Current Indicator + Expand Button */}
+        {isCur && (
+          <span className="text-[8px] px-2 py-1 rounded-full flex-shrink-0"
+            style={{ background:`${meta.color}40`, color:meta.color, fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
+            चालू
+          </span>
+        )}
+        {hasADs && (
+          <motion.div animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration:0.15 }}>
+            <ChevronRight size={16} className="text-slate-600 flex-shrink-0" />
+          </motion.div>
+        )}
       </button>
 
-      {/* Progress bar for active */}
-      {isCur && (
-        <div className="px-4 -mt-1 pb-3">
-          <div className="flex justify-between text-[10px] text-slate-600 mb-1">
-            <span style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>बीता हुआ</span>
-            <span style={{color:meta.color}}>{pct}%</span>
-          </div>
-          <ProgressBar pct={pct} color={meta.color} delay={0.3+idx*0.05}/>
-        </div>
-      )}
-
-      {/* Antardasha accordion */}
+      {/* AD Grid (Nested) */}
       <AnimatePresence>
-        {open && (
-          <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}}
-            exit={{height:0,opacity:0}} transition={{duration:0.24}}>
-            <div className="border-t border-white/5 bg-slate-950/50">
-              <div className="px-10 py-1.5 text-[9px] text-slate-600 uppercase tracking-widest"
-                style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>अंतर्दशा</div>
-              {adList.map((adLord,ai) => (
+        {isOpen && hasADs && (
+          <motion.div
+            initial={{ height:0, opacity:0 }} animate={{ height:"auto", opacity:1 }}
+            exit={{ height:0, opacity:0 }} transition={{ duration:0.2 }}
+            className="overflow-hidden">
+            <div className="px-3 pb-3 pt-2 border-t border-slate-700/40 space-y-2">
+              {d.antardashas.map((ad, i) => (
                 <ADRow
-  key={ai}
-  lord={adLord}
-  adData={adDataMap[adLord]}
-  isCurrentMD={isCur}
-  curAD={curAD}
-  curPD={curPD}
-  curSD={curSD}
-  curPR={curPR}
-/>
+                  key={i}
+                  lord={ad.lord}
+                  adData={ad}
+                  mdLord={d.lord}
+                  mdLordCode={code}
+                  curAD={curAD}
+                  curPD={curPD}
+                  curSD={curSD}
+                  curPR={curPR}
+                  isCurrentMD={isCur}
+                  chartMeta={chartMeta}
+                />
               ))}
             </div>
           </motion.div>
@@ -456,8 +589,7 @@ function MDCard({d, curMD, curAD, curPD, curSD, curPR, idx}) {
   );
 }
 
-// ── Year Selector (API-powered) ───────────────────────────────
-function YearSelector({sequence}) {
+function YearSelector({ sequence }) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [results, setResults] = useState(null);
   const search = () => {
@@ -480,11 +612,9 @@ function YearSelector({sequence}) {
     <div className="p-4 rounded-2xl border border-slate-700/40 bg-slate-800/15">
       <div className="flex items-center gap-2 mb-1">
         <Calendar size={13} className="text-amber-400"/>
-        <span className="text-sm font-semibold text-slate-200"
-          style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>🔍 वर्ष चयनकर्ता</span>
+        <span className="text-sm font-semibold text-slate-200" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>🔍 वर्ष चयनकर्ता</span>
       </div>
-      <p className="text-[10px] text-slate-600 mb-3"
-        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>किसी भी वर्ष की सक्रिय दशा देखें</p>
+      <p className="text-[10px] text-slate-600 mb-3" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>किसी भी वर्ष की सक्रिय दशा देखें</p>
 
       <div className="flex gap-2 mb-1">
         <input type="number" value={year} min={1900} max={2100}
@@ -503,12 +633,12 @@ function YearSelector({sequence}) {
           <motion.div initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} exit={{opacity:0}} className="mt-3">
             <div className="flex flex-col gap-2">
               {results.map((r,i) => {
-                const codes = [TO_CODE[r.mahadasha]||"Su", TO_CODE[r.antardasha]||"Su", TO_CODE[r.pratyantara||r.pratyantardasha]||"Su"];
+                const codes = [TO_CODE[r.mahadasha]||"Su", TO_CODE[r.antardasha]||"Su", TO_CODE[r.pratyantara||r.pratyantardashas]||"Su"];
                 const metas = codes.map(c=>PLANET_META[c]||{});
                 return (
                   <motion.div key={i} initial={{opacity:0,x:-6}} animate={{opacity:1,x:0}} transition={{delay:i*0.04}}
                     className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/25 flex-wrap">
-                    {[r.mahadasha,r.antardasha,r.pratyantara||r.pratyantardasha].map((lord,li)=>(
+                    {[r.mahadasha,r.antardasha,r.pratyantara||r.pratyantardashas].map((lord,li)=>(
                       <span key={li} className="flex items-center gap-1">
                         <span className="text-xs font-black" style={{color:metas[li].color||"#94A3B8"}}>{metas[li].symbol}</span>
                         <span className="text-xs text-slate-300" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</span>
@@ -516,8 +646,7 @@ function YearSelector({sequence}) {
                       </span>
                     ))}
                     {r.start && (
-                      <span className="ml-auto text-[10px] text-slate-600"
-                        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+                      <span className="ml-auto text-[10px] text-slate-600" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
                         {r.start} – {r.end}
                       </span>
                     )}
@@ -532,8 +661,7 @@ function YearSelector({sequence}) {
   );
 }
 
-// ── Alignment Search (API-powered) ───────────────────────────
-function AlignmentSearch({sequence}) {
+function AlignmentSearch({ sequence }) {
   const [f, setF] = useState({md:"",ad:"",pd:""});
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -555,8 +683,7 @@ function AlignmentSearch({sequence}) {
 
   const Sel = ({label, val, onChange}) => (
     <div className="flex-1">
-      <div className="text-[10px] text-slate-600 mb-1"
-        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{label}</div>
+      <div className="text-[10px] text-slate-600 mb-1" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{label}</div>
       <select value={val} onChange={e=>onChange(e.target.value)}
         className="w-full px-2 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-200 text-xs focus:outline-none focus:border-cyan-500/50"
         style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
@@ -570,11 +697,9 @@ function AlignmentSearch({sequence}) {
     <div className="p-4 rounded-2xl border border-slate-700/40 bg-slate-800/15">
       <div className="flex items-center gap-2 mb-1">
         <Search size={13} className="text-cyan-400"/>
-        <span className="text-sm font-semibold text-slate-200"
-          style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>🎯 दशा संरेखण खोज</span>
+        <span className="text-sm font-semibold text-slate-200" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>🎯 दशा संरेखण खोज</span>
       </div>
-      <p className="text-[10px] text-slate-600 mb-3"
-        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+      <p className="text-[10px] text-slate-600 mb-3" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
         विशेष दशा संयोजन खोजें — जैसे "कब आएगा शनि-राहु-केतु का समय?"
       </p>
 
@@ -594,14 +719,11 @@ function AlignmentSearch({sequence}) {
         {results !== null && (
           <motion.div initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} exit={{opacity:0}} className="mt-3">
             {results.length === 0
-              ? <p className="text-[11px] text-slate-500 text-center py-3"
-                  style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>कोई परिणाम नहीं मिला</p>
-              : <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1"
-                  style={{scrollbarWidth:"thin",scrollbarColor:"rgba(99,102,241,0.25) transparent"}}>
-                  <div className="text-[9px] text-slate-600 mb-1"
-                    style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>मिले {results.length} परिणाम</div>
+              ? <p className="text-[11px] text-slate-500 text-center py-3" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>कोई परिणाम नहीं मिला</p>
+              : <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1" style={{scrollbarWidth:"thin",scrollbarColor:"rgba(99,102,241,0.25) transparent"}}>
+                  <div className="text-[9px] text-slate-600 mb-1" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>मिले {results.length} परिणाम</div>
                   {results.map((r,i) => {
-                    const lords = [r.mahadasha, r.antardasha, r.pratyantara||r.pratyantardasha];
+                    const lords = [r.mahadasha, r.antardasha, r.pratyantara||r.pratyantardashas];
                     const codes = lords.map(l=>TO_CODE[l]||"Su");
                     const metas = codes.map(c=>PLANET_META[c]||{});
                     return (
@@ -611,15 +733,13 @@ function AlignmentSearch({sequence}) {
                           {lords.map((lord,li)=>(
                             <span key={li} className="flex items-center gap-1">
                               <span className="text-xs font-black" style={{color:metas[li].color||"#94A3B8"}}>{metas[li].symbol}</span>
-                              <span className="text-xs font-semibold text-slate-200"
-                                style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</span>
+                              <span className="text-xs font-semibold text-slate-200" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{lord}</span>
                               {li<2 && <span className="text-slate-600 text-xs">»</span>}
                             </span>
                           ))}
                         </div>
                         {(r.start||r.from) && (
-                          <div className="text-[10px] text-slate-500 flex gap-3"
-                            style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+                          <div className="text-[10px] text-slate-500 flex gap-3" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
                             <span>{r.start||r.from} से {r.end||r.to}</span>
                             {r.duration && <span className="text-slate-600">अवधि: {r.duration}</span>}
                           </div>
@@ -636,10 +756,9 @@ function AlignmentSearch({sequence}) {
   );
 }
 
-// ── MAIN EXPORT ───────────────────────────────────────────────
-// ═══════════════════════════════════════════════════════════
-// DASHA PREDICTIONS — Detailed results with WHY reasoning
-// ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// DASHA PREDICTIONS & YOGINI 
+// ═══════════════════════════════════════════════════════════════════════════
 const HI = { fontFamily:"'Noto Sans Devanagari',sans-serif" };
 const C  = { amber:"#F59E0B",cyan:"#22D3EE",rose:"#FB7185",green:"#4ADE80",purple:"#C084FC",
              indigo:"#818CF8",orange:"#FB923C",teal:"#2DD4BF",red:"#EF4444",yellow:"#FCD34D",pink:"#F472B6" };
@@ -710,7 +829,6 @@ const MD_DATA = {
     remedy:"शुक्र मंत्र: ॐ शुक्राय नमः | हीरा/ओपल | लक्ष्मी पूजा शुक्रवार" },
 };
 
-// Antardasha compatibility matrix
 const AD_COMPAT = {
   Su:{Su:"मध्यम — स्वयं का अत्यधिक प्रभाव",Mo:"✅ अच्छा — माता/जनता से लाभ",Ma:"✅ मित्र — साहस और उन्नति",Me:"✅ मित्र — बुद्धि तेज, व्यापार",Ju:"✅ मित्र — धर्म-ज्ञान, पुत्र सुख",Ve:"⚠️ शत्रु — प्रेम-करियर में टकराव",Sa:"⚠️ शत्रु — बाधा, देरी, स्वास्थ्य",Ra:"⚠️ — भ्रम, अचानक परिवर्तन",Ke:"⚠️ — वैराग्य, आध्यात्मिक झुकाव"},
   Mo:{Su:"✅ — माता-पिता दोनों से लाभ",Mo:"मध्यम — अत्यधिक भावुकता",Ma:"⚠️ शत्रु — मानसिक तनाव, क्रोध",Me:"✅ मित्र — बुद्धि-भावना का संतुलन",Ju:"✅ मित्र — गजकेसरी सक्रिय",Ve:"✅ मित्र — प्रेम, सुख, संपत्ति",Sa:"⚠️ शत्रु — माता को कष्ट, तनाव",Ra:"⚠️ — मानसिक भ्रम, अस्थिरता",Ke:"⚠️ — वैराग्य, माता से दूरी"},
@@ -739,7 +857,6 @@ function DashaPredictions({ curMD, curAD, curMDCode, curADCode, chartMeta }) {
         <span className="flex-1 h-px bg-slate-800"/>
       </div>
 
-      {/* MD Selector */}
       <div className="grid grid-cols-5 gap-1.5">
         {PLANET_ORDER.map(c => {
           const d = MD_DATA[c]; if(!d) return null;
@@ -758,7 +875,6 @@ function DashaPredictions({ curMD, curAD, curMDCode, curADCode, chartMeta }) {
         })}
       </div>
 
-      {/* MD Detail Card */}
       {dd && <motion.div key={selMD} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}>
         <div className="p-4 rounded-2xl border" style={{ background:`${dd.color}0A`, borderColor:`${dd.color}35` }}>
           <div className="flex items-center gap-3 mb-3">
@@ -800,7 +916,6 @@ function DashaPredictions({ curMD, curAD, curMDCode, curADCode, chartMeta }) {
           </div>
         </div>
 
-        {/* Antardasha compatibility */}
         <button onClick={() => setShowAD(s => !s)}
           className="w-full mt-2 py-2.5 rounded-xl text-[12px] font-black transition-all flex items-center justify-center gap-2"
           style={{ background:"rgba(245,158,11,.08)", border:"1px solid rgba(245,158,11,.2)", color:C.amber }}>
@@ -842,36 +957,26 @@ function DashaPredictions({ curMD, curAD, curMDCode, curADCode, chartMeta }) {
   );
 }
 
-// ════════════════════════════════════════════════════════════
-// MAIN EXPORT — DashaTimeline with inner tab navigation
-// Tabs: दशा क्रम | फलादेश | 🔢 AV विश्लेषण | वर्ष चयन | संरेखण खोज
-// ════════════════════════════════════════════════════════════
-
-// ── योगिनी दशा Grid ──────────────────────────────────────────
-// योगिनी ग्रह → TINTS कोड मैपिंग
+// ── योगिनी दशा ───────────────────────────────────────────────
 const YOGINI_PLANET_CODE = {
   "Mo":"Mo", "Su":"Su", "Ju":"Ju", "Ma":"Ma",
   "Me":"Me", "Sa":"Sa", "Ve":"Ve", "Ra/Ke":"Ra",
 };
-// ग्रह कोड → योगिनी नाम (AD/PD/SD में दिखाने के लिए)
 const YOGINI_NAMES = {
   "Mo":"मंगला", "Su":"पिंगला", "Ju":"धान्या", "Ma":"भ्रामरी",
   "Me":"भद्रिका", "Sa":"उल्का", "Ve":"सिद्धा",
   "Ra/Ke":"संकटा", "Ra":"संकटा", "Ke":"संकटा",
 };
-// योगिनी दशाओं के लिए रंग — नाम आधारित
 const YOGINI_ACCENT = {
   "संकटा":"#818CF8","मंगला":"#94A3B8","पिंगला":"#F59E0B",
   "धान्या":"#FB923C","भ्रामरी":"#F87171","भद्रिका":"#34D399",
   "उल्का":"#A78BFA","सिद्धा":"#F472B6",
 };
-// planet string → accent color (AD/PD/SD के लिए shortcut)
 const yAccent = (planet) => YOGINI_ACCENT[YOGINI_NAMES[planet]] || "#94A3B8";
 
-// ── Helper: date string "DD-MM-YYYY" → Date object ───────────
 function yParse(s) {
   if (!s) return null;
-  const p = s.split(" ")[0].split("-"); // ignore time part if present
+  const p = s.split(" ")[0].split("-");
   if (p.length === 3) return new Date(`${p[2]}-${p[1]}-${p[0]}`);
   return null;
 }
@@ -880,7 +985,6 @@ function yIsCur(start, end, now) {
   return s && e && now >= s && now < e;
 }
 
-// ── Level 4 (SD): सूक्ष्म दशा mini grid ──────────────────────
 function YoginiSDRow({ pds, isCurAD, now }) {
   return (
     <div className="mt-2 pt-2 border-t border-white/5">
@@ -922,8 +1026,7 @@ function YoginiSDRow({ pds, isCurAD, now }) {
   );
 }
 
-// ── Level 3 (PD): प्रत्यंतर दशा accordion rows ───────────────
-function YoginiPDSection({ pratyantardashas, isCurAD, now, accentColor }) {
+function YoginiPDSection({ pratyantardashas, isCurAD, now }) {
   const [openPD, setOpenPD] = useState(() => {
     if (!isCurAD) return null;
     const idx = pratyantardashas?.findIndex(pd => yIsCur(pd.start, pd.end, now));
@@ -954,7 +1057,6 @@ function YoginiPDSection({ pratyantardashas, isCurAD, now, accentColor }) {
                 borderColor: isPdCur ? pdMeta.color : "rgba(255,255,255,0.06)",
               }}
             >
-              {/* PD row — click to open SD */}
               <button
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left"
                 onClick={() => hasSDs && setOpenPD(isPdOpen ? null : k)}
@@ -985,7 +1087,6 @@ function YoginiPDSection({ pratyantardashas, isCurAD, now, accentColor }) {
                 )}
               </button>
 
-              {/* SD sub-section */}
               <AnimatePresence>
                 {isPdOpen && hasSDs && (
                   <motion.div
@@ -1007,10 +1108,9 @@ function YoginiPDSection({ pratyantardashas, isCurAD, now, accentColor }) {
   );
 }
 
-// ── Main YoginiGrid: MD → AD → PD → SD ───────────────────────
 function YoginiGrid({ yoginiData }) {
-  const [openMD, setOpenMD] = useState({});   // object — multiple MDs एक साथ open
-  const [openAD, setOpenAD] = useState({});   // key: "mdIdx-adIdx"
+  const [openMD, setOpenMD] = useState({});
+  const [openAD, setOpenAD] = useState({});
 
   if (!yoginiData || yoginiData.length === 0) {
     return (
@@ -1022,15 +1122,11 @@ function YoginiGrid({ yoginiData }) {
   }
 
   const now = new Date();
-
-  const toggleMD = (i) =>
-    setOpenMD(prev => ({ ...prev, [i]: !prev[i] }));
-  const toggleAD = (key) =>
-    setOpenAD(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleMD = (i) => setOpenMD(prev => ({ ...prev, [i]: !prev[i] }));
+  const toggleAD = (key) => setOpenAD(prev => ({ ...prev, [key]: !prev[key] }));
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Header */}
       <div className="text-[10px] text-slate-600 uppercase tracking-widest mb-1 flex items-center gap-2">
         <span className="w-3 h-px bg-slate-700 inline-block"/>
         <span style={{ fontFamily:"'Noto Sans Devanagari',sans-serif" }}>
@@ -1059,7 +1155,6 @@ function YoginiGrid({ yoginiData }) {
               boxShadow:   isMdCur ? `0 0 18px ${accent}22` : "none",
             }}
           >
-            {/* ── MD Row ── */}
             <button className="w-full flex items-center gap-3 p-3.5 text-left"
               onClick={() => toggleMD(i)}>
               <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border"
@@ -1074,7 +1169,6 @@ function YoginiGrid({ yoginiData }) {
                     style={{ fontFamily:"'Noto Sans Devanagari',sans-serif", color:accent }}>
                     {md.name}
                   </span>
-                  {/* नक्षत्र badge — VP Goyal table */}
                   {md.nakshatra && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded-full border"
                       style={{ background:`${accent}12`, borderColor:`${accent}35`, color:`${accent}cc`,
@@ -1126,7 +1220,6 @@ function YoginiGrid({ yoginiData }) {
               </motion.div>
             </button>
 
-            {/* ── AD Accordion ── */}
             <AnimatePresence>
               {isMdOpen && ads.length > 0 && (
                 <motion.div
@@ -1158,7 +1251,6 @@ function YoginiGrid({ yoginiData }) {
                               boxShadow:   isAdCur ? `0 0 8px ${adAccent}18` : "none",
                             }}
                           >
-                            {/* AD row */}
                             <button
                               className="w-full flex items-center gap-2 px-3 py-2 text-left"
                               onClick={() => hasPDs && toggleAD(adKey)}
@@ -1189,7 +1281,6 @@ function YoginiGrid({ yoginiData }) {
                               )}
                             </button>
 
-                            {/* PD + SD sub-section */}
                             <AnimatePresence>
                               {isAdOpen && hasPDs && (
                                 <motion.div
@@ -1223,7 +1314,6 @@ function YoginiGrid({ yoginiData }) {
   );
 }
 
-// ── Inner Tab Bar ────────────────────────────────────────────
 const DASHA_TABS = [
   { id: "timeline",    label: "📅 दशा क्रम" },
   { id: "predictions", label: "📖 फलादेश" },
@@ -1261,25 +1351,24 @@ export default function DashaTimeline({ dasha, chartMeta }) {
   const curMD = current.mahadasha;
   const curAD = current.antardasha;
   const curPD = current.pratyantara;
-const curSD = current.sookshmadasha;
-const curPR = current.pranadasha;
+  const curSD = current.sookshmadasha;
+  const curPR = current.pranadasha;
 
-const curSDCode = TO_CODE[curSD] || "Su";
-const curPRCode = TO_CODE[curPR] || "Su";
-
-const m4 = PLANET_META[curSDCode] || {};
-const m5 = PLANET_META[curPRCode] || {};
   const curMDCode = TO_CODE[curMD] || "Su";
   const curADCode = TO_CODE[curAD] || "Su";
   const curPDCode = TO_CODE[curPD] || "Su";
+  const curSDCode = TO_CODE[curSD] || "Su";
+  const curPRCode = TO_CODE[curPR] || "Su";
+
   const m1 = PLANET_META[curMDCode]||{};
   const m2 = PLANET_META[curADCode]||{};
   const m3 = PLANET_META[curPDCode]||{};
+  const m4 = PLANET_META[curSDCode]||{};
+  const m5 = PLANET_META[curPRCode]||{};
 
   return (
     <div className="flex flex-col gap-5 pb-6">
 
-      {/* ── वर्तमान दशा card — always visible ───────────────── */}
       <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
         className="p-5 rounded-2xl border border-amber-500/28 bg-gradient-to-br from-amber-500/8 via-slate-900/50 to-slate-950/70 ring-1 ring-amber-500/15 shadow-lg shadow-amber-500/5">
         <div className="flex items-center gap-2 text-[10px] text-amber-400/70 uppercase tracking-widest mb-4">
@@ -1287,7 +1376,8 @@ const m5 = PLANET_META[curPRCode] || {};
           <span style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>वर्तमान दशा काल</span>
         </div>
 
-         <div className="grid grid-cols-5 gap-2 md:gap-3 mb-4">          {[
+        <div className="grid grid-cols-5 gap-2 md:gap-3 mb-4">
+          {[
               {label:"महादशा", lord:curMD, code:curMDCode, meta:m1},
               {label:"अंतर्दशा", lord:curAD, code:curADCode, meta:m2},
               {label:"प्रत्यंतर", lord:curPD, code:curPDCode, meta:m3},
@@ -1298,12 +1388,9 @@ const m5 = PLANET_META[curPRCode] || {};
             return (
               <div key={i} className="text-center p-3 rounded-xl border"
                 style={{background:t.glow, borderColor:t.border}}>
-                <div className="text-2xl mb-1" style={{color:d.meta.color,
-                  filter:`drop-shadow(0 0 8px ${d.meta.color}60)`}}>{d.meta.symbol}</div>
-                <div className="text-sm font-bold text-slate-100 mb-0.5"
-                  style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{d.lord}</div>
-                <div className="text-[10px] text-slate-500"
-                  style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{d.label}</div>
+                <div className="text-2xl mb-1" style={{color:d.meta.color, filter:`drop-shadow(0 0 8px ${d.meta.color}60)`}}>{d.meta.symbol}</div>
+                <div className="text-sm font-bold text-slate-100 mb-0.5" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{d.lord}</div>
+                <div className="text-[10px] text-slate-500" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{d.label}</div>
               </div>
             );
           })}
@@ -1311,18 +1398,15 @@ const m5 = PLANET_META[curPRCode] || {};
 
         <div>
           <div className="flex justify-between text-[10px] mb-1.5">
-            <span className="text-slate-500"
-              style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>महादशा प्रगति</span>
+            <span className="text-slate-500" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>महादशा प्रगति</span>
             <span style={{color:m1.color}}>समाप्त: {current.endDate} · {current.progressPercent}%</span>
           </div>
           <ProgressBar pct={current.progressPercent} color={m1.color} delay={0.4}/>
         </div>
       </motion.div>
 
-      {/* ── Inner Tab Navigation ─────────────────────────────── */}
       <DashaInnerTabs active={activeTab} onChange={setActiveTab} />
 
-      {/* ── Tab: दशा क्रम (Accordion MD → AD → PD) ──────────── */}
       {activeTab === "timeline" && (
         <div>
           <div className="text-[10px] text-slate-600 uppercase tracking-widest mb-3 flex items-center gap-2">
@@ -1332,40 +1416,17 @@ const m5 = PLANET_META[curPRCode] || {};
           </div>
           <div className="flex flex-col gap-3">
             {sequence.map((d,i) => (
-              <MDCard key={i} d={d} curMD={curMD} curAD={curAD} curPD={curPD} curSD={curSD} curPR={curPR} idx={i}/>
+              <MDCard key={i} d={d} curMD={curMD} curAD={curAD} curPD={curPD} curSD={curSD} curPR={curPR} idx={i} chartMeta={chartMeta}/>
             ))}
           </div>
         </div>
       )}
 
-      {/* ── Tab: फलादेश (Predictions) ────────────────────────── */}
-      {activeTab === "predictions" && (
-        <DashaPredictions
-          curMD={curMD} curAD={curAD}
-          curMDCode={curMDCode} curADCode={curADCode}
-          chartMeta={chartMeta}
-        />
-      )}
-
-      {/* ── Tab: 🔢 AV विश्लेषण ← NEW ────────────────────────── */}
-      {activeTab === "dasha_av" && (
-        <DashaAVTab data={chartMeta?.enginesData?.dasha_shani} />
-      )}
-
-      {/* ── Tab: वर्ष चयन ─────────────────────────────────────── */}
-      {activeTab === "year" && (
-        <YearSelector sequence={sequence}/>
-      )}
-
-      {/* ── Tab: संरेखण खोज ──────────────────────────────────── */}
-      {activeTab === "alignment" && (
-        <AlignmentSearch sequence={sequence}/>
-      )}
-
-      {/* ── Tab: ✨ योगिनी दशा ───────────────────────────────── */}
-      {activeTab === "yogini" && (
-        <YoginiGrid yoginiData={yogini} />
-      )}
+      {activeTab === "predictions" && <DashaPredictions curMD={curMD} curAD={curAD} curMDCode={curMDCode} curADCode={curADCode} chartMeta={chartMeta}/>}
+      {activeTab === "dasha_av" && <DashaAVTab data={chartMeta?.enginesData?.dasha_shani} />}
+      {activeTab === "year" && <YearSelector sequence={sequence}/>}
+      {activeTab === "alignment" && <AlignmentSearch sequence={sequence}/>}
+      {activeTab === "yogini" && <YoginiGrid yoginiData={yogini} />}
 
     </div>
   );
