@@ -459,7 +459,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
                           ) : ptDetail.is_caution ? (
                             <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-300 font-bold border border-red-500/30">⚠️ कमजोर/पीड़ा योग → {lordshipText} के फलों में रुकावट या कष्ट की चेतावनी।</span>
                           ) : (
-                            <span className="text-slate-500">सामान्य प्रभाव ({lordshipText})</span>
+                            <span className="text-slate-400">सामान्य प्रभाव ({lordshipText})</span>
                           )}
                         </td>
                       </tr>
@@ -992,7 +992,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
                     </td>
                     <td className="p-2 border-r border-slate-700 text-right text-indigo-400 bg-indigo-900/30 text-[10px]">D10 योग:</td>
                     <td className="p-2 bg-indigo-900/30">
-                      <span className={`text-[13px] ${t.d10Bav>t.d1Bav?'text-indigo-400':'text-amber-500'}`}>{t.d10Bav} {t.d10Bav>t.d1Bav?"🚀":""}</span>
+                      <span className={`text-[13px] ${t.d10Bav>t.d1Bav?'text-indigo-400':'text-amber-500'}`}>{t.d10Bav} {t.d10Bav>t.d1Sav?"🚀":""}</span>
                     </td>
                   </tr>
                 </tbody>

@@ -2256,18 +2256,13 @@ def find_exact_sun_ingress(year, month, day):
     न्यूटन-राप्सन या बाइसेक्शन विधि का उपयोग करके उस महीने में सूर्य के 
     0 डिग्री राशि प्रवेश (Exact Solar Ingress) का सटीक क्षण (Julian Day) निकालता है।
     """
-    # उस तारीख के दोपहर 12 बजे से शुरुआत करें
     approx_jd = swe.julday(year, month, day, 12.0)
     swe.set_sid_mode(swe.SIDM_LAHIRI)
     
-    # वर्तमान सूर्य की निरयण डिग्री और राशि इंडेक्स निकालें
     res = swe.calc_ut(approx_jd, swe.SUN, swe.FLG_SIDEREAL)[0][0]
     current_sign = int(res / 30) % 12
-    
-    # हमें सूर्य के इस राशि के प्रारंभ (0 डिग्री) में प्रवेश का क्षण चाहिए
     target_deg = current_sign * 30.0
     
-    # अगर सूर्य राशि के बिल्कुल अंत में है और अगले दिन प्रवेश कर रहा है
     if (res % 30) > 25:
         target_deg = ((current_sign + 1) % 12) * 30.0
 
@@ -2275,12 +2270,10 @@ def find_exact_sun_ingress(year, month, day):
     high_jd = approx_jd + 1.5
     exact_jd = approx_jd
     
-    # 0.05 सेकंड की सटीकता के लिए 30 बार बाइसेक्शन लूप चलाएं
     for _ in range(30):
         mid_jd = (low_jd + high_jd) / 2.0
         sun_deg = swe.calc_ut(mid_jd, swe.SUN, swe.FLG_SIDEREAL)[0][0]
         
-        # 360 डिग्री बाउंड्री क्रॉसिंग को हैंडल करें
         if target_deg == 0 and sun_deg > 330:
             sun_deg -= 360.0
             
@@ -2300,6 +2293,14 @@ def api_monthly_transit_bav():
     1. सूर्य के 0 डिग्री राशि प्रवेश (Exact Sun Ingress) के सटीक समय पर गोचर गणना।
     2. थ्रेशोल्ड लक्ष्य = 25 बिंदु (भिन्नाष्टक)।
     """
+    # 🌟 वेंडर/क्लाउड सर्वर्स (Vercel/Render) पर 405 और CORS एरर रोकने के लिए OPTIONS प्री-फ्लाइट को मैन्युअली हैंडल करें
+    if request.method == 'OPTIONS':
+        response = jsonify({"success": True})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response, 200
+
     try:
         body = request.get_json(force=True)
         if not body:
@@ -2316,10 +2317,8 @@ def api_monthly_transit_bav():
         except ValueError:
             return jsonify({"success": False, "error": "तारीख का फॉर्मेट YYYY-MM-DD होना चाहिए।"}), 400
 
-        # [सुधार 1]: सूर्य संक्रांति प्रवेश (0-Degree Solar Ingress) का सटीक क्षण निकालें
         ingress_jd = find_exact_sun_ingress(input_dt.year, input_dt.month, input_dt.day)
         
-        # डिस्प्ले के लिए UTC समय को रीडेबल फॉर्मेट में बदलें
         greg_time = swe.revjul(ingress_jd)
         hour_frac = greg_time[3]
         hours = int(hour_frac)
@@ -2337,7 +2336,6 @@ def api_monthly_transit_bav():
         transit_details = []
         total_bav_transit_points = 0
 
-        # सूर्य प्रवेश के उसी सटीक सेकंड पर अन्य सातों ग्रहों की राशियाँ और बिंदु निकालें
         for p in PLANET_KEYS:
             deg = swe.calc_ut(ingress_jd, PLANET_SWE[p], swe.FLG_SIDEREAL)[0][0]
             sign_idx = int(deg / 30) % 12
@@ -2360,7 +2358,8 @@ def api_monthly_transit_bav():
         bav_threshold = 25
         is_bav_auspicious = total_bav_transit_points >= bav_threshold
 
-        return jsonify({
+        # 🌟 क्लाउड रिस्पॉन्स में CORS हेडर्स जोड़ें
+        res = jsonify({
             "success": True,
             "is_auspicious": is_bav_auspicious,
             "total_points": total_bav_transit_points,
@@ -2368,6 +2367,8 @@ def api_monthly_transit_bav():
             "exact_ingress_time": exact_time_str,
             "transit_details": transit_details
         })
+        res.headers.add('Access-Control-Allow-Origin', '*')
+        return res
 
     except Exception as e:
         import traceback
