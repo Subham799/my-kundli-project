@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const HI = { fontFamily: "'Noto Sans Devanagari', sans-serif" };
 
-// स्थिरांक (Constants) को Component के बाहर रखा है ताकि बार-बार मेमोरी न लें
 const PLANETS = [
   { k: "Su", hi: "सूर्य", color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20" },
   { k: "Mo", hi: "चंद्र", color: "text-slate-200", bg: "bg-slate-200/10", border: "border-slate-200/20" },
@@ -16,7 +15,6 @@ const PLANETS = [
 
 const RASHIS = ["मेष", "वृष", "मिथुन", "कर्क", "सिंह", "कन्या", "तुला", "वृश्चिक", "धनु", "मकर", "कुंभ", "मीन"];
 
-// Heatmap Logic को भी बाहर निकाल दिया (Pure Function - Super Fast)
 const getHeatmapClass = (pt) => {
   if (pt >= 4) return "text-emerald-400 font-black"; 
   if (pt >= 2) return "text-amber-400 font-bold";  
@@ -24,30 +22,42 @@ const getHeatmapClass = (pt) => {
   return "text-slate-600";                         
 };
 
-// React.memo का इस्तेमाल: इससे फालतू रेंडरिंग 100% रुक जाएगी
-const ShodhanaPanel = React.memo(({ shodhanaData, lagnaIdx = 0 }) => {
+const ShodhanaPanel = React.memo(({ shodhanaData }) => {
   const [activeTab, setActiveTab] = useState('trikona');
+  console.log("FULL SHODHANA DATA", shodhanaData);
+console.log("ORIGINAL BAV", shodhanaData?.original_bav);
+console.log(
+  "MARS",
+  shodhanaData?.original_bav?.Ma,
+  shodhanaData?.original_bav?.Ma?.reduce((a,b)=>a+b,0)
+);
 
-  // Crash-Proof Destructuring
   const { 
     trikona_shodhana = {}, 
     ekadhipatya_shodhana = {}, 
     shodhya_pinda = {}, 
-    event_triggers = [] 
+    event_triggers = [],
+    original_bav = {} 
   } = shodhanaData || {};
+  // 2. यहाँ अपना Console Log लगा दें 👇
+  console.log(
+    "🔥 Mars BAV Frontend Check:", 
+    original_bav?.Ma, 
+    "Total Sum:", 
+    original_bav?.Ma?.reduce((a, b) => a + b, 0)
+  );
 
-  // Error Check
+  
+
   if (!shodhanaData || shodhanaData.error) {
     return <div className="p-5 text-center text-rose-400 text-sm" style={HI}>⚠️ शोधन डेटा उपलब्ध नहीं है या कोई त्रुटि है।</div>;
   }
 
-  // Memoized Calculation: सिर्फ एक बार चलेगा
   const maxPinda = useMemo(() => {
     const values = Object.values(shodhya_pinda).map(Number).filter(n => !isNaN(n));
     return values.length > 0 ? Math.max(...values) : 0;
   }, [shodhya_pinda]);
 
-  // Reusable Table Component (Lightweight)
   const renderTable = (data, title, desc) => (
     <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="mt-4">
       <div className="mb-4">
@@ -59,8 +69,11 @@ const ShodhanaPanel = React.memo(({ shodhanaData, lagnaIdx = 0 }) => {
           <thead>
             <tr className="bg-slate-800/80 text-slate-300">
               <th className="p-2 border-b border-r border-slate-700/50 font-black">ग्रह</th>
+              {/* 🔥 FIX: हेडिंग में सीधे राशियों के नाम (मेष, वृषभ) दिखाएं ताकि कन्फ्यूजन न हो */}
               {RASHIS.map((r, i) => (
-                <th key={i} className="p-2 border-b border-slate-700/50 font-semibold min-w-[35px]">{i + 1}</th>
+                <th key={i} className="p-2 border-b border-slate-700/50 font-semibold min-w-[35px] text-[10px]">
+                  {i + 1}<br/><span className="text-slate-500">{r}</span>
+                </th>
               ))}
             </tr>
           </thead>
@@ -71,8 +84,8 @@ const ShodhanaPanel = React.memo(({ shodhanaData, lagnaIdx = 0 }) => {
                 <tr key={p.k} className="hover:bg-white/[0.02] transition-colors border-b border-slate-700/30 last:border-0">
                   <td className={`p-2 border-r border-slate-700/50 font-black ${p.color} bg-slate-900/50`}>{p.hi}</td>
                   {Array.from({ length: 12 }).map((_, i) => {
-                      // 🔥 Rotation Fix: Engine Rashi-based → UI House-based
-                      const rashiIndex = (lagnaIdx + i) % 12;
+                      // 🔥 FIX: रोटेशन हटा दिया गया है। अब i=0 मतलब हमेशा मेष (Aries) होगा।
+                      const rashiIndex = i;
                       const pt = points[rashiIndex] ?? 0;
                       return (
                         <td key={i} className={`p-2 ${getHeatmapClass(pt)}`}>
@@ -91,7 +104,6 @@ const ShodhanaPanel = React.memo(({ shodhanaData, lagnaIdx = 0 }) => {
 
   return (
     <div className="mt-6 mb-4 p-4 rounded-2xl border border-slate-700/50 bg-slate-900/60 shadow-xl">
-      {/* Sub-Tabs */}
       <div className="flex p-1 bg-slate-800 rounded-xl overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         {[
           { id: 'trikona', label: 'त्रिकोण शोधन' },
@@ -113,7 +125,6 @@ const ShodhanaPanel = React.memo(({ shodhanaData, lagnaIdx = 0 }) => {
         ))}
       </div>
 
-      {/* Tab Content */}
       <AnimatePresence mode="wait">
         {activeTab === 'trikona' && renderTable(trikona_shodhana, "त्रिकोण शोधन (Trikona Shodhana)", "अग्नि, पृथ्वी, वायु और जल त्रिकोण की राशियों में से न्यूनतम अंक को घटाने के बाद बचे हुए बिंदु।")}
         
@@ -122,7 +133,6 @@ const ShodhanaPanel = React.memo(({ shodhanaData, lagnaIdx = 0 }) => {
         {activeTab === 'triggers' && (
           <motion.div key="p" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="mt-4">
             
-            {/* Shodhya Pinda Grid */}
             <div className="mb-6 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
               {PLANETS.map(p => {
                 const pVal = shodhya_pinda[p.k] || 0;
@@ -165,6 +175,11 @@ const ShodhanaPanel = React.memo(({ shodhanaData, lagnaIdx = 0 }) => {
                             <span className={`text-[10px] font-bold ${pInfo.color} uppercase tracking-wider`} style={HI}>कारक: {pInfo.hi}</span>
                           </div>
                         </div>
+                        {evt.transit_by && (
+                          <div className={`px-2 py-1 rounded text-[10px] font-bold border ${evt.transit_by === 'Ju' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-slate-600/30 text-slate-300 border-slate-500/50'}`} style={HI}>
+                            गोचर: {evt.transit_by === 'Ju' ? 'गुरु' : 'शनि'}
+                          </div>
+                        )}
                       </div>
                       <div className="px-3 py-2 rounded-lg bg-[#040814] border border-slate-700 text-slate-300 text-[11px] font-mono tracking-wide mb-3 flex justify-between items-center">
                         <span>{evt.formula}</span>
@@ -175,7 +190,9 @@ const ShodhanaPanel = React.memo(({ shodhanaData, lagnaIdx = 0 }) => {
                           <span className="px-2 py-1 bg-rose-500/20 text-rose-300 text-[10px] font-bold rounded border border-rose-500/30" style={HI}>नक्षत्र: {evt.trigger_nakshatra}</span>
                           <span className="px-2 py-1 bg-cyan-500/20 text-cyan-300 text-[10px] font-bold rounded border border-cyan-500/30" style={HI}>राशि: {evt.trigger_rashi}</span>
                         </div>
-                        <p className="text-[12px] text-slate-200 leading-relaxed font-medium" style={HI}>{evt.prediction}</p>
+                        <p className="text-[12px] text-slate-200 leading-relaxed font-medium" style={HI}>
+                          {evt.prediction ? evt.prediction.replace(/\*\*/g, '') : ''}
+                        </p>
                       </div>
                     </div>
                   );

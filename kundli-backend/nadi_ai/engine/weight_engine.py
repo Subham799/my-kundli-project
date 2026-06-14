@@ -54,7 +54,7 @@ class WeightEngine:
         m_nak = nak_data["final_multiplier"]
 
         # 5. Dasha Multiplier (Time Permission)
-        target_date = self.dob + timedelta(days=target_year * 365.25)
+        target_date = self.dob + timedelta(days=target_year * 360.0)
         active_dasha = self.dasha_engine.get_current_mahadasha(target_date)
         m_dasha = self._calculate_dasha_multiplier(planet_code, active_dasha)
 

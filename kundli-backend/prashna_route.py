@@ -288,7 +288,7 @@ def _compute_dba(jd: float, moon_lon: float) -> dict:
 
     # JD → datetime for adding years
     # Bhukti: sub-period within Maha
-    DAYS_PER_YR = 365.25
+    DAYS_PER_YR = 360.0
     maha_total_days = maha_yrs * DAYS_PER_YR
 
     bhukti_lord = None

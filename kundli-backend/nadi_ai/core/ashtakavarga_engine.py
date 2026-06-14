@@ -18,13 +18,11 @@ class AshtakavargaEngine:
         Supports both List and Dict for sav_bindus to prevent crashes.
         """
         total = 0
-        # FIX 1: Both indices strictly converted to int to prevent Infinite Loop
         current_idx = int(start_sign_idx)
         target_idx = int(target_sign_idx)
         
         # Circular sum (inclusive of start and target signs)
         while True:
-            # FIX 2: Safe handling for both List and Dict
             if isinstance(sav_bindus, list):
                 total += sav_bindus[current_idx]
             else:
@@ -38,9 +36,14 @@ class AshtakavargaEngine:
         return total
 
     def calculate_exact_age(self, total_bindus):
-        """ The Core File Sutra: (Total * 7) / 27 """
-        exact_age = (total_bindus * 7) / 27.0
-        return round(exact_age, 2)
+        """ 
+        The Core File Sutra: (Total * 7) % 27
+        🔥 FIX: Age is the REMAINDER (शेषफल), not the float quotient!
+        """
+        remainder = (total_bindus * 7) % 27
+        # अगर शेषफल 0 आता है, तो उम्र 27वां वर्ष मानी जाती है
+        exact_age = remainder if remainder != 0 else 27
+        return int(exact_age)
 
     def generate_karmic_triggers(self, lagna_sign_idx, astro_data, sav_bindus):
         """
@@ -52,7 +55,6 @@ class AshtakavargaEngine:
         # 1️⃣ DUKH TRIGGERS (Struggle / Karma Cleansing)
         for planet in self.DUKH_PLANETS:
             if planet in astro_data:
-                # FIX 3: Explicitly wrap in int() to avoid String vs Int comparison bug
                 p_sign_idx = int(astro_data[planet]["Vargas"]["D1"]["Idx"])
                 total_pts = self._sum_bindus(lagna_sign_idx, p_sign_idx, sav_bindus)
                 age = self.calculate_exact_age(total_pts)
@@ -71,7 +73,6 @@ class AshtakavargaEngine:
         # 2️⃣ SUKH TRIGGERS (Destiny / Joy)
         for planet in self.SUKH_PLANETS:
             if planet in astro_data:
-                # FIX 3: Explicitly wrap in int()
                 p_sign_idx = int(astro_data[planet]["Vargas"]["D1"]["Idx"])
                 total_pts = self._sum_bindus(lagna_sign_idx, p_sign_idx, sav_bindus)
                 age = self.calculate_exact_age(total_pts)

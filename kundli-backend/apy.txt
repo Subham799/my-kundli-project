@@ -1012,12 +1012,12 @@ def calculate_vimshottari(moon_degree, birth_date):
     nak_idx = int(moon_degree / (360/27)); lord_idx = nak_idx % 9
     fraction_remaining = 1.0 - (moon_degree % (360/27)) / (360/27)
     current_date = birth_date; dashas = []
-    first_end = current_date + timedelta(days=fraction_remaining * DASHA_YEARS[lord_idx] * 365.25)
+    first_end = current_date + timedelta(days=fraction_remaining * DASHA_YEARS[lord_idx] * 360.0)
     dashas.append({"planet":DASHA_LORDS[lord_idx],"start":current_date.strftime("%d-%m-%Y"),"end":first_end.strftime("%d-%m-%Y"),"idx":lord_idx})
     current_date = first_end
     for i in range(1, 9):
         idx = (lord_idx + i) % 9
-        end  = current_date + timedelta(days=DASHA_YEARS[idx] * 365.25)
+        end  = current_date + timedelta(days=DASHA_YEARS[idx] * 360.0)
         dashas.append({"planet":DASHA_LORDS[idx],"start":current_date.strftime("%d-%m-%Y"),"end":end.strftime("%d-%m-%Y"),"idx":idx})
         current_date = end
     return dashas
@@ -1029,7 +1029,7 @@ def get_antardashas(md_lord_idx, md_start_date_str):
         ad_lord_idx = (md_lord_idx + i) % 9
         ad_years    = DASHA_YEARS[ad_lord_idx]
         duration    = (md_years * ad_years) / 120.0
-        end_date    = current_date + timedelta(days=duration * 365.25)
+        end_date    = current_date + timedelta(days=duration * 360.0)
         ads.append({"planet":DASHA_LORDS[ad_lord_idx],"start":current_date.strftime("%d-%m-%Y"),"end":end_date.strftime("%d-%m-%Y"),"idx":ad_lord_idx})
         current_date = end_date
     return ads
@@ -1039,7 +1039,7 @@ def get_pratyantardashas(md_lord_idx, ad_lord_idx, ad_start_date_str):
     md_years = DASHA_YEARS[md_lord_idx]; ad_years = DASHA_YEARS[ad_lord_idx]
     for i in range(9):
         pd_lord_idx = (ad_lord_idx + i) % 9; pd_years = DASHA_YEARS[pd_lord_idx]
-        duration    = (md_years * ad_years * pd_years / (120.0 * 120.0)) * 365.25
+        duration    = (md_years * ad_years * pd_years / (120.0 * 120.0)) * 360.0
         end_date    = current_date + timedelta(days=duration)
         pds.append({"planet":DASHA_LORDS[pd_lord_idx],"start":current_date.strftime("%d-%m-%Y"),"end":end_date.strftime("%d-%m-%Y")})
         current_date = end_date
@@ -1062,12 +1062,12 @@ def get_all_dashas_for_year(moon_degree, birth_date, target_year):
     fraction_remaining = 1.0 - (moon_degree%(360/27))/(360/27)
     current_date = birth_date
     first_md_duration = fraction_remaining * DASHA_YEARS[lord_idx]
-    md_end = current_date + timedelta(days=first_md_duration * 365.25)
+    md_end = current_date + timedelta(days=first_md_duration * 360.0)
     mahadashas = [{"planet":DASHA_LORDS[lord_idx],"idx":lord_idx,"start":current_date,"end":md_end}]
     current_date = md_end
     for i in range(1,9):
         md_idx = (lord_idx+i)%9; md_duration = DASHA_YEARS[md_idx]
-        md_end = current_date + timedelta(days=md_duration*365.25)
+        md_end = current_date + timedelta(days=md_duration*360.0)
         mahadashas.append({"planet":DASHA_LORDS[md_idx],"idx":md_idx,"start":current_date,"end":md_end})
         current_date = md_end
     target_start = datetime(target_year,1,1); target_end = datetime(target_year,12,31)
@@ -1078,12 +1078,12 @@ def get_all_dashas_for_year(moon_degree, birth_date, target_year):
             for i in range(9):
                 ad_idx = (md['idx']+i)%9; ad_years = DASHA_YEARS[ad_idx]
                 ad_duration = (md_years*ad_years)/120.0
-                ad_end = ad_current + timedelta(days=ad_duration*365.25)
+                ad_end = ad_current + timedelta(days=ad_duration*360.0)
                 if ad_current <= target_end and ad_end >= target_start:
                     pd_current = ad_current
                     for j in range(9):
                         pd_idx = (ad_idx+j)%9; pd_years = DASHA_YEARS[pd_idx]
-                        pd_duration = (md_years*ad_years*pd_years/(120.0*120.0))*365.25
+                        pd_duration = (md_years*ad_years*pd_years/(120.0*120.0))*360.0
                         pd_end = pd_current + timedelta(days=pd_duration)
                         if pd_current <= target_end and pd_end >= target_start:
                             active_dashas.append({'mahadasha':md['planet'],'antardasha':DASHA_LORDS[ad_idx],'pratyantardasha':DASHA_LORDS[pd_idx],'start':pd_current,'end':pd_end})
@@ -1098,12 +1098,12 @@ def search_dasha_alignments(moon_degree, birth_date, search_criteria):
     fraction_remaining = 1.0 - (moon_degree%(360/27))/(360/27)
     current_date = birth_date; matches = []
     first_md_duration = fraction_remaining * DASHA_YEARS[lord_idx]
-    md_end = current_date + timedelta(days=first_md_duration*365.25)
+    md_end = current_date + timedelta(days=first_md_duration*360.0)
     mahadashas = [{"planet":DASHA_LORDS[lord_idx],"idx":lord_idx,"start":current_date,"end":md_end}]
     current_date = md_end
     for i in range(1,9):
         md_idx = (lord_idx+i)%9
-        md_end = current_date + timedelta(days=DASHA_YEARS[md_idx]*365.25)
+        md_end = current_date + timedelta(days=DASHA_YEARS[md_idx]*360.0)
         mahadashas.append({"planet":DASHA_LORDS[md_idx],"idx":md_idx,"start":current_date,"end":md_end})
         current_date = md_end
     for md in mahadashas:
@@ -1113,12 +1113,12 @@ def search_dasha_alignments(moon_degree, birth_date, search_criteria):
             ad_idx = (md['idx']+i)%9; ad_planet = DASHA_LORDS[ad_idx]
             ad_years = DASHA_YEARS[ad_idx]; ad_duration = (md_years*ad_years)/120.0
             if search_criteria.get('antardasha') and ad_planet != search_criteria['antardasha']:
-                ad_current += timedelta(days=ad_duration*365.25); continue
-            ad_end = ad_current + timedelta(days=ad_duration*365.25)
+                ad_current += timedelta(days=ad_duration*360.0); continue
+            ad_end = ad_current + timedelta(days=ad_duration*360.0)
             pd_current = ad_current
             for j in range(9):
                 pd_idx = (ad_idx+j)%9; pd_planet = DASHA_LORDS[pd_idx]
-                pd_years = DASHA_YEARS[pd_idx]; pd_duration = (md_years*ad_years*pd_years/(120.0*120.0))*365.25
+                pd_years = DASHA_YEARS[pd_idx]; pd_duration = (md_years*ad_years*pd_years/(120.0*120.0))*360.0
                 if search_criteria.get('pratyantardasha') and pd_planet != search_criteria['pratyantardasha']:
                     pd_current += timedelta(days=pd_duration); continue
                 pd_end = pd_current + timedelta(days=pd_duration)

@@ -1058,12 +1058,12 @@ def calculate_vimshottari(moon_degree, birth_date):
     nak_idx = int(moon_degree / (360/27)); lord_idx = nak_idx % 9
     fraction_remaining = 1.0 - (moon_degree % (360/27)) / (360/27)
     current_date = birth_date; dashas = []
-    first_end = current_date + timedelta(days=fraction_remaining * DASHA_YEARS[lord_idx] * 365.25)
+    first_end = current_date + timedelta(days=fraction_remaining * DASHA_YEARS[lord_idx] * 360.0)
     dashas.append({"planet":DASHA_LORDS[lord_idx],"start":current_date.strftime("%d-%m-%Y"),"end":first_end.strftime("%d-%m-%Y"),"idx":lord_idx})
     current_date = first_end
     for i in range(1, 9):
         idx = (lord_idx + i) % 9
-        end  = current_date + timedelta(days=DASHA_YEARS[idx] * 365.25)
+        end  = current_date + timedelta(days=DASHA_YEARS[idx] * 360.0)
         dashas.append({"planet":DASHA_LORDS[idx],"start":current_date.strftime("%d-%m-%Y"),"end":end.strftime("%d-%m-%Y"),"idx":idx})
         current_date = end
     return dashas
@@ -1229,7 +1229,7 @@ def get_antardashas(md_lord_idx, md_start_date_str):
         ad_lord_idx = (md_lord_idx + i) % 9
         ad_years    = DASHA_YEARS[ad_lord_idx]
         duration    = (md_years * ad_years) / 120.0
-        end_date    = current_date + timedelta(days=duration * 365.25)
+        end_date    = current_date + timedelta(days=duration * 360.0)
         ads.append({"planet":DASHA_LORDS[ad_lord_idx],"start":current_date.strftime("%d-%m-%Y"),"end":end_date.strftime("%d-%m-%Y"),"idx":ad_lord_idx})
         current_date = end_date
     return ads
@@ -1239,7 +1239,7 @@ def get_pratyantardashas(md_lord_idx, ad_lord_idx, ad_start_date_str):
     md_years = DASHA_YEARS[md_lord_idx]; ad_years = DASHA_YEARS[ad_lord_idx]
     for i in range(9):
         pd_lord_idx = (ad_lord_idx + i) % 9; pd_years = DASHA_YEARS[pd_lord_idx]
-        duration    = (md_years * ad_years * pd_years / (120.0 * 120.0)) * 365.25
+        duration    = (md_years * ad_years * pd_years / (120.0 * 120.0)) * 360.0
         end_date    = current_date + timedelta(days=duration)
         pds.append({
             "planet": DASHA_LORDS[pd_lord_idx],
@@ -1298,13 +1298,13 @@ def get_all_dashas_for_year(moon_degree, birth_date, target_year):
     fraction_remaining = 1.0 - (moon_degree%(360/27))/(360/27)
     current_date = birth_date
     first_md_duration = fraction_remaining * DASHA_YEARS[lord_idx]
-    md_end = current_date + timedelta(days=first_md_duration * 365.25)
+    md_end = current_date + timedelta(days=first_md_duration * 360.0)
     mahadashas = [{"planet":DASHA_LORDS[lord_idx],"idx":lord_idx,"start":current_date,"end":md_end}]
     current_date = md_end
     
     for i in range(1,9):
         md_idx = (lord_idx+i)%9; md_duration = DASHA_YEARS[md_idx]
-        md_end = current_date + timedelta(days=md_duration*365.25)
+        md_end = current_date + timedelta(days=md_duration*360.0)
         mahadashas.append({"planet":DASHA_LORDS[md_idx],"idx":md_idx,"start":current_date,"end":md_end})
         current_date = md_end
         
@@ -1317,12 +1317,12 @@ def get_all_dashas_for_year(moon_degree, birth_date, target_year):
             for i in range(9):
                 ad_idx = (md['idx']+i)%9; ad_years = DASHA_YEARS[ad_idx]
                 ad_duration = (md_years*ad_years)/120.0
-                ad_end = ad_current + timedelta(days=ad_duration*365.25)
+                ad_end = ad_current + timedelta(days=ad_duration*360.0)
                 if ad_current <= target_end and ad_end >= target_start:
                     pd_current = ad_current
                     for j in range(9):
                         pd_idx = (ad_idx+j)%9; pd_years = DASHA_YEARS[pd_idx]
-                        pd_duration = (md_years*ad_years*pd_years/(120.0*120.0))*365.25
+                        pd_duration = (md_years*ad_years*pd_years/(120.0*120.0))*360.0
                         pd_end = pd_current + timedelta(days=pd_duration)
                         if pd_current <= target_end and pd_end >= target_start:
                             sd_current = pd_current
@@ -1369,13 +1369,13 @@ def search_dasha_alignments(moon_degree, birth_date, search_criteria):
     fraction_remaining = 1.0 - (moon_degree%(360/27))/(360/27)
     current_date = birth_date; matches = []
     first_md_duration = fraction_remaining * DASHA_YEARS[lord_idx]
-    md_end = current_date + timedelta(days=first_md_duration*365.25)
+    md_end = current_date + timedelta(days=first_md_duration*360.0)
     mahadashas = [{"planet":DASHA_LORDS[lord_idx],"idx":lord_idx,"start":current_date,"end":md_end}]
     current_date = md_end
     
     for i in range(1,9):
         md_idx = (lord_idx+i)%9
-        md_end = current_date + timedelta(days=DASHA_YEARS[md_idx]*365.25)
+        md_end = current_date + timedelta(days=DASHA_YEARS[md_idx]*360.0)
         mahadashas.append({"planet":DASHA_LORDS[md_idx],"idx":md_idx,"start":current_date,"end":md_end})
         current_date = md_end
         
@@ -1387,13 +1387,13 @@ def search_dasha_alignments(moon_degree, birth_date, search_criteria):
             ad_idx = (md['idx']+i)%9; ad_planet = DASHA_LORDS[ad_idx]
             ad_years = DASHA_YEARS[ad_idx]; ad_duration = (md_years*ad_years)/120.0
             if search_criteria.get('antardasha') and ad_planet != search_criteria['antardasha']:
-                ad_current += timedelta(days=ad_duration*365.25); continue
-            ad_end = ad_current + timedelta(days=ad_duration*365.25)
+                ad_current += timedelta(days=ad_duration*360.0); continue
+            ad_end = ad_current + timedelta(days=ad_duration*360.0)
             pd_current = ad_current
             
             for j in range(9):
                 pd_idx = (ad_idx+j)%9; pd_planet = DASHA_LORDS[pd_idx]
-                pd_years = DASHA_YEARS[pd_idx]; pd_duration = (md_years*ad_years*pd_years/(120.0*120.0))*365.25
+                pd_years = DASHA_YEARS[pd_idx]; pd_duration = (md_years*ad_years*pd_years/(120.0*120.0))*360.0
                 if search_criteria.get('pratyantardasha') and pd_planet != search_criteria['pratyantardasha']:
                     pd_current += timedelta(days=pd_duration); continue
                 pd_end = pd_current + timedelta(days=pd_duration)
@@ -2151,6 +2151,132 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         "yearly":            yearly_data,
     }, None
 
+# ══════════════════════════════════════════════════════════════════════════
+#  मास प्रवेश गोचर विश्लेषक — सूर्य संक्रांति प्रवेश क्षण (V.P. Goel Rule v4.0)
+# ══════════════════════════════════════════════════════════════════════════
+
+def find_exact_sun_ingress(year, month, day):
+    """
+    न्यूटन-राप्सन या बाइसेक्शन विधि का उपयोग करके उस महीने में सूर्य के 
+    0 डिग्री राशि प्रवेश (Exact Solar Ingress) का सटीक क्षण (Julian Day) निकालता है।
+    """
+    # उस तारीख के दोपहर 12 बजे से शुरुआत करें
+    approx_jd = swe.julday(year, month, day, 12.0)
+    swe.set_sid_mode(swe.SIDM_LAHIRI)
+    
+    # वर्तमान सूर्य की निरयण डिग्री और राशि इंडेक्स निकालें
+    res = swe.calc_ut(approx_jd, swe.SUN, swe.FLG_SIDEREAL)[0][0]
+    current_sign = int(res / 30) % 12
+    
+    # हमें सूर्य के इस राशि के प्रारंभ (0 डिग्री) में प्रवेश का क्षण चाहिए
+    target_deg = current_sign * 30.0
+    
+    # अगर सूर्य राशि के बिल्कुल अंत में है और अगले दिन प्रवेश कर रहा है
+    if (res % 30) > 25:
+        target_deg = ((current_sign + 1) % 12) * 30.0
+
+    low_jd = approx_jd - 1.5
+    high_jd = approx_jd + 1.5
+    exact_jd = approx_jd
+    
+    # 0.05 सेकंड की सटीकता के लिए 30 बार बाइसेक्शन लूप चलाएं
+    for _ in range(30):
+        mid_jd = (low_jd + high_jd) / 2.0
+        sun_deg = swe.calc_ut(mid_jd, swe.SUN, swe.FLG_SIDEREAL)[0][0]
+        
+        # 360 डिग्री बाउंड्री क्रॉसिंग को हैंडल करें
+        if target_deg == 0 and sun_deg > 330:
+            sun_deg -= 360.0
+            
+        if sun_deg < target_deg:
+            low_jd = mid_jd
+        else:
+            high_jd = mid_jd
+            
+        exact_jd = mid_jd
+        
+    return exact_jd
+
+@app.route('/api/monthly_transit_bav', methods=['POST', 'OPTIONS'])
+def api_monthly_transit_bav():
+    """
+    V.P. Goel जी के असली सॉफ्टवेयर स्तर का गोचर:
+    1. सूर्य के 0 डिग्री राशि प्रवेश (Exact Sun Ingress) के सटीक समय पर गोचर गणना।
+    2. थ्रेशोल्ड लक्ष्य = 25 बिंदु (भिन्नाष्टक)।
+    """
+    try:
+        body = request.get_json(force=True)
+        if not body:
+            return jsonify({"success": False, "error": "Invalid JSON"}), 400
+
+        transit_date_str = body.get("transit_date")
+        base_bav         = body.get("base_bav")
+
+        if not transit_date_str or not base_bav:
+            return jsonify({"success": False, "error": "transit_date या base_bav गायब है।"}), 400
+
+        try:
+            input_dt = datetime.strptime(transit_date_str, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"success": False, "error": "तारीख का फॉर्मेट YYYY-MM-DD होना चाहिए।"}), 400
+
+        # [सुधार 1]: सूर्य संक्रांति प्रवेश (0-Degree Solar Ingress) का सटीक क्षण निकालें
+        ingress_jd = find_exact_sun_ingress(input_dt.year, input_dt.month, input_dt.day)
+        
+        # डिस्प्ले के लिए UTC समय को रीडेबल फॉर्मेट में बदलें
+        greg_time = swe.revjul(ingress_jd)
+        hour_frac = greg_time[3]
+        hours = int(hour_frac)
+        mins = int((hour_frac - hours) * 60)
+        secs = int((((hour_frac - hours) * 60) - mins) * 60)
+        
+        exact_time_str = f"{greg_time[2]} {['जनवरी','फरवरी','मार्च','अप्रैल','मई','जून','जुलाई','अगस्त','सितंबर','अक्टूबर','नवंबर','दिसंबर'][greg_time[1]-1]} {greg_time[0]} को {hours:02d}:{mins:02d}:{secs:02d} UTC"
+
+        PLANET_SWE = {
+            "Su": swe.SUN, "Mo": swe.MOON, "Ma": swe.MARS, 
+            "Me": swe.MERCURY, "Ju": swe.JUPITER, "Ve": swe.VENUS, "Sa": swe.SATURN
+        }
+        PLANET_KEYS = ["Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa"]
+
+        transit_details = []
+        total_bav_transit_points = 0
+
+        # सूर्य प्रवेश के उसी सटीक सेकंड पर अन्य सातों ग्रहों की राशियाँ और बिंदु निकालें
+        for p in PLANET_KEYS:
+            deg = swe.calc_ut(ingress_jd, PLANET_SWE[p], swe.FLG_SIDEREAL)[0][0]
+            sign_idx = int(deg / 30) % 12
+
+            pts_array = base_bav.get(p, [])
+            points = pts_array[sign_idx] if len(pts_array) > sign_idx else 0
+            total_bav_transit_points += points
+
+            is_winner = points >= 6
+            is_caution = points <= 2
+
+            transit_details.append({
+                "planet": p,
+                "transit_sign_idx": sign_idx,
+                "points": points,
+                "is_winner": is_winner,
+                "is_caution": is_caution
+            })
+
+        bav_threshold = 25
+        is_bav_auspicious = total_bav_transit_points >= bav_threshold
+
+        return jsonify({
+            "success": True,
+            "is_auspicious": is_bav_auspicious,
+            "total_points": total_bav_transit_points,
+            "average_threshold": bav_threshold,
+            "exact_ingress_time": exact_time_str,
+            "transit_details": transit_details
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # ── MAIN API ENDPOINT ────────────────────────────────────────────────────
 # api.py में अन्य @app.route के साथ इसे जोड़ें

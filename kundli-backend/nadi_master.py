@@ -82,13 +82,13 @@ def apply_trine_logic(base_age):
 
 def decimal_to_ymd(age_decimal):
     y = int(age_decimal)
-    total_days = (age_decimal - y) * 365.25
+    total_days = (age_decimal - y) * 360.0
     m = int(total_days // 30.4375)
     d = int(total_days % 30.4375)
     return y, m, d
 
 def calculate_event_date(dob_obj, age_decimal):
-    return dob_obj + timedelta(days=(age_decimal * 365.25))
+    return dob_obj + timedelta(days=(age_decimal * 360.0))
 
 # ==========================================
 # 🛠️ DASHA AVASTHA & BHRIGU BINDU

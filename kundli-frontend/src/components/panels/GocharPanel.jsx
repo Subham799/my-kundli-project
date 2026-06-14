@@ -57,7 +57,7 @@ function getTransitPositions(date) {
   const year = d.getFullYear();
   const month = d.getMonth() + 1;
   const dayOfYear = Math.floor((d - new Date(year, 0, 0)) / 86400000);
-  const fracYear = year + dayOfYear / 365.25;
+  const fracYear = year + dayOfYear / 360.0;
 
   // Saturn: ~2.46 years per sign. Was in Makara (10) at Jan 2020, Kumbha (11) from Jan 2023
   // Meena (12) from ~Mar 2025
@@ -85,7 +85,7 @@ function getTransitPositions(date) {
   // Mars: ~45 days per sign. Was in Mesha (1) at Mar 2024
   const marsBase = 1; // Mesha at Mar 2024
   const marsYearsFrom2024 = fracYear - 2024.25;
-  const marsSignOffset = Math.floor(marsYearsFrom2024 / (45/365.25));
+  const marsSignOffset = Math.floor(marsYearsFrom2024 / (45/360.0));
   const marsSign = ((marsBase - 1 + marsSignOffset) % 12) + 1;
 
   return {

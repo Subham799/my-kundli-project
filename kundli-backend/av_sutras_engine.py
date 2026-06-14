@@ -189,7 +189,7 @@ def _simulate_dasha_deep(
         return empty
 
     try:
-        target_date = dob_dt + _dt.timedelta(days=target_age * 365.25)
+        target_date = dob_dt + _dt.timedelta(days=target_age * 360.0)
     except Exception:
         return empty
 
@@ -391,8 +391,8 @@ def _scan_full_year_dasha(
     if not dob_dt: return empty
 
     try:
-        yr_start = dob_dt + _dt.timedelta(days=target_age * 365.25)
-        yr_end   = yr_start + _dt.timedelta(days=365.25)
+        yr_start = dob_dt + _dt.timedelta(days=target_age * 360.0)
+        yr_end   = yr_start + _dt.timedelta(days=360.0)
     except Exception:
         return empty
 
@@ -529,7 +529,7 @@ def _check_transit_at_age(
         dob_dt = _to_dt(dob)
         if not dob_dt: return result
 
-        target_date = dob_dt + _dt.timedelta(days=target_age * 365.25)
+        target_date = dob_dt + _dt.timedelta(days=target_age * 360.0)
 
         # Julian Day
         jd = swe.julday(
