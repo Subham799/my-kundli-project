@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import React, { useState } from "react";
-
+const API_BASE = import.meta.env.VITE_API_URL ?? "";
 const RASHIS = ["मेष","वृषभ","मिथुन","कर्क","सिंह","कन्या","तुला","वृश्चिक","धनु","मकर","कुंभ","मीन"];
 
 // भावों के मुख्य नैसर्गिक कारकत्व विवरण (स्वामित्व फल विश्लेषण के लिए)
@@ -270,7 +270,7 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
     return ownedHouses;
   };
 
-  // Trigger monthly transit API call
+ // Trigger monthly transit API call
   const handleCalculateTransit = async () => {
     if (!rawBav) {
       setTransitError("जन्म कुंडली का BAV डेटा उपलब्ध नहीं है।");
@@ -279,17 +279,14 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
     setLoadingTransit(true);
     setTransitError("");
     
-    // 🌟 [VERCEL FIX]: Vercel पर 405 रोकने के लिए फुल URL का प्रयोग करें!
-    // अगर आपके पास VITE_API_BASE_URL (जैसे https://api.kundalimaker.com) है, तो वह इस्तेमाल होगा
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ""; 
-    const targetUrl = API_BASE_URL ? `${API_BASE_URL}/api/monthly_transit_bav` : '/api/monthly_transit_bav';
+    // 🌟 [CRITICAL FIX]: अब यह सीधा Render Backend को हिट करेगा!
+    const targetUrl = `${API_BASE}/api/monthly_transit_bav`;
     
     const requestPayload = { transit_date: transitDate, base_bav: rawBav };
     
-    // डिबगर लॉग्स
     const logs = [];
     logs.push(`[${new Date().toLocaleTimeString()}] 🚀 Initiating transit calculation...`);
-    logs.push(`[URL]: POST ${targetUrl}`);
+    logs.push(`[URL]: POST ${targetUrl}`); // अब यहाँ Render का URL दिखेगा
     logs.push(`[Payload]: ${JSON.stringify(requestPayload)}`);
     setDebugLog(logs);
 
@@ -303,8 +300,8 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
       logs.push(`[Response Status]: ${response.status} ${response.statusText}`);
 
       if (response.status === 405 || response.status === 404) {
-        logs.push(`[❌ ERROR ${response.status}]: Method Not Allowed or Missing. URL check karein.`);
-        setTransitError(`ऑनलाइन सर्वर (Vercel/Render) पर एरर ${response.status}। सुनिश्चित करें कि बैकएंड पर रूट मौजूद है और URL सही है।`);
+        logs.push(`[❌ ERROR ${response.status}]: Method Not Allowed. Check VITE_API_URL.`);
+        setTransitError(`ऑनलाइन सर्वर (Vercel/Render) पर एरर ${response.status}।`);
         setTransitResult(null);
         setDebugLog([...logs]);
         return;
