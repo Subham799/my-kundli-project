@@ -2272,65 +2272,45 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         "taraMatrix": tara_matrix,
     }, None
 
-# ══════════════════════════════════════════════════════════════════════════
-#  मास प्रवेश गोचर विश्लेषक — सूर्य संक्रांति प्रवेश क्षण (V.P. Goel Rule v4.0)
-# ══════════════════════════════════════════════════════════════════════════
+# =====================================================================
+# 🚀 V.P. GOEL TRANSIT ENGINE (मास प्रवेश गोचर विश्लेषक)
+# =====================================================================
 
 def find_exact_sun_ingress(year, month, day):
-    """
-    न्यूटन-राप्सन या बाइसेक्शन विधि का उपयोग करके उस महीने में सूर्य के 
-    0 डिग्री राशि प्रवेश (Exact Solar Ingress) का सटीक क्षण (Julian Day) निकालता है।
-    """
     approx_jd = swe.julday(year, month, day, 12.0)
     swe.set_sid_mode(swe.SIDM_LAHIRI)
-    
     res = swe.calc_ut(approx_jd, swe.SUN, swe.FLG_SIDEREAL)[0][0]
     current_sign = int(res / 30) % 12
     target_deg = current_sign * 30.0
-    
     if (res % 30) > 25:
         target_deg = ((current_sign + 1) % 12) * 30.0
-
     low_jd = approx_jd - 1.5
     high_jd = approx_jd + 1.5
     exact_jd = approx_jd
-    
     for _ in range(30):
         mid_jd = (low_jd + high_jd) / 2.0
         sun_deg = swe.calc_ut(mid_jd, swe.SUN, swe.FLG_SIDEREAL)[0][0]
-        
         if target_deg == 0 and sun_deg > 330:
             sun_deg -= 360.0
-            
-        if sun_deg < target_deg:
-            low_jd = mid_jd
-        else:
-            high_jd = mid_jd
-            
+        if sun_deg < target_deg: low_jd = mid_jd
+        else: high_jd = mid_jd
         exact_jd = mid_jd
-        
     return exact_jd
 
-
-# 🌟 ध्यान दें: 'POST' के साथ 'OPTIONS' होना अनिवार्य है और मेथड्स कैपिटल में होने चाहिए
-@app.route('/api/monthly_transit_bav', methods=['POST', 'OPTIONS'])
+# 🌟 strict_slashes=False लगाना बहुत जरूरी है
+@app.route('/api/monthly_transit_bav', methods=['POST', 'OPTIONS'], strict_slashes=False)
 def api_monthly_transit_bav():
-    """
-    V.P. Goel जी के प्रामाणिक अष्टकवर्ग गोचर विधा पर आधारित एंडपॉइंट।
-    """
-    
-    # 🌟 [CRITICAL FIX]: ऑनलाइन (Vercel/Render) पर 405 एरर को रोकने के लिए प्री-फ्लाइट रिक्वेस्ट का जवाब मैन्युअली दें
+    # 🌟 Vercel CORS Pre-flight Fix
     if request.method == 'OPTIONS':
         response = jsonify({"success": True})
         response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept')
         response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
         return response, 200
 
     try:
         body = request.get_json(force=True)
-        if not body:
-            return jsonify({"success": False, "error": "Invalid JSON"}), 400
+        if not body: return jsonify({"success": False, "error": "Invalid JSON"}), 400
 
         transit_date_str = body.get("transit_date")
         base_bav         = body.get("base_bav")
@@ -2338,12 +2318,7 @@ def api_monthly_transit_bav():
         if not transit_date_str or not base_bav:
             return jsonify({"success": False, "error": "transit_date या base_bav गायब है।"}), 400
 
-        try:
-            input_dt = datetime.strptime(transit_date_str, "%Y-%m-%d")
-        except ValueError:
-            return jsonify({"success": False, "error": "तारीख का फॉर्मेट YYYY-MM-DD होना चाहिए।"}), 400
-
-        # सूर्य का प्रवेश क्षण निकालें
+        input_dt = datetime.strptime(transit_date_str, "%Y-%m-%d")
         ingress_jd = find_exact_sun_ingress(input_dt.year, input_dt.month, input_dt.day)
         
         greg_time = swe.revjul(ingress_jd)
@@ -2351,13 +2326,9 @@ def api_monthly_transit_bav():
         hours = int(hour_frac)
         mins = int((hour_frac - hours) * 60)
         secs = int((((hour_frac - hours) * 60) - mins) * 60)
-        
         exact_time_str = f"{greg_time[2]} {['जनवरी','फरवरी','मार्च','अप्रैल','मई','जून','जुलाई','अगस्त','सितंबर','अक्टूबर','नवंबर','दिसंबर'][greg_time[1]-1]} {greg_time[0]} को {hours:02d}:{mins:02d}:{secs:02d} UTC"
 
-        PLANET_SWE = {
-            "Su": swe.SUN, "Mo": swe.MOON, "Ma": swe.MARS, 
-            "Me": swe.MERCURY, "Ju": swe.JUPITER, "Ve": swe.VENUS, "Sa": swe.SATURN
-        }
+        PLANET_SWE = {"Su": swe.SUN, "Mo": swe.MOON, "Ma": swe.MARS, "Me": swe.MERCURY, "Ju": swe.JUPITER, "Ve": swe.VENUS, "Sa": swe.SATURN}
         PLANET_KEYS = ["Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa"]
 
         transit_details = []
@@ -2366,29 +2337,22 @@ def api_monthly_transit_bav():
         for p in PLANET_KEYS:
             deg = swe.calc_ut(ingress_jd, PLANET_SWE[p], swe.FLG_SIDEREAL)[0][0]
             sign_idx = int(deg / 30) % 12
-
             pts_array = base_bav.get(p, [])
             points = pts_array[sign_idx] if len(pts_array) > sign_idx else 0
             total_bav_transit_points += points
-
-            is_winner = points >= 6
-            is_caution = points <= 2
 
             transit_details.append({
                 "planet": p,
                 "transit_sign_idx": sign_idx,
                 "points": points,
-                "is_winner": is_winner,
-                "is_caution": is_caution
+                "is_winner": points >= 6,
+                "is_caution": points <= 2
             })
 
         bav_threshold = 25
-        is_bav_auspicious = total_bav_transit_points >= bav_threshold
-
-        # 🌟 लाइव प्रोडक्शन सर्वर के लिए JSON बनाते समय CORS ऑरिजिन को स्पष्ट रूप से इंजेक्ट करें
         res = jsonify({
             "success": True,
-            "is_auspicious": is_bav_auspicious,
+            "is_auspicious": total_bav_transit_points >= bav_threshold,
             "total_points": total_bav_transit_points,
             "average_threshold": bav_threshold,
             "exact_ingress_time": exact_time_str,
@@ -2398,9 +2362,7 @@ def api_monthly_transit_bav():
         return res
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        # एरर ब्लॉक में भी CORS सुनिश्चित करें ताकि क्रैश होने पर भी 405 न आए
+        import traceback; traceback.print_exc()
         err_res = jsonify({"success": False, "error": str(e)})
         err_res.headers.add('Access-Control-Allow-Origin', '*')
         return err_res, 500

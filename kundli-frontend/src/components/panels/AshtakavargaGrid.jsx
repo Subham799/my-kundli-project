@@ -279,9 +279,14 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
     setLoadingTransit(true);
     setTransitError("");
     
-    const targetUrl = '/api/monthly_transit_bav';
+    // 🌟 [VERCEL FIX]: Vercel पर 405 रोकने के लिए फुल URL का प्रयोग करें!
+    // अगर आपके पास VITE_API_BASE_URL (जैसे https://api.kundalimaker.com) है, तो वह इस्तेमाल होगा
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ""; 
+    const targetUrl = API_BASE_URL ? `${API_BASE_URL}/api/monthly_transit_bav` : '/api/monthly_transit_bav';
+    
     const requestPayload = { transit_date: transitDate, base_bav: rawBav };
     
+    // डिबगर लॉग्स
     const logs = [];
     logs.push(`[${new Date().toLocaleTimeString()}] 🚀 Initiating transit calculation...`);
     logs.push(`[URL]: POST ${targetUrl}`);
@@ -297,9 +302,9 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
       
       logs.push(`[Response Status]: ${response.status} ${response.statusText}`);
 
-      if (response.status === 405) {
-        logs.push(`[❌ ERROR 405]: Method Not Allowed. Online router blocking POST/OPTIONS.`);
-        setTransitError("ऑनलाइन सर्वर ने सुरक्षा कारणों (CORS/405) से इस अनुरोध को ब्लॉक कर दिया है। कृपया डिबग कंसोल देखें।");
+      if (response.status === 405 || response.status === 404) {
+        logs.push(`[❌ ERROR ${response.status}]: Method Not Allowed or Missing. URL check karein.`);
+        setTransitError(`ऑनलाइन सर्वर (Vercel/Render) पर एरर ${response.status}। सुनिश्चित करें कि बैकएंड पर रूट मौजूद है और URL सही है।`);
         setTransitResult(null);
         setDebugLog([...logs]);
         return;
@@ -323,7 +328,6 @@ export default function AshtakavargaGrid({ sav=[], houses=[], ashtakavargaSpecia
       setDebugLog([...logs]);
     }
   };
-
   return (
     <div className="flex flex-col gap-6 pb-4">
 
