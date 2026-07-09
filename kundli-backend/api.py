@@ -12,6 +12,10 @@ from datetime import datetime, timedelta
 import requests as http_requests
 import os
 
+# NAYE IMPORTS — dynamic timezone ke liye
+from timezonefinder import TimezoneFinder
+import pytz
+
 # ── Nadi AI imports (unchanged from original) ──────────────────────────────
 from nadi_ai.core.interpretation_builder import build_interpretation
 from nadi_ai.core.house_diagnostic_engine import HouseDiagnosticEngine
@@ -34,14 +38,28 @@ from sudarshan_engine import get_sudarshan_data
 from yearly_engine import get_yearly_prediction
 from maitri_engine import compute_maitri
 from shodhana_engine import run_shodhana
-
+from blog_data import BLOG_DATABASE
 
 # ── Sunrise calculator ────────────────────────────────────────────────────
-def _calc_sunrise(dt, lat, lon, tz_offset=5.5):
-    """DOB ka Swiss Ephemeris sunrise. Returns HH:MM string ya None."""
+def _calc_sunrise(dt, lat, lon):
+    """DOB ka Swiss Ephemeris sunrise. Returns HH:MM string ya None.
+       Ab TimezoneFinder se fully dynamic ho gaya hai!"""
     try:
         from datetime import timedelta
-        birth_utc = dt - timedelta(hours=tz_offset)
+
+        tf = TimezoneFinder()
+        timezone_str = tf.timezone_at(lat=lat, lng=lon)
+        if timezone_str is None:
+            timezone_str = 'UTC'
+
+        local_tz = pytz.timezone(timezone_str)
+        localized_dt = local_tz.localize(dt, is_dst=None)
+        birth_utc = localized_dt.astimezone(pytz.utc)
+
+        # Local time zone ka offset nikalna (in hours) sunrise math ke liye
+        offset_seconds = local_tz.utcoffset(localized_dt).total_seconds()
+        tz_offset = offset_seconds / 3600.0
+
         jd_utc = swe.julday(
             birth_utc.year, birth_utc.month, birth_utc.day,
             birth_utc.hour + birth_utc.minute / 60.0
@@ -1001,7 +1019,20 @@ def get_all_vargas(degree):
     return v
 
 def calculate_astrology(local_dt, lat, lon):
-    utc_dt = local_dt - timedelta(hours=5, minutes=30)
+    # 1. Latitude aur Longitude se dynamic timezone nikalna
+    tf = TimezoneFinder()
+    timezone_str = tf.timezone_at(lat=lat, lng=lon)
+
+    if timezone_str is None:
+        timezone_str = 'UTC'  # Failsafe
+
+    # 2. Local time ko us location ke time zone ke hisaab se set karna
+    local_tz = pytz.timezone(timezone_str)
+    localized_dt = local_tz.localize(local_dt, is_dst=None)
+
+    # 3. UTC me convert karna (IST hardcode hat gaya!)
+    utc_dt = localized_dt.astimezone(pytz.utc)
+
     jd = swe.julday(utc_dt.year, utc_dt.month, utc_dt.day, utc_dt.hour + (utc_dt.minute/60.0))
     swe.set_sid_mode(swe.SIDM_LAHIRI)
     planets_map = {"Su":swe.SUN,"Mo":swe.MOON,"Ma":swe.MARS,"Me":swe.MERCURY,"Ju":swe.JUPITER,"Ve":swe.VENUS,"Sa":swe.SATURN}
@@ -3247,6 +3278,21 @@ def generate_kp_payload():
         import traceback; traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/posts', methods=['GET'])
+def get_all_posts():
+    response = jsonify({"success": True, "posts": BLOG_DATABASE})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response, 200
+
+@app.route('/api/posts/<slug>', methods=['GET'])
+def get_single_post(slug):
+    post = BLOG_DATABASE.get(slug)
+    if post:
+        response = jsonify({"success": True, "post": post})
+    else:
+        response = jsonify({"success": False, "error": "Post not found"})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response, 200        
 
 
 # ── ENTRY POINT ──────────────────────────────────────────────────────────
