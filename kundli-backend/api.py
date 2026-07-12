@@ -39,50 +39,71 @@ from yearly_engine import get_yearly_prediction
 from maitri_engine import compute_maitri
 from shodhana_engine import run_shodhana
 from blog_data import BLOG_DATABASE
-
-# ── Sunrise calculator ────────────────────────────────────────────────────
 def _calc_sunrise(dt, lat, lon):
-    """DOB ka Swiss Ephemeris sunrise. Returns HH:MM string ya None.
-       Ab TimezoneFinder se fully dynamic ho gaya hai!"""
+    """Sunrise Calculator: Tries Dynamic Timezone, falls back to IST (5.5)"""
     try:
         from datetime import timedelta
+        import swisseph as swe
+        
+        # API से आने वाले String को Float में बदलना अनिवार्य है
+        safe_lat = float(lat)
+        safe_lon = float(lon)
+        
+        # 1. Default IST (5.5) मान कर चलते हैं
+        tz_offset = 5.5
+        
+        # 2. Dynamic Timezone निकालने की कोशिश करते हैं
+        try:
+            from timezonefinder import TimezoneFinder
+            import pytz
+            tf = TimezoneFinder()
+            tz_str = tf.timezone_at(lat=safe_lat, lng=safe_lon)
+            if tz_str:
+                local_tz = pytz.timezone(tz_str)
+                localized_dt = local_tz.localize(dt, is_dst=False)
+                # Offset को hours में कन्वर्ट करो
+                tz_offset = local_tz.utcoffset(localized_dt).total_seconds() / 3600.0
+        except ImportError:
+            print("⚠️ [Sunrise] timezonefinder/pytz missing! Using default IST (5.5)")
+        except Exception as e:
+            print(f"⚠️ [Sunrise] Dynamic TZ error: {e}. Using default IST (5.5)")
 
-        tf = TimezoneFinder()
-        timezone_str = tf.timezone_at(lat=lat, lng=lon)
-        if timezone_str is None:
-            timezone_str = 'UTC'
-
-        local_tz = pytz.timezone(timezone_str)
-        localized_dt = local_tz.localize(dt, is_dst=None)
-        birth_utc = localized_dt.astimezone(pytz.utc)
-
-        # Local time zone ka offset nikalna (in hours) sunrise math ke liye
-        offset_seconds = local_tz.utcoffset(localized_dt).total_seconds()
-        tz_offset = offset_seconds / 3600.0
-
+        # 3. जन्म समय को UTC में बदलो (Offset के अनुसार)
+        birth_utc = dt - timedelta(hours=tz_offset)
         jd_utc = swe.julday(
             birth_utc.year, birth_utc.month, birth_utc.day,
             birth_utc.hour + birth_utc.minute / 60.0
         )
-        geopos = (float(lon), float(lat), 0.0)
+        
+        # 4. स्विस एफेमेरिस (Swiss Ephemeris) से सूर्योदय निकालो
+        geopos = (safe_lon, safe_lat, 0.0)
         rsmi   = swe.CALC_RISE | swe.BIT_DISC_CENTER
-        res    = swe.rise_trans(jd_utc, swe.SUN, rsmi, geopos, 0.0, 0.0, swe.FLG_SWIEPH)
+        
+        res = swe.rise_trans(jd_utc, swe.SUN, rsmi, geopos, 0.0, 0.0, swe.FLG_SWIEPH)
         sunrise_jd = res[1][0]
+        
         if jd_utc < sunrise_jd:
             res = swe.rise_trans(jd_utc - 1.0, swe.SUN, rsmi, geopos, 0.0, 0.0, swe.FLG_SWIEPH)
             sunrise_jd = res[1][0]
+            
         _, _, _, utc_h = swe.revjul(sunrise_jd)
         local_h = (utc_h + tz_offset) % 24
+        
+        # 5. Hours और Minutes को फॉर्मेट करो
         h = int(local_h)
         m = round((local_h - h) * 60)
-        if m == 60: h += 1; m = 0
+        if m == 60: 
+            h = (h + 1) % 24
+            m = 0
+            
         result = f"{h:02d}:{m:02d}"
-        print(f"[Sunrise] ✅ {result}")
+        print(f"🌅 [Sunrise] Calculated: {result} (Offset: {tz_offset})")
         return result
-    except Exception as e:
-        print(f"[Sunrise] Error: {e}")
-        return None
 
+    except Exception as e:
+        print(f"❌ [Sunrise] Fatal Error: {e}")
+        # अगर कुछ भी फेल हो जाए, तो UI Blank न हो इसलिए Failsafe
+        return "06:00"
 app = Flask(__name__)
 app.secret_key = "kundli_super_secret_key_123"
 from prashna_route import prashna_bp
@@ -1028,7 +1049,11 @@ def calculate_astrology(local_dt, lat, lon):
 
     # 2. Local time ko us location ke time zone ke hisaab se set karna
     local_tz = pytz.timezone(timezone_str)
-    localized_dt = local_tz.localize(local_dt, is_dst=None)
+    try:
+        localized_dt = local_tz.localize(local_dt, is_dst=None)
+    except (pytz.exceptions.AmbiguousTimeError, pytz.exceptions.NonExistentTimeError):
+        # DST transition ke exact gap/overlap me pad raha hai — safe fallback
+        localized_dt = local_tz.localize(local_dt, is_dst=False)
 
     # 3. UTC me convert karna (IST hardcode hat gaya!)
     utc_dt = localized_dt.astimezone(pytz.utc)
