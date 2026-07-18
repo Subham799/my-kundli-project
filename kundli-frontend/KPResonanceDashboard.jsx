@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import useKundliStore from '../../store/useKundliStore';
-
+import { generateKPPayload } from '../../api/kundliApi';
 // ── Planet shortcode map (Hindi → KP code) ──────────────────────────────────
 const PLANET_CODES = {
   "सूर्य": "Su", "चंद्र": "Mo", "मंगल": "Ma", "बुध": "Me",

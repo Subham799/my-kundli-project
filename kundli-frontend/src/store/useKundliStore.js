@@ -257,6 +257,8 @@ export function computeMasterConclusion(data) {
     specialYogas, yogakaraka,
     avTurningPoints, avBhavas, avTotal,
     dasha: dashaList,
+    // 🌟 मास्टर इंजन का एडवांस डेटा यहाँ शामिल करें
+    advanced_astrology: data.enginesData?.advanced_astrology || {}
   };
 }
 
@@ -342,37 +344,59 @@ const useKundliStore = create((set,get) => ({
   enginesLoading:false,   // ← phase 2 loading indicator
   selectedPlanet:null, drawerOpen:false,
   activeTab:"planets", sidebarCollapsed:false, hoveredHouse:null,
+  dashaYearType:360.0,   // 🌟 360 (सावन) या 365.2425 (सौर)
 
   setForm:(key,value)=>set((s)=>({formData:{...s.formData,[key]:value}})),
   resetForm:()=>set({formData:{name:"",dob:"",time:"",city:"",chartType:"D1",lat:null,lon:null}}),
 
-  fetchChart: async () => {
-    const {formData}=get();
-    if (!formData.name||!formData.dob||!formData.time||!formData.city) {
-      set({error:"Please fill all required fields."}); return;
+ fetchChart: async (yearTypeOverride) => {
+    const { formData, dashaYearType } = get();
+    if (!formData.name || !formData.dob || !formData.time || !formData.city) {
+      set({ error: "Please fill all required fields." });
+      return;
     }
-    set({loading:true,error:null,enginesLoading:false});
+    const dyt = yearTypeOverride ?? dashaYearType;
+    set({ loading: true, error: null, enginesLoading: false, dashaYearType: dyt });
+    
+    const payload = { ...formData, age: formData.age || 0, dasha_year_type: dyt };
+    
     try {
-      // ── Phase 1: Fast chart (no engines) — instant render ──────
-      const data = await fetchKundliChartFast(formData);
+      // ── Phase 1: Fast chart ──────
+      const data = await fetchKundliChartFast(payload);
       if (!data.masterConclusion?.riskTable) {
         data.masterConclusion = computeMasterConclusion(data);
       }
-      set({chartData:data, loading:false, sidebarCollapsed:true, activeTab:"planets", enginesLoading:true});
+      set({ chartData: data, loading: false, sidebarCollapsed: true, activeTab: "planets", enginesLoading: true });
 
-      // ── Phase 2: Heavy engines in background ────────────────────
+      // ── Phase 2: Heavy engines ────
       try {
-        const engResult = await fetchKundliEngines(formData);
-        set((s) => ({
-          chartData: s.chartData ? { ...s.chartData, enginesData: engResult.enginesData || null, _enginesReady: !!engResult.enginesData } : s.chartData,
-          enginesLoading: false,
-        }));
-      } catch {
-        set({enginesLoading:false});
+        const engResult = await fetchKundliEngines(payload);
+        set((s) => {
+          const newChartData = s.chartData ? { 
+            ...s.chartData, 
+            enginesData: engResult.enginesData || null, 
+            _enginesReady: !!engResult.enginesData 
+          } : s.chartData;
+          
+          if (newChartData) {
+            newChartData.masterConclusion = computeMasterConclusion(newChartData);
+          }
+          return { chartData: newChartData, enginesLoading: false };
+        });
+      } catch (err) {
+        console.error("Engines failed:", err);
+        set({ enginesLoading: false });
       }
-    } catch(err) {
-      set({error:err.message||"Failed to fetch chart.",loading:false,enginesLoading:false});
+    } catch (err) {
+      set({ error: err.message || "Failed to fetch chart.", loading: false, enginesLoading: false });
     }
+  },
+
+  // 🌟 दशा वर्ष प्रणाली टॉगल — 360 दिन (सावन) ↔ 365.2425 दिन (सौर)
+  // Naya year type set karke chart ko usi dasha_year_type ke saath dobara fetch karta hai
+  setDashaYearType: (newYearType) => {
+    set({dashaYearType:newYearType});
+    get().fetchChart(newYearType);
   },
 
   // loadDemo — masterConclusion computed LIVE from DEMO_DATA

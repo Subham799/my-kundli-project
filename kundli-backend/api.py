@@ -38,6 +38,7 @@ from sudarshan_engine import get_sudarshan_data
 from yearly_engine import get_yearly_prediction
 from maitri_engine import compute_maitri
 from shodhana_engine import run_shodhana
+from predictive_engine import run_advanced_predictions, match_kundlis_dasha_rule
 from blog_data import BLOG_DATABASE
 def _calc_sunrise(dt, lat, lon):
     """Sunrise Calculator: Tries Dynamic Timezone, falls back to IST (5.5)"""
@@ -1110,28 +1111,31 @@ def calculate_sav(data):
                 sav_points[target_idx] += 1
     return sav_points
 
-def calculate_vimshottari(moon_degree, birth_date):
+def calculate_vimshottari(moon_degree, birth_date, year_length=360.0):
     nak_idx = int(moon_degree / (360/27)); lord_idx = nak_idx % 9
     fraction_remaining = 1.0 - (moon_degree % (360/27)) / (360/27)
     fraction_elapsed = 1.0 - fraction_remaining  # <-- नया
     current_date = birth_date; dashas = []
-    first_end = current_date + timedelta(days=fraction_remaining * DASHA_YEARS[lord_idx] * 360.0)
-    absolute_start = current_date - timedelta(days=fraction_elapsed * DASHA_YEARS[lord_idx] * 360.0) # <-- नया
+    first_end = current_date + timedelta(days=fraction_remaining * DASHA_YEARS[lord_idx] * year_length)
+    absolute_start = current_date - timedelta(days=fraction_elapsed * DASHA_YEARS[lord_idx] * year_length) # <-- नया
     dashas.append({"planet":DASHA_LORDS[lord_idx],"start":current_date.strftime("%d-%m-%Y"),"end":first_end.strftime("%d-%m-%Y"),"idx":lord_idx,"absolute_start": absolute_start.strftime("%d-%m-%Y")})
     current_date = first_end
     for i in range(1, 9):
         idx = (lord_idx + i) % 9
-        end  = current_date + timedelta(days=DASHA_YEARS[idx] * 360.0)
+        end  = current_date + timedelta(days=DASHA_YEARS[idx] * year_length)
         dashas.append({"planet":DASHA_LORDS[idx],"start":current_date.strftime("%d-%m-%Y"),"absolute_start": current_date.strftime("%d-%m-%Y"),
                        "end":end.strftime("%d-%m-%Y"),"idx":idx})
         current_date = end
     return dashas
 
-def calculate_yogini_dasha(moon_degree, birth_date):
+def calculate_yogini_dasha(moon_degree, birth_date, reference_date=None):
     """
     योगिनी दशा — 36 वर्ष का चक्र (5 स्तर: MD → AD → PD → SD → PrD)
     VP Goyal revised table: हर MD के साथ नक्षत्र नाम + Star Lord भी।
     """
+    if reference_date is None:
+        reference_date = datetime.now()
+
     nak_idx        = int(moon_degree / (360 / 27))
     nak_number     = nak_idx + 1
     first_md_idx   = (nak_number + 3) % 8
@@ -1146,11 +1150,12 @@ def calculate_yogini_dasha(moon_degree, birth_date):
     # YOGINI_NAK_SEQUENCE में उस entry को खोजें जिसका yogini_idx == first_md_idx
     # और जो जन्म नक्षत्र (nak_idx 0-26) से match करे
     # Table में 24 entries हैं; हम birth nak को table position में map करते हैं
-    birth_nak_name = ["अश्विनी","भरणी","कृत्तिका","रोहिणी","मृगशिरा","आर्द्रा",
+    ALL_NAK_NAMES_27 = ["अश्विनी","भरणी","कृत्तिका","रोहिणी","मृगशिरा","आर्द्रा",
                       "पुनर्वसु","पुष्य","अश्लेषा","मघा","पूर्वा फाल्गुनी","उत्तरा फाल्गुनी",
                       "हस्त","चित्रा","स्वाति","विशाखा","अनुराधा","ज्येष्ठा",
                       "मूल","पूर्वाषाढ़ा","उत्तराषाढ़ा","श्रवण","धनिष्ठा","शतभिषा",
-                      "पूर्वा भाद्रपद","उत्तरा भाद्रपद","रेवती"][nak_idx]
+                      "पूर्वा भाद्रपद","उत्तरा भाद्रपद","रेवती"]
+    birth_nak_name = ALL_NAK_NAMES_27[nak_idx]
 
     # Clubbing map: 27 नक्षत्र → 24 table entries
     NAK_TO_TABLE = {
@@ -1268,8 +1273,10 @@ def calculate_yogini_dasha(moon_degree, birth_date):
                     "duration_years": md["duration"],
                     "idx":            md_idx,
                     "nakshatra":      nak_name,      # VP Goyal table नक्षत्र
+                    "nakshatra_idx":  ALL_NAK_NAMES_27.index(nak_name) if nak_name in ALL_NAK_NAMES_27 else None,
                     "star_lord":      star_lord,     # नक्षत्र स्वामी
                     "prog_lagna":     prog_lagna,    # प्रोग्रेस्ड लग्न (राशि)
+                    "table_position": nak_table_pos - 1,   # VP Goyal 24-entry table में position
                     "antardashas":    antardashas,
                 })
 
@@ -1278,27 +1285,39 @@ def calculate_yogini_dasha(moon_degree, birth_date):
         current_md_idx = (current_md_idx + 8) % 8  # cycle end — idx same रहता है (8%8=0 bug fix)
         # nak_table_pos अपने आप mod 24 से cycle करता है
 
-    return dashas
+    # ── वर्तमान योगिनी महादशा निर्धारित करें (reference_date के आधार पर) ──
+    current_md = None
+    for md in dashas:
+        _md_start = datetime.strptime(md["start"], "%d-%m-%Y")
+        _md_end   = datetime.strptime(md["end"], "%d-%m-%Y")
+        if _md_start <= reference_date <= _md_end:
+            current_md = md
+            break
+
+    return {
+        "dashas":  dashas,
+        "current": current_md,
+    }
 
 
-def get_antardashas(md_lord_idx, md_start_date_str):
+def get_antardashas(md_lord_idx, md_start_date_str, year_length=360.0):
     ads = []; current_date = datetime.strptime(md_start_date_str, "%d-%m-%Y")
     md_years = DASHA_YEARS[md_lord_idx]
     for i in range(9):
         ad_lord_idx = (md_lord_idx + i) % 9
         ad_years    = DASHA_YEARS[ad_lord_idx]
         duration    = (md_years * ad_years) / 120.0
-        end_date    = current_date + timedelta(days=duration * 360.0)
+        end_date    = current_date + timedelta(days=duration * year_length)
         ads.append({"planet":DASHA_LORDS[ad_lord_idx],"start":current_date.strftime("%d-%m-%Y"),"end":end_date.strftime("%d-%m-%Y"),"idx":ad_lord_idx})
         current_date = end_date
     return ads
 
-def get_pratyantardashas(md_lord_idx, ad_lord_idx, ad_start_date_str):
+def get_pratyantardashas(md_lord_idx, ad_lord_idx, ad_start_date_str, year_length=360.0):
     pds = []; current_date = datetime.strptime(ad_start_date_str, "%d-%m-%Y")
     md_years = DASHA_YEARS[md_lord_idx]; ad_years = DASHA_YEARS[ad_lord_idx]
     for i in range(9):
         pd_lord_idx = (ad_lord_idx + i) % 9; pd_years = DASHA_YEARS[pd_lord_idx]
-        duration    = (md_years * ad_years * pd_years / (120.0 * 120.0)) * 360.0
+        duration    = (md_years * ad_years * pd_years / (120.0 * 120.0)) * year_length
         end_date    = current_date + timedelta(days=duration)
         pds.append({
             "planet": DASHA_LORDS[pd_lord_idx],
@@ -1511,7 +1530,7 @@ def search_dasha_alignments(moon_degree, birth_date, search_criteria):
 # ██  SECTION 3 — JSON API ROUTES  (replaces render_template_string)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, lon=None):
+def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, lon=None, dasha_year_type=360.0, age=0):
     """
     Core calculation pipeline — same as original home() POST handler,
     but returns a dict (not rendered HTML).
@@ -1525,8 +1544,10 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
     dt   = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
     astro      = calculate_astrology(dt, lat, lon)
     sav_points = calculate_sav(astro)
-    dashas        = calculate_vimshottari(astro["Mo"]["Degree"], dt)
-    yogini_dashas = calculate_yogini_dasha(astro["Mo"]["Degree"], dt)
+    dashas        = calculate_vimshottari(astro["Mo"]["Degree"], dt, year_length=dasha_year_type)
+    yogini_result = calculate_yogini_dasha(astro["Mo"]["Degree"], dt, reference_date=datetime.now())
+    yogini_dashas  = yogini_result["dashas"]
+    current_yogini = yogini_result["current"]
     now           = datetime.now()
 
     # ── Bhav Chalit (Sri Pati Paddhati) ──────────────────────────
@@ -1593,13 +1614,13 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         if datetime.strptime(d['start'], "%d-%m-%Y") <= now < datetime.strptime(d['end'], "%d-%m-%Y"):
             current_md = d; break
 
-    current_ads = get_antardashas(current_md['idx'], current_md.get('absolute_start', current_md['start']))
+    current_ads = get_antardashas(current_md['idx'], current_md.get('absolute_start', current_md['start']), year_length=dasha_year_type)
     current_ad  = current_ads[0]
     for ad in current_ads:
         ad['is_current'] = datetime.strptime(ad['start'], "%d-%m-%Y") <= now < datetime.strptime(ad['end'], "%d-%m-%Y")
         if ad['is_current']: current_ad = ad
 
-    current_pds = get_pratyantardashas(current_md['idx'], current_ad['idx'], current_ad['start'])
+    current_pds = get_pratyantardashas(current_md['idx'], current_ad['idx'], current_ad['start'], year_length=dasha_year_type)
     current_pd = current_pds[0] # Default to first
     for pd in current_pds:
         pd['is_current'] = datetime.strptime(pd['start'], "%d-%m-%Y") <= now < datetime.strptime(pd['end'], "%d-%m-%Y")
@@ -1894,7 +1915,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         md_tara_moon = get_tara_name(moon_nak_idx, md_nak_idx)
 
         # Absolute start for antardashas loop
-        ads_raw = get_antardashas(d["idx"], d.get("absolute_start", d["start"]))
+        ads_raw = get_antardashas(d["idx"], d.get("absolute_start", d["start"]), year_length=dasha_year_type)
         antardashas = []
         
         for ad in ads_raw:
@@ -1912,7 +1933,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             ad_tara_moon = get_tara_name(moon_nak_idx, ad_nak_idx)
             ad_tara_lord = get_tara_name(md_nak_idx, ad_nak_idx)
             
-            pds_raw = get_pratyantardashas(d["idx"], ad["idx"], ad["start"]) # Math uses original raw start
+            pds_raw = get_pratyantardashas(d["idx"], ad["idx"], ad["start"], year_length=dasha_year_type) # Math uses original raw start
             pd_list = []
             
             for pd in pds_raw:
@@ -2227,6 +2248,22 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         print(f"[KP Significators] Error: {_kps_e}")
         kp_sig_data = {}
 
+    # ── Advanced Predictive Engine (Deep Forensics, D-10 Deities, D-9 Marriage, Chara Karakas, Progressed Lagna) ──
+    try:
+        master_advanced_data = run_advanced_predictions(
+            astro_data=astro,
+            lagna_degree=astro["La"]["Degree"],
+            planet_house_map=planet_house_map,
+            birth_time_dt=dt,
+            sunrise_time_str=_calc_sunrise(dt, lat, lon),
+            age=age,
+            current_yogini_md=current_yogini,
+        )
+        engines_data["advanced_astrology"] = master_advanced_data
+    except Exception as _adv_e:
+        print(f"[Advanced Predictions Error]: {_adv_e}")
+        engines_data["advanced_astrology"] = {}
+
     # ── CRITICAL: enginesData में inject ────────────────────────────────────
     # Frontend chartData.enginesData.shodhana पढ़ता है
     engines_data["shodhana"] = shodhana_data
@@ -2280,6 +2317,7 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
             "lagnaNakshatraPada": int((astro["La"]["Degree"] % (360/27)) / (360/108)) + 1,
             "chartType": chart_type,
             "sunrise": _calc_sunrise(dt, lat, lon),
+            "dashaYearType": dasha_year_type,
             # BTR ke liye zaroori fields
             "birth_hour":     round(dt.hour + dt.minute / 60.0, 4),
             "sunrise_hour":   6.0,   # approximate — swisseph se calculate bhi ho sakta hai
@@ -2444,11 +2482,13 @@ def api_chart():
     chart_type = body.get('chart_type', 'D1')
     lat        = body.get('lat')
     lon        = body.get('lon')
+    dasha_year_type = float(body.get('dasha_year_type', 360.0))
+    age        = int(body.get('age', 0) or 0)
 
     if not all([name, city, date_str, time_str]):
         return jsonify({'error': 'Missing required fields: name, dob, time, city'}), 400
 
-    result, err = _build_chart_response(name, city, date_str, time_str, chart_type, lat=lat, lon=lon)
+    result, err = _build_chart_response(name, city, date_str, time_str, chart_type, lat=lat, lon=lon, dasha_year_type=dasha_year_type, age=age)
     if err:
         return jsonify({'error': err}), 400
     return jsonify(result)
@@ -2472,11 +2512,13 @@ def api_chart_fast():
     chart_type = body.get('chart_type', 'D1')
     lat        = body.get('lat')
     lon        = body.get('lon')
+    dasha_year_type = float(body.get('dasha_year_type', 360.0))
+    age        = int(body.get('age', 0) or 0)
 
     if not all([name, city, date_str, time_str]):
         return jsonify({'error': 'Missing required fields: name, dob, time, city'}), 400
 
-    result, err = _build_chart_response(name, city, date_str, time_str, chart_type, lat=lat, lon=lon)
+    result, err = _build_chart_response(name, city, date_str, time_str, chart_type, lat=lat, lon=lon, dasha_year_type=dasha_year_type, age=age)
     if err:
         return jsonify({'error': err}), 400
 
@@ -2503,6 +2545,8 @@ def api_chart_engines():
     chart_type = body.get('chart_type', 'D1')
     lat        = body.get('lat')
     lon        = body.get('lon')
+    dasha_year_type = float(body.get('dasha_year_type', 360.0))
+    age        = int(body.get('age', 0) or 0)
 
     if not all([name, city, date_str, time_str]):
         return jsonify({'error': 'Missing fields'}), 400
@@ -2517,7 +2561,7 @@ def api_chart_engines():
         dt         = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
         astro      = calculate_astrology(dt, lat, lon)
         sav_points = calculate_sav(astro)
-        dashas     = calculate_vimshottari(astro["Mo"]["Degree"], dt)
+        dashas     = calculate_vimshottari(astro["Mo"]["Degree"], dt, year_length=dasha_year_type)
         now        = datetime.now()
 
         asc_idx    = astro["La"]["Vargas"][chart_type]["Idx"]
@@ -2557,7 +2601,7 @@ def api_chart_engines():
                                     "Ju":"गुरु","Ve":"शुक्र","Sa":"शनि","Ra":"राहु","Ke":"केतु"}.items()}
         _dasha_seq_full = []
         for _d in dashas:
-            _ads_raw = get_antardashas(_d["idx"], _d.get("absolute_start", _d["start"]))
+            _ads_raw = get_antardashas(_d["idx"], _d.get("absolute_start", _d["start"]), year_length=dasha_year_type)
             _antardashas = []
             for _ad in _ads_raw:
                 # Skip/Cap AD
@@ -2567,7 +2611,7 @@ def api_chart_engines():
                 _ad_start_dt = datetime.strptime(_ad["start"], "%d-%m-%Y")
                 _disp_ad_start = dt if _ad_start_dt < dt else _ad_start_dt
 
-                _pds_raw = get_pratyantardashas(_d["idx"], _ad["idx"], _ad["start"])
+                _pds_raw = get_pratyantardashas(_d["idx"], _ad["idx"], _ad["start"], year_length=dasha_year_type)
                 _pd_list = []
                 for _pd in _pds_raw:
                     # Skip/Cap PD
@@ -2677,6 +2721,25 @@ def api_chart_engines():
             print(f"[KP Significators] Error: {_kps_e}")
             kp_sig_data = {}
 
+        # ── Advanced Predictive Engine (Deep Forensics, D-10 Deities, D-9 Marriage, Chara Karakas, Progressed Lagna) ──
+        try:
+            _yogini_result_adv = calculate_yogini_dasha(astro["Mo"]["Degree"], dt, reference_date=datetime.now())
+            _current_yogini_adv = _yogini_result_adv["current"]
+
+            master_advanced_data = run_advanced_predictions(
+                astro_data=astro,
+                lagna_degree=astro["La"]["Degree"],
+                planet_house_map=planet_house_map,
+                birth_time_dt=dt,
+                sunrise_time_str=astro.get('sunrise', "06:00"),
+                age=age,
+                current_yogini_md=_current_yogini_adv,
+            )
+            engines_data["advanced_astrology"] = master_advanced_data
+        except Exception as _adv_e:
+            print(f"[Advanced Predictions Error] (engines route): {_adv_e}")
+            engines_data["advanced_astrology"] = {}
+
         # ── KP Extensions: Ruling Planets + Predictions ───────────────────
         kp_pred_data = {}
         kp_rp_data   = {}
@@ -2711,6 +2774,62 @@ def api_chart_engines():
         print(f"[ENGINES ROUTE 500] {e}")
         traceback.print_exc()
         return jsonify({'error': str(e), 'enginesData': {}, '_enginesReady': False}), 500
+
+
+# ── KUNDLI MATCHING — V.P. Goel जन्म-दशा मिलान (Guna Milan/मंगल दोष का विकल्प) ──
+@app.route('/api/match', methods=['POST'])
+def api_match():
+    """
+    दो व्यक्तियों (लड़का/लड़की) के जन्म-विवरण लेकर दोनों के charts calculate
+    करता है, फिर V.P. Goel की जन्म-दशा मिलान विधि से compatibility जाँचता है।
+
+    Body:
+      {
+        "person_a": {"name","dob","time","city","lat"?,"lon"?},
+        "person_b": {"name","dob","time","city","lat"?,"lon"?}
+      }
+    """
+    body = request.get_json(force=True)
+    person_a = body.get('person_a', {})
+    person_b = body.get('person_b', {})
+
+    def _build_astro_for_match(p, label):
+        name       = p.get('name', '')
+        city       = p.get('city', '')
+        date_str   = p.get('dob', '')
+        time_str   = p.get('time', '')
+        lat        = p.get('lat')
+        lon        = p.get('lon')
+        if not all([name, date_str, time_str, city]):
+            return None, f"{label}: नाम/जन्म-तिथि/समय/शहर में से कोई जानकारी अधूरी है"
+        if not lat or not lon:
+            lat, lon = get_coordinates(city)
+        if not lat or not lon:
+            return None, f"{label}: शहर नहीं मिला — {city}"
+        try:
+            dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            return None, f"{label}: तिथि/समय प्रारूप गलत है"
+        astro = calculate_astrology(dt, lat, lon)
+        return astro, None
+
+    astro_a, err_a = _build_astro_for_match(person_a, "Person A")
+    if err_a:
+        return jsonify({'error': err_a}), 400
+
+    astro_b, err_b = _build_astro_for_match(person_b, "Person B")
+    if err_b:
+        return jsonify({'error': err_b}), 400
+
+    try:
+        match_result = match_kundlis_dasha_rule(astro_a, astro_b)
+    except Exception as e:
+        import traceback
+        print(f"[MATCH ROUTE 500] {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+    return jsonify(match_result)
 
 
 # ── LEGACY / HELPER ROUTES (from original app.py) ───────────────────────

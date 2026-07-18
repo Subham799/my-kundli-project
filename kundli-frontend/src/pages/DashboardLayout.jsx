@@ -18,6 +18,7 @@ import DashaTimeline      from "../components/panels/DashaTimeline";
 import DrishtiGrid        from "../components/panels/DrishtiGrid";
 import AshtakavargaGrid   from "../components/panels/AshtakavargaGrid";
 import HousePanel         from "../components/panels/HousePanel";
+import AdvancedAstrologyPanel         from "../components/panels/AdvancedAstrologyPanel";
 import Badge              from "../components/ui/Badge";
 
 // ── Phase 1 (but conclusion is heavy — lazy ok) ───────────────────────────
@@ -2046,7 +2047,8 @@ function RightPanel({ chartData }) {
     setActiveTab, 
     selectPlanet, 
     closeDrawer, 
-    enginesLoading 
+    enginesLoading,
+    setDashaYearType
   } = useKundliStore();
 
   const isMobile = useIsMobile();
@@ -2171,6 +2173,8 @@ function RightPanel({ chartData }) {
   <DashaTimeline
     dasha={chartData.dasha}
     chartMeta={chartData.meta}
+    currentYearType={chartData.meta?.dashaYearType || 360.0}
+    onYearTypeChange={setDashaYearType}
   />
 )}
 
@@ -2232,6 +2236,14 @@ function RightPanel({ chartData }) {
             {activeTab === "vivah"           && <VivahPanel />}
             {activeTab === "prashna"         && <PrashnaKundli />}  {/* 🔥 PRASHNA KUNDLI TAB */}
             {activeTab === "chalit" && <Chalit />}
+            {/* 🌟 नया कारक टैब यहाँ जोड़ें */}
+        {activeTab === "karaka" && (
+          enginesLoading 
+            ? <TabSkeleton /> 
+            : <AdvancedAstrologyPanel 
+                data={chartData?.enginesData?.advanced_astrology} 
+              />
+        )}
           </motion.div>
           </AnimatePresence>
         </Suspense>

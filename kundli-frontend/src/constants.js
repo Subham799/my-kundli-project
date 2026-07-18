@@ -100,6 +100,8 @@ export const TABS = [
   { id: "vivah",           label: "💍 विवाह",           phase: 2 },
   { id: "prashna",           label: "🔯 प्रश्न कुण्डली",           phase: 2 },
   { id: "chalit", label: "🔯 चलित कुण्डली", phase: 2 },
+  { id: "karaka", label: "🔯 karak", phase: 2 },
+
   
    
 ];

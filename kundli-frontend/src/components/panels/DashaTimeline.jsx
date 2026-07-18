@@ -100,7 +100,7 @@ function TaraBadge({ label, tara }) {
 }
 
 // 🌟 LAZY LOADING CALCULATION ENGINES (360-Day Saavan Year)
-function generateADsLazy(mdLord, mdStartStr, mdDurDays) {
+function generateADsLazy(mdLord, mdStartStr, mdDurDays, yearLength = 360.0) {
   if (!mdStartStr || !mdLord) return [];
   let [d, m, y] = mdStartStr.split('-');
   let curTimeMs = Date.UTC(y, m - 1, d);
@@ -110,7 +110,7 @@ function generateADsLazy(mdLord, mdStartStr, mdDurDays) {
 
   for (let i = 0; i < 9; i++) {
     const adLord = LORDS[(startIdx + i) % 9];
-    const adDurDays = (mdDurDays / 360.0) * YEARS[adLord] * 360.0;
+    const adDurDays = (mdDurDays / yearLength) * YEARS[adLord] * yearLength;
     const nextTimeMs = curTimeMs + (adDurDays * 86400000);
 
     const curDt = new Date(curTimeMs);
@@ -127,7 +127,7 @@ function generateADsLazy(mdLord, mdStartStr, mdDurDays) {
   return ads;
 }
 
-function generatePDsLazy(adLord, adStartStr, adDurDays, mdLord, mdDurDays) {
+function generatePDsLazy(adLord, adStartStr, adDurDays, mdLord, mdDurDays, yearLength = 360.0) {
   if (!adStartStr || !adLord) return [];
   let [d, m, y] = adStartStr.split('-');
   let curTimeMs = Date.UTC(y, m - 1, d);
@@ -137,7 +137,7 @@ function generatePDsLazy(adLord, adStartStr, adDurDays, mdLord, mdDurDays) {
 
   for (let i = 0; i < 9; i++) {
     const pdLord = LORDS[(startIdx + i) % 9];
-    const pdDurDays = (mdDurDays * YEARS[adLord] * YEARS[pdLord] / 14400.0) * 360.0;
+    const pdDurDays = (mdDurDays * YEARS[adLord] * YEARS[pdLord] / 14400.0) * yearLength;
     const nextTimeMs = curTimeMs + (pdDurDays * 86400000);
 
     const curDt = new Date(curTimeMs);
@@ -373,10 +373,12 @@ function PDGrid({ adLord, pdData, curPD, curSD, curPR, isCurrentAD, chartMeta, m
   const taraMatrix = chartMeta?.taraMatrix;
   
   // ⚡ LAZY LOAD DATES
+  const yearLength = chartMeta?.meta?.dashaYearType || 360.0;
+
   const resolvedPdData = useMemo(() => {
       if (pdData && pdData.length > 0) return pdData;
-      return generatePDsLazy(adLord, adStart, adDurDays, mdLord, YEARS[mdLord]);
-  }, [pdData, adLord, adStart, adDurDays, mdLord]);
+      return generatePDsLazy(adLord, adStart, adDurDays, mdLord, YEARS[mdLord], yearLength);
+  }, [pdData, adLord, adStart, adDurDays, mdLord, yearLength]);
 
   const findPD = (lord) => resolvedPdData?.find(p => p.lord === lord || p.lord_hi === lord || p.planet === lord);
 
@@ -1342,7 +1344,7 @@ function DashaInnerTabs({ active, onChange }) {
   );
 }
 
-export default function DashaTimeline({ dasha, chartMeta }) {
+export default function DashaTimeline({ dasha, chartMeta, currentYearType = 360.0, onYearTypeChange }) {
   if (!dasha) return null;
   const { current, sequence, yogini } = dasha;
 
@@ -1368,6 +1370,39 @@ export default function DashaTimeline({ dasha, chartMeta }) {
 
   return (
     <div className="flex flex-col gap-5 pb-6">
+
+      {/* 🌟 दशा वर्ष प्रणाली टॉगल बटन 🌟 */}
+      {onYearTypeChange && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-2xl border border-slate-700/40 bg-slate-800/20">
+          <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+            दशा वर्ष प्रणाली (Dasha Year)
+          </div>
+          <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
+            <button
+              onClick={() => onYearTypeChange(360.0)}
+              className={`px-4 py-1.5 rounded-lg text-[11px] font-bold transition-all duration-300 ${
+                currentYearType === 360.0
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 border border-transparent'
+              }`}
+              style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}
+            >
+              360 दिन (सावन)
+            </button>
+            <button
+              onClick={() => onYearTypeChange(365.2425)}
+              className={`px-4 py-1.5 rounded-lg text-[11px] font-bold transition-all duration-300 ${
+                currentYearType === 365.2425
+                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(34,211,238,0.2)]'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 border border-transparent'
+              }`}
+              style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}
+            >
+              365.24 दिन (सौर)
+            </button>
+          </div>
+        </div>
+      )}
 
       <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
         className="p-5 rounded-2xl border border-amber-500/28 bg-gradient-to-br from-amber-500/8 via-slate-900/50 to-slate-950/70 ring-1 ring-amber-500/15 shadow-lg shadow-amber-500/5">

@@ -12,7 +12,7 @@ const KP_EVENT_DICTIONARY = {
 };
 
 export default function KPResonanceDashboard() {
-  const { chartData } = useKundliStore();
+  const { chartData, dashaYearType, setDashaYearType } = useKundliStore();
   const [selectedTopic, setSelectedTopic] = useState("career");
   const [loading, setLoading] = useState(false);
   const [payloadResult, setPayloadResult] = useState(null);
@@ -32,19 +32,13 @@ export default function KPResonanceDashboard() {
         dob: chartData?.meta?.dob,
         moon_degree: chartData?.planets?.Mo?.fullDegree || 0,
         lat: chartData?.meta?.lat || 28.61,
-        lon: chartData?.meta?.lon || 77.20
+        lon: chartData?.meta?.lon || 77.20,
+        dasha_year_type: dashaYearType || 360.0 // 🌟 ग्लोबल स्टेट यहाँ पास हो रही है
       };
 
-     const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001';
-
-      const response = await fetch(`${API_BASE_URL}/api/generate-kp-payload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.error || "Failed to generate payload");
+      // 🌟 सीधा API क्लाइंट फंक्शन कॉल करें
+      const result = await generateKPPayload(payload);
+      if (!result.success) throw new Error(result.error || "Failed to generate payload");
 
       const finalPrompt = `Question: ${KP_EVENT_DICTIONARY[selectedTopic].label}\n\nUniversal KP Payload:\n${JSON.stringify(result.universal_payload, null, 2)}\n\nBhai, is data ko analyze karke strict KP rules ke hisaab se batao event ka promise hai ya nahi, aur agar hai to exact time window aur gochar kab trigger karega?`;
       
@@ -65,7 +59,33 @@ export default function KPResonanceDashboard() {
         <span className="w-1.5 h-6 rounded-full bg-gradient-to-b from-cyan-400 to-purple-500 block"></span>
         Ask AI Astrologer (Top-Down KP Approach)
       </h2>
-      <p className="text-sm text-slate-400 mb-6">Select a question to generate a precise 5-Block KP prediction prompt.</p>
+<p className="text-sm text-slate-400 mb-4">Select a question to generate a precise 5-Block KP prediction prompt.</p>
+
+      {/* 🌟 ग्लोबल KP दशा वर्ष प्रणाली टॉगल 🌟 */}
+      <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 w-fit mb-6">
+        <button 
+          onClick={() => setDashaYearType(360.0)}
+          className={`px-4 py-1.5 rounded-lg text-[11px] font-bold transition-all duration-300 ${
+            dashaYearType === 360.0 
+              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]' 
+              : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 border border-transparent'
+          }`}
+          style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}
+        >
+          360 दिन (सावन)
+        </button>
+        <button 
+          onClick={() => setDashaYearType(365.2425)}
+          className={`px-4 py-1.5 rounded-lg text-[11px] font-bold transition-all duration-300 ${
+            dashaYearType === 365.2425 
+              ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(34,211,238,0.2)]' 
+              : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 border border-transparent'
+          }`}
+          style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}
+        >
+          365.24 दिन (सख्त KP)
+        </button>
+      </div>
 
       <div className="flex flex-col md:flex-row items-center gap-4">
         <select 

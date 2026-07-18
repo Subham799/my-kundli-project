@@ -67,6 +67,8 @@ export async function fetchKundliChart(formData) {
     name: formData.name, dob: formData.dob, time: formData.time,
     city: formData.city, chart_type: formData.chartType,
     lat: formData.lat, lon: formData.lon,
+    dasha_year_type: formData.dasha_year_type ?? 360.0,
+    age: formData.age ?? 0, // 👈 इसे जोड़ें
   });
 }
 
@@ -77,6 +79,8 @@ export async function fetchKundliChartFast(formData) {
     name: formData.name, dob: formData.dob, time: formData.time,
     city: formData.city, chart_type: formData.chartType,
     lat: formData.lat, lon: formData.lon,
+    age: formData.age ?? 0, // 👈 इसे जोड़ें
+    dasha_year_type: formData.dasha_year_type ?? 360.0,
   });
 }
 
@@ -90,6 +94,8 @@ export async function fetchKundliEngines(formData) {
         name: formData.name, dob: formData.dob, time: formData.time,
         city: formData.city, chart_type: formData.chartType,
         lat: formData.lat, lon: formData.lon,
+        age: formData.age ?? 0, // 👈 इसे जोड़ें
+        dasha_year_type: formData.dasha_year_type ?? 360.0,
       }),
     });
     if (!res.ok) return { enginesData: null, _enginesReady: false };
@@ -128,5 +134,44 @@ export async function fetchCitySuggestions(query) {
   if (!query || query.length < 2) return [];
   const res = await fetch(`${BASE_URL}/api/cities?q=${encodeURIComponent(query)}`);
   if (!res.ok) return [];
+  return res.json();
+}
+export async function generateKPPayload(kpData) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/generate-kp-payload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topic: kpData.topic,
+        astro_data: kpData.astro_data,
+        raw_significators: kpData.raw_significators,
+        cusp_data: kpData.cusp_data,
+        dob: kpData.dob,
+        moon_degree: kpData.moon_degree,
+        lat: kpData.lat,
+        lon: kpData.lon,
+        // 🌟 यहाँ ग्लोबल पैरामीटर पास होगा
+        dasha_year_type: kpData.dasha_year_type ?? 360.0
+      }),
+    });
+    if (!res.ok) throw new Error("Failed to generate KP payload");
+    return await res.json();
+  } catch (err) {
+    console.error("KP Payload fetch failed:", err);
+    throw err;
+  }
+}
+// KUNDLI MATCHING — V.P. Goel जन्म-दशा मिलान
+// personA / personB: {name, dob, time, city, lat?, lon?}
+export async function fetchKundliMatch(personA, personB) {
+  const res = await fetch(`${BASE_URL}/api/match`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ person_a: personA, person_b: personB }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "मिलान असफल रहा");
+  }
   return res.json();
 }
