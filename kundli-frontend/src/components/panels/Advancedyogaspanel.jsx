@@ -43,6 +43,9 @@ const TABS = [
   { id: "rashis",  label: "📅 राशि चक्र" },
   { id: "tulna",   label: "⚖️ भाव तुलना" },
   { id: "mega",    label: "📊 सारांश" },
+  { id: "vivah",   label: "💍 विवाह-तलाक (सूत्र)" },
+  { id: "khar",    label: "☠️ 64वाँ नवांश / खर" },
+  { id: "hora",    label: "☀️ D2 होरा" },
 ];
 
 // [Fix ④] SutraCard{} REMOVED.
@@ -871,24 +874,492 @@ function MegaTab({ mega_rules }) {
 }
 
 
+// ════════ TAB — KHAR / 64TH NAVAMSHA ════════════════════════
+function Khar64NavamsaTab({ khar_64th_navamsa }) {
+  const data = khar_64th_navamsa;
+
+  if (!data?.computed) {
+    return <EmptyState icon="☠️" message="64वें नवांश / खर का डेटा उपलब्ध नहीं" />;
+  }
+
+  const dualPlanets = Array.isArray(data.dual_sign_planets) ? data.dual_sign_planets : [];
+  const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+  const vishPlanets = Array.isArray(data.vish_navamsha_planets) ? data.vish_navamsha_planets : [];
+  const names = (arr) => Array.isArray(arr) && arr.length ? arr.join(", ") : "—";
+
+  const Mini = ({ label, value, tone = "normal" }) => (
+    <span style={{
+      ...HI, fontSize: "0.68rem", lineHeight: 1.35,
+      color: tone === "bad" ? C.rose : tone === "good" ? C.cyan : "rgba(255,255,255,.72)"
+    }}>
+      <b style={{ color: "rgba(255,255,255,.48)", fontWeight: 500 }}>{label}:</b> {value || "—"}
+    </span>
+  );
+
+  return (
+    <div className="space-y-3">
+      <GlassCard className="p-3" style={{ borderLeft: `3px solid ${C.amber}` }}>
+        <div style={{ ...HI, fontWeight: 800, fontSize: "0.9rem", color: C.amber }}>
+          ☠️ 64वाँ नवांश / खर
+        </div>
+        <div style={{ ...HI, fontSize: "0.68rem", color: "rgba(255,255,255,.55)", marginTop: "4px", lineHeight: 1.5 }}>
+          D1 द्वि-स्वभाव राशि → 1/5/9 नवांश → D9 से 4था → D3 से 8वाँ → केवल राशि-स्वामी।
+        </div>
+      </GlassCard>
+
+      {/* STEP 1 + 2: show every planet in a D1 dual sign and its degree/navamsha status */}
+      <GlassCard className="p-3">
+        <div style={{ ...HI, fontWeight: 800, fontSize: "0.8rem", color: C.cyan, marginBottom: "7px" }}>
+          स्टेप 1–2 · D1 द्वि-स्वभाव राशि + 1/5/9 नवांश
+        </div>
+        {!dualPlanets.length ? (
+          <div style={{ ...HI, fontSize: "0.7rem", color: "rgba(255,255,255,.55)" }}>कोई ग्रह द्वि-स्वभाव राशि में नहीं।</div>
+        ) : (
+          <div style={{ display: "grid", gap: "5px" }}>
+            {dualPlanets.map((x, i) => (
+              <div key={`${x.planet_code}-${i}`} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px",
+                padding: "6px 8px", borderRadius: "6px", background: "rgba(255,255,255,.035)"
+              }}>
+                <div style={{ ...HI, fontSize: "0.72rem", color: "rgba(255,255,255,.82)" }}>
+                  <b>{x.planet_name}</b> · {x.d1_rashi_name} · {x.d1_sign_degree}° · नवांश {x.navamsha_no}
+                </div>
+                <StatusPill
+                  label={x.navamsha_qualifies ? "योग्य" : "बाहर"}
+                  color={x.navamsha_qualifies ? "cyan" : "rose"}
+                  size="xs"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </GlassCard>
+
+      {/* STEP 3 + 4: only qualifying planets */}
+      <GlassCard className="p-3">
+        <div style={{ ...HI, fontWeight: 800, fontSize: "0.8rem", color: C.amber, marginBottom: "7px" }}>
+          स्टेप 3–4 · 64वाँ नवांश + 22वाँ द्रेष्काण + Double Khar
+        </div>
+
+        {!candidates.length ? (
+          <div style={{ ...HI, fontSize: "0.7rem", color: "rgba(255,255,255,.55)" }}>
+            कोई ग्रह 1/5/9 नवांश की शर्त पूरी नहीं करता।
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: "8px" }}>
+            {candidates.map((x, i) => {
+              const d9 = x.d9_64th_navamsha || x.d9_fourth || {};
+              const d3 = x.d3_22nd_drekkana || x.d3_eighth || {};
+              const isDouble = !!x.double_khar;
+
+              return (
+                <div key={`${x.planet_code}-${i}`} style={{
+                  padding: "8px", borderRadius: "7px",
+                  border: `1px solid ${isDouble ? "rgba(251,113,133,.28)" : "rgba(255,255,255,.08)"}`,
+                  background: isDouble ? "rgba(251,113,133,.055)" : "rgba(255,255,255,.025)"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                    <div style={{ ...HI, fontWeight: 800, fontSize: "0.8rem", color: C.cyan }}>
+                      {x.planet_name} से खर
+                    </div>
+                    <StatusPill label={isDouble ? "DOUBLE KHAR" : "Single Khar"} color={isDouble ? "rose" : "cyan"} size="xs" />
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: "5px 10px" }}>
+                    <Mini label="D1" value={`${x.d1_rashi_name} · ${x.d1_sign_degree}° · नवांश ${x.navamsha_no}`} />
+                    <Mini label="D9 में ग्रह" value={`${x.planet_name}: ${x.d9_rashi_name || "—"}`} />
+                    <Mini label="D3 में ग्रह" value={`${x.planet_name}: ${x.d3_rashi_name || "—"}`} />
+                    <Mini label="D9 से 4था (64वाँ नवांश)" value={d9.available ? `${d9.target_rashi_name} → ${d9.lord_name}` : "—"} tone="good" />
+                    <Mini label="D3 से 8वाँ (22वाँ द्रेष्काण)" value={d3.available ? `${d3.target_rashi_name} → ${d3.lord_name}` : "—"} tone="good" />
+                    <Mini label="64वें नवांश के स्वामी की D2 होरा" value={x.d9_khar_lord_hora?.available ? `${x.d9_khar_lord} → ${x.d9_khar_lord_hora.hora_lord} होरा · ${x.d9_khar_lord_hora.d2_rashi_name || "D2 उपलब्ध"}` : "D2 डेटा उपलब्ध नहीं"} />
+                    <Mini label="22वें द्रेष्काण के स्वामी की D2 होरा" value={x.d3_khar_lord_hora?.available ? `${x.d3_khar_lord} → ${x.d3_khar_lord_hora.hora_lord} होरा · ${x.d3_khar_lord_hora.d2_rashi_name || "D2 उपलब्ध"}` : "D2 डेटा उपलब्ध नहीं"} />
+                  </div>
+
+                  {isDouble && (
+                    <div style={{ ...HI, marginTop: "6px", fontSize: "0.72rem", fontWeight: 700, color: C.rose }}>
+                      Double Khar: <b>{x.planet_name}</b> से <b>{x.d9_khar_lord}</b> बन रहा है
+                      {x.double_khar_hora?.available && (
+                        <span style={{ fontWeight: 600, color: "rgba(255,255,255,.72)" }}>
+                          {` · D2 में ${x.d9_khar_lord_hora?.d2_rashi_name || x.double_khar_hora.d2_rashi_name || "होरा"}: ${x.double_khar_hora.hora_lord}`}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </GlassCard>
+
+      {/* ALL-PLANET 64TH NAVAMSHA + 22ND DREKKANA EVIDENCE */}
+      {Array.isArray(data.all_planet_checks) && data.all_planet_checks.length > 0 && (
+        <GlassCard className="p-3">
+          <div style={{ ...HI, fontWeight: 800, fontSize: "0.8rem", color: C.cyan, marginBottom: "7px" }}>
+            सभी ग्रह · 64वाँ नवांश + 22वाँ द्रेष्काण
+          </div>
+          <div style={{ ...HI, fontSize: "0.67rem", color: "rgba(255,255,255,.48)", marginBottom: "8px", lineHeight: 1.45 }}>
+            Double Khar बने या न बने, हर ग्रह से D9 का 4था और D3 का 8वाँ केवल evidence के रूप में दिखाया गया है।
+          </div>
+          <div style={{ display: "grid", gap: "6px" }}>
+            {data.all_planet_checks.map((x, i) => {
+              const d9 = x.d9_64th_navamsha || x.d9_fourth || {};
+              const d3 = x.d3_22nd_drekkana || x.d3_eighth || {};
+              return (
+                <div key={`all-khar-${x.planet_code}-${i}`} style={{
+                  padding: "7px 8px", borderRadius: "7px",
+                  background: "rgba(255,255,255,.025)",
+                  border: "1px solid rgba(255,255,255,.06)"
+                }}>
+                  <div style={{ ...HI, fontWeight: 750, fontSize: "0.73rem", color: "rgba(255,255,255,.82)", marginBottom: "5px" }}>
+                    {x.planet_name} · {x.d1_rashi_name} · {x.d1_sign_degree}° · नवांश {x.navamsha_no}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: "4px 10px" }}>
+                    <Mini label="64वाँ नवांश" value={d9.available ? `${d9.target_rashi_name} → ${d9.lord_name}` : "D9 डेटा उपलब्ध नहीं"} />
+                    <Mini label="22वाँ द्रेष्काण" value={d3.available ? `${d3.target_rashi_name} → ${d3.lord_name}` : "D3 डेटा उपलब्ध नहीं"} />
+                    <Mini label="Double Khar" value={x.double_khar ? `हाँ · ${x.d9_khar_lord || "—"}` : "नहीं"} />
+                    <Mini label="64वें स्वामी की Hora" value={x.d9_khar_lord_hora?.available ? `${x.d9_khar_lord} → ${x.d9_khar_lord_hora.hora_lord}` : "—"} />
+                    <Mini label="22वें स्वामी की Hora" value={x.d3_khar_lord_hora?.available ? `${x.d3_khar_lord} → ${x.d3_khar_lord_hora.hora_lord}` : "—"} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </GlassCard>
+      )}
+
+      {/* VISH NAVAMSHA — INDEPENDENT RAW EVIDENCE */}
+      {vishPlanets.length > 0 && (
+        <GlassCard className="p-3" style={{ borderLeft: `3px solid ${C.rose}` }}>
+          <div style={{ ...HI, fontWeight: 800, fontSize: "0.8rem", color: C.rose, marginBottom: "7px" }}>
+            विष नवांश · सर्प / गिद्ध / सूअर
+          </div>
+          <div style={{ ...HI, fontSize: "0.67rem", color: "rgba(255,255,255,.48)", marginBottom: "6px", lineHeight: 1.45 }}>
+            D1 राशि के अनुसार 1/5/9 विष नवांश की raw स्थिति; साथ में भाव, स्वामित्व, प्राकृतिक कारकत्व और D2 होरा।
+          </div>
+          <div style={{ ...HI, fontSize: "0.66rem", color: "rgba(255,255,255,.62)", marginBottom: "8px", padding: "5px 7px", borderRadius: "6px", background: "rgba(255,255,255,.025)", border: "1px solid rgba(255,255,255,.06)" }}>
+            <b>विष नवांश वर्ग:</b> 1वाँ नवांश = <b>सर्प</b> · 5वाँ नवांश = <b>गिद्ध</b> · 9वाँ नवांश = <b>सूअर</b>
+          </div>
+          <div style={{ display: "grid", gap: "6px" }}>
+            {vishPlanets.map((x, i) => (
+              <div key={`vish-${x.planet_code}-${i}`} style={{
+                padding: "7px 8px", borderRadius: "7px",
+                background: "rgba(251,113,133,.045)",
+                border: "1px solid rgba(251,113,133,.12)"
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
+                  <div style={{ ...HI, fontWeight: 800, fontSize: "0.73rem", color: C.rose }}>
+                    {x.planet_name} · {x.d1_rashi_name} · {x.d1_sign_degree}° · नवांश {x.navamsha_no}
+                  </div>
+                  <StatusPill label={x.vish_navamsha_no ? `${x.vish_navamsha_no}वाँ · ${x.vish_category || "विष"}` : (x.vish_category || "विष")} color="rose" size="xs" />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: "4px 10px" }}>
+                  <Mini label="D1 भाव" value={x.d1_house_name || "—"} />
+                  <Mini label="D1 स्वामित्व" value={Array.isArray(x.d1_lordship_houses) && x.d1_lordship_houses.length ? x.d1_lordship_houses.join(", ") + "वां" : "—"} />
+                  <Mini label="प्राकृतिक कारकत्व" value={x.natural_karakatwa || "—"} />
+                  <Mini label="D2 होरा" value={x.vish_hora?.available ? `${x.vish_hora.hora_lord} होरा · ${x.vish_hora.d2_rashi_name || "—"}` : "D2 डेटा उपलब्ध नहीं"} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+      )}
+
+      <div style={{ ...HI, fontSize: "0.67rem", lineHeight: 1.5, color: "rgba(255,255,255,.38)", padding: "7px 9px", background: "rgba(255,255,255,.025)", borderRadius: "6px" }}>
+        नोट: ये सभी entries केवल गणना/evidence हैं। Double Khar, 64वाँ नवांश, 22वाँ द्रेष्काण या विष नवांश से software स्वयं कोई अंतिम फलादेश/निर्णय नहीं देता।
+      </div>
+
+      {data.has_double_khar && (
+        <GlassCard className="p-3" style={{ borderLeft: `3px solid ${C.rose}` }}>
+          <div style={{ ...HI, fontSize: "0.72rem", color: "rgba(255,255,255,.5)", marginBottom: "3px" }}>
+            Double Khar किन ग्रहों से बन रहा है?
+          </div>
+          <div style={{ ...HI, fontWeight: 800, fontSize: "0.8rem", color: C.rose }}>
+            {names(data.double_khar_planets)}
+          </div>
+        </GlassCard>
+      )}
+    </div>
+  );
+}
+
+// ════════ TAB 9 — VIVAH & DIVORCE (V.P. GOEL SUTRAS) ════════
+function VivahDivorceTab({ vivah_promise, divorce_separation }) {
+  if (!vivah_promise || !divorce_separation)
+    return <EmptyState icon="💍" message="विवाह-संबंधी डेटा उपलब्ध नहीं" />;
+
+  const vp = vivah_promise;
+  const ds = divorce_separation;
+  const d1 = vp.d1 || ds.d1 || {};
+  const d9 = vp.d9 || ds.d9 || {};
+
+  const names = (arr) => Array.isArray(arr) && arr.length ? arr.join(", ") : "—";
+  const yn = (v) => v ? "हाँ" : "नहीं";
+  const field = (o, ...keys) => {
+    for (const k of keys) if (o && o[k] != null) return o[k];
+    return null;
+  };
+
+  const Mini = ({ label, value, tone = "normal" }) => (
+    <span style={{
+      ...HI, fontSize: "0.68rem", lineHeight: 1.3,
+      color: tone === "bad" ? C.rose : tone === "good" ? C.cyan : "rgba(255,255,255,.72)"
+    }}>
+      <b style={{ color: "rgba(255,255,255,.48)", fontWeight: 500 }}>{label}:</b> {value || "—"}
+    </span>
+  );
+
+  const EntityRow = ({ title, data, lord = false }) => {
+    if (!data) return null;
+    const planet = data.planet_name || data.lagnesh_name || "—";
+    const house = field(data, "house_no", "house");
+    const trik = field(data, "in_trik_6_8_12", "in_trik");
+    const yutiBad = field(data, "yuti_malefics");
+    const yutiGood = field(data, "yuti_benefics");
+    const drishtiBad = field(data, "malefic_drishti", "malefic_drishti_planets");
+    const drishtiGood = field(data, "benefic_drishti", "benefic_drishti_planets");
+    const retro = field(data, "is_retrograde", "is_vakri_retrograde");
+
+    return (
+      <div style={{
+        display: "grid", gridTemplateColumns: "78px 1fr", gap: "8px",
+        padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,.055)"
+      }}>
+        <div style={{ ...HI, fontSize: "0.76rem", fontWeight: 700, color: C.cyan }}>{title}</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 12px" }}>
+          <Mini label={lord ? "ग्रह" : "स्थिति"} value={lord ? `${planet}${house ? ` · ${house} भाव` : ""}` : planet} />
+          {lord && <Mini label="त्रिक" value={yn(Boolean(trik))} tone={trik ? "bad" : "normal"} />}
+          {lord && <Mini label="युति पाप" value={names(yutiBad)} tone={yutiBad?.length ? "bad" : "normal"} />}
+          {lord && <Mini label="युति शुभ" value={names(yutiGood)} tone={yutiGood?.length ? "good" : "normal"} />}
+          <Mini label="दृष्टि पाप" value={names(drishtiBad)} tone={drishtiBad?.length ? "bad" : "normal"} />
+          <Mini label="दृष्टि शुभ" value={names(drishtiGood)} tone={drishtiGood?.length ? "good" : "normal"} />
+          {lord && <Mini label="वक्री" value={yn(Boolean(retro))} />}
+        </div>
+      </div>
+    );
+  };
+
+  const HouseRow = ({ title, data, showPK = false }) => {
+    if (!data) return null;
+    const occ = data.planets_present || [];
+    const bad = data.malefic_planets_present || [];
+    const good = data.benefic_planets_present || [];
+    const badDr = data.malefic_drishti || data.malefic_drishti_planets || [];
+    const goodDr = data.benefic_drishti || data.benefic_drishti_planets || [];
+    const pk = data.paap_kartari;
+    return (
+      <div style={{
+        display: "grid", gridTemplateColumns: "78px 1fr", gap: "8px",
+        padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,.055)"
+      }}>
+        <div style={{ ...HI, fontSize: "0.76rem", fontWeight: 700, color: C.amber }}>{title}</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 12px" }}>
+          <Mini label="ग्रह" value={names(occ)} />
+          <Mini label="पाप" value={names(bad)} tone={bad.length ? "bad" : "normal"} />
+          <Mini label="शुभ" value={names(good)} tone={good.length ? "good" : "normal"} />
+          <Mini label="पाप दृष्टि" value={names(badDr)} tone={badDr.length ? "bad" : "normal"} />
+          <Mini label="शुभ दृष्टि" value={names(goodDr)} tone={goodDr.length ? "good" : "normal"} />
+          {showPK && <Mini label="Paap Kartari" value={pk?.is_active ? `हाँ (${names(pk.previous_house_planets || pk.previous_planets)} | ${names(pk.next_house_planets || pk.next_planets)})` : "नहीं"} tone={pk?.is_active ? "bad" : "normal"} />}
+        </div>
+      </div>
+    );
+  };
+
+  const ChartBlock = ({ chart, label }) => {
+    if (!chart?.computed) return null;
+    const lagna = chart.lagna || {};
+    const lagnesh = chart.lagnesh || {};
+    const seventh = chart.seventh_house || {};
+    const seventhLord = chart.seventh_lord || {};
+    const ninth = chart.ninth_house || {};
+    const ninthLord = chart.house_lords?.["9"] || {};
+
+    return (
+      <GlassCard className="p-3" style={{ borderLeft: `3px solid ${label === "D1" ? C.cyan : C.amber}` }}>
+        <div style={{ ...HI, fontSize: "0.9rem", fontWeight: 800, color: label === "D1" ? C.cyan : C.amber, marginBottom: "5px" }}>
+          {label} <span style={{ color: "rgba(255,255,255,.5)", fontWeight: 500 }}>· लग्न {lagna.rashi_name || "—"}</span>
+        </div>
+        <EntityRow title="लग्न" data={{ planet_name: names(lagna.planets_present), benefic_drishti: lagna.benefic_drishti_planets, malefic_drishti: lagna.malefic_drishti_planets }} />
+        {lagna.paap_kartari && <div style={{ ...HI, fontSize: "0.68rem", padding: "5px 0", color: lagna.paap_kartari.is_active ? C.rose : "rgba(255,255,255,.58)" }}>Paap Kartari: <b>{lagna.paap_kartari.is_active ? "हाँ" : "नहीं"}</b>{lagna.paap_kartari.is_active && ` · ${names(lagna.paap_kartari.previous_house_planets || lagna.paap_kartari.previous_planets)} | ${names(lagna.paap_kartari.next_house_planets || lagna.paap_kartari.next_planets)}`}</div>}
+        <EntityRow title="लग्नेश" data={lagnesh} lord />
+        <EntityRow title="सप्तमेश" data={seventhLord} lord />
+        <EntityRow title="नवमेश" data={{ ...ninthLord, planet_name: ninthLord.planet_name }} lord />
+        <HouseRow title="सप्तम भाव" data={seventh} showPK />
+        <HouseRow title="नवम भाव" data={ninth} />
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 14px", paddingTop: "7px" }}>
+          <Mini label="त्रिक 6" value={names(chart.sixth_house?.planets_present)} />
+          <Mini label="त्रिक 8" value={names(chart.eighth_house?.planets_present)} />
+          <Mini label="त्रिक 12" value={names(chart.twelfth_house?.planets_present)} />
+        </div>
+      </GlassCard>
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      <div style={{ ...HI, fontSize: "0.72rem", color: C.amber, padding: "7px 10px", background: "rgba(245,158,11,.07)", borderRadius: "7px" }}>
+        केवल raw observations — ग्रह, भाव, युति, दृष्टि, त्रिक और Paap Kartari। कोई final prediction/synthesis नहीं।
+      </div>
+      <ChartBlock chart={d1} label="D1" />
+      <ChartBlock chart={d9} label="D9" />
+    </div>
+  );
+}
+
+// ════════ TAB — D2 HORA ANALYSIS ═══════════════════════════
+function HoraTab({ hora_analysis }) {
+  const h = hora_analysis;
+
+  // Local compact renderer for Hora rows.
+  // Keep this inside HoraTab so tab switching never depends on
+  // Mini being declared in another tab component.
+  const Mini = ({ label, value }) => (
+    <span style={{
+      ...HI, fontSize: "0.68rem", lineHeight: 1.3,
+      color: "rgba(255,255,255,.72)"
+    }}>
+      <b style={{ color: "rgba(255,255,255,.48)", fontWeight: 500 }}>{label}:</b> {value ?? "—"}
+    </span>
+  );
+  if (!h?.computed) return <EmptyState icon="☀️" message="D2 होरा डेटा उपलब्ध नहीं" subtext="यह टैब केवल उपलब्ध D1/D2 raw data और configured Hora rules दिखाता है।" />;
+
+  const planets = Array.isArray(h.rows) ? h.rows : [];
+  const strength = Array.isArray(h.formula_2_hora_strength?.rows) ? h.formula_2_hora_strength.rows : [];
+  const natureFlags = Array.isArray(h.formula_4_nature_speech?.flags) ? h.formula_4_nature_speech.flags : [];
+  const houseData = Array.isArray(h.d2_house_reference?.rows) ? h.d2_house_reference.rows : [];
+  const mansagariRules = Array.isArray(h.mansagari_textual_rules?.rules) ? h.mansagari_textual_rules.rules : [];
+  const horaName = x => x?.hora_lord || x?.hora || x?.hora_lord_name || "—";
+  const strengthName = x => x?.strength_label || x?.segment_label || x?.strength || "—";
+
+  return (
+    <div className="space-y-3">
+      <GlassCard className="p-3" style={{ borderLeft: `3px solid ${C.amber}` }}>
+        <div style={{ ...HI, fontWeight: 800, fontSize: "0.9rem", color: C.amber }}>☀️ D2 होरा — Raw Analysis</div>
+        <div style={{ ...HI, fontSize: "0.68rem", color: "rgba(255,255,255,.55)", marginTop: "4px", lineHeight: 1.5 }}>
+          D1 राशि + डिग्री से Parashari D2 Hora, फिर Hora lord, strength और उपलब्ध textual flags।
+          यह मॉड्यूल कोई अंतिम फलादेश या निर्णय नहीं देता।
+        </div>
+      </GlassCard>
+
+      <GlassCard className="p-3">
+        <div style={{ ...HI, fontWeight: 800, fontSize: "0.8rem", color: C.cyan, marginBottom: "7px" }}>सूत्र 1 · बेसिक पराशरी होरा</div>
+        <div style={{ ...HI, fontSize: "0.68rem", color: "rgba(255,255,255,.55)", padding: "6px 8px", background: "rgba(255,255,255,.03)", borderRadius: "6px", marginBottom: "8px" }}>
+          विषम राशि: 0°–&lt;15° = सूर्य/सिंह, 15°–&lt;30° = चंद्र/कर्क ·
+          सम राशि: 0°–&lt;15° = चंद्र/कर्क, 15°–&lt;30° = सूर्य/सिंह
+        </div>
+        {planets.length ? <div style={{ display: "grid", gap: "5px" }}>
+          {planets.map((x, i) => (
+            <div key={`${x.planet_code || x.code || "p"}-${i}`} style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: "6px", padding: "6px 8px", borderRadius: "6px", background: "rgba(255,255,255,.035)" }}>
+              <span style={{ ...HI, fontSize: "0.7rem", color: "rgba(255,255,255,.82)" }}><b>{x.planet_name || x.name || x.planet_code || "—"}</b></span>
+              <span style={{ fontSize: "0.68rem", color: "rgba(255,255,255,.55)" }}>D1 {x.rashi_name || "—"} · {x.degree ?? "—"}°</span>
+              <span style={{ ...HI, fontSize: "0.68rem", color: x.parashari_hora?.hora_lord_code === "Su" ? C.amber : C.cyan }}>{horaName(x.parashari_hora)} · {x.parashari_hora?.hora_sign || "—"}</span>
+            </div>
+          ))}
+        </div> : <div style={{ ...HI, fontSize: "0.7rem", color: "rgba(255,255,255,.5)" }}>ग्रहवार D2 Hora data उपलब्ध नहीं।</div>}
+      </GlassCard>
+
+      <GlassCard className="p-3">
+        <div style={{ ...HI, fontWeight: 800, fontSize: "0.8rem", color: C.amber, marginBottom: "7px" }}>सूत्र 2 · होरा शक्ति</div>
+        <div style={{ ...HI, fontSize: "0.68rem", color: "rgba(255,255,255,.5)", marginBottom: "7px" }}>
+          0°–5°, 5°–10°, 10°–15° तथा 15°–20°, 20°–25°, 25°–30° segments को raw strength category।
+        </div>
+        {strength.length ? <div className="space-y-1">{strength.map((x, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 7px", borderBottom: "1px solid rgba(255,255,255,.05)" }}>
+            <span style={{ ...HI, fontSize: "0.7rem", color: "rgba(255,255,255,.75)" }}>{x.planet_name || "—"}</span>
+            <span style={{ fontSize: "0.68rem", color: C.amber }}>{strengthName(x.strength)}</span>
+          </div>
+        ))}</div> : <div style={{ ...HI, fontSize: "0.7rem", color: "rgba(255,255,255,.5)" }}>Hora strength data उपलब्ध नहीं।</div>}
+      </GlassCard>
+
+      <GlassCard className="p-3">
+        <div style={{ ...HI, fontWeight: 800, fontSize: "0.8rem", color: C.cyan, marginBottom: "7px" }}>सूत्र 3 · लाभ मण्डूक / केरल होरा</div>
+        <div style={{ ...HI, fontSize: "0.68rem", color: "rgba(255,255,255,.55)", marginBottom: "7px" }}>
+          Sun-contributed और Moon-contributed mapping को raw evidence के रूप में दिखाया जाएगा।
+        </div>
+        {planets.length ? <div style={{ display: "grid", gap: "5px" }}>{planets.map((x, i) => (
+          <div key={`kerala-${i}`} style={{ padding: "6px 8px", borderRadius: "6px", background: "rgba(255,255,255,.035)" }}>
+            <Mini label="ग्रह" value={x.planet_name || x.name || x.planet_code} />
+            <Mini label="D1 राशि-स्वामी" value={x.rashi_lord || "—"} />
+            <Mini label="Hora" value={horaName(x.parashari_hora)} />
+            <Mini label="Mapped D2 राशि" value={x.kerala_hora?.mapped_rashi_name || "—"} />
+          </div>
+        ))}</div> : <div style={{ ...HI, fontSize: "0.7rem", color: "rgba(255,255,255,.5)" }}>Kerala Hora mapping data उपलब्ध नहीं।</div>}
+      </GlassCard>
+
+      <GlassCard className="p-3">
+        <div style={{ ...HI, fontWeight: 800, fontSize: "0.8rem", color: C.amber, marginBottom: "7px" }}>ग्रंथीय संदर्भ · मानसागरी Hora Rules</div>
+        <div style={{ ...HI, fontSize: "0.68rem", color: "rgba(255,255,255,.55)", marginBottom: "7px" }}>Source में दिए planetary Hora फल केवल textual reference के रूप में हैं। Software इन्हें किसी व्यक्ति पर automatic prediction नहीं लगाएगा।</div>
+        {mansagariRules.length ? <div className="space-y-1">{mansagariRules.map((x, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2.6fr", gap: "7px", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,.05)" }}>
+            <span style={{ ...HI, fontSize: "0.68rem", color: C.cyan }}>{x.planet || "—"}</span>
+            <span style={{ ...HI, fontSize: "0.68rem", color: C.amber }}>{x.placement || "—"}</span>
+            <span style={{ ...HI, fontSize: "0.66rem", color: "rgba(255,255,255,.62)" }}>{x.rule || "—"}</span>
+          </div>
+        ))}</div> : <div style={{ ...HI, fontSize: "0.7rem", color: "rgba(255,255,255,.5)" }}>Textual rules उपलब्ध नहीं।</div>}
+      </GlassCard>
+
+      <GlassCard className="p-3">
+        <div style={{ ...HI, fontWeight: 800, fontSize: "0.8rem", color: C.amber, marginBottom: "7px" }}>सूत्र 4 · स्वभाव और वाणी Flags</div>
+        <div style={{ ...HI, fontSize: "0.68rem", color: "rgba(255,255,255,.55)", marginBottom: "7px" }}>
+          केवल rule-match / evidence flags। कोई निश्चित भविष्यवाणी या final decision नहीं।
+        </div>
+        {natureFlags.length ? <div className="space-y-1">{natureFlags.map((x, i) => (
+          <div key={i} style={{ padding: "6px 8px", borderRadius: "6px", background: x.available === false ? "rgba(255,255,255,.025)" : "rgba(34,211,238,.06)" }}>
+            <div style={{ ...HI, fontSize: "0.72rem", fontWeight: 700, color: x.available === false ? "rgba(255,255,255,.65)" : C.cyan }}>{x.label || x.rule || "Rule"}</div>
+            {x.evidence && <div style={{ ...HI, fontSize: "0.66rem", color: "rgba(255,255,255,.5)", marginTop: "3px" }}>{x.evidence}</div>}
+          </div>
+        ))}</div> : <div style={{ ...HI, fontSize: "0.7rem", color: "rgba(255,255,255,.5)" }}>कोई configured nature/speech flag उपलब्ध नहीं।</div>}
+      </GlassCard>
+
+      <GlassCard className="p-3">
+        <div style={{ ...HI, fontWeight: 800, fontSize: "0.8rem", color: C.cyan, marginBottom: "7px" }}>D2 के 12 भाव · धन के संदर्भ</div>
+        {houseData.length ? <div className="space-y-1">{houseData.map((x, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "45px 1fr", gap: "7px", padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,.05)" }}>
+            <span style={{ fontFamily: "monospace", fontSize: "0.7rem", color: C.amber }}>{x.house || i + 1}</span>
+            <span style={{ ...HI, fontSize: "0.68rem", color: "rgba(255,255,255,.62)" }}>{x.topic || x.description || x.label || "—"}</span>
+          </div>
+        ))}</div> : <div style={{ ...HI, fontSize: "0.7rem", color: "rgba(255,255,255,.5)" }}>D2 house reference engine data आने पर दिखेगा।</div>}
+      </GlassCard>
+
+      <div style={{ ...HI, fontSize: "0.67rem", lineHeight: 1.5, color: "rgba(255,255,255,.38)", padding: "7px 9px", background: "rgba(255,255,255,.025)", borderRadius: "6px" }}>
+        नोट: software केवल सूत्रों से निकले evidence/flags रखेगा। “100% धन लाभ”, “गरीब”, “विवाह निश्चित” जैसे final conclusions software स्वयं नहीं देगा। अंतिम व्याख्या व्यक्ति/ज्योतिषी करेगा।
+      </div>
+    </div>
+  );
+}
+
 // ════════ MAIN COMPONENT ═════════════════════════════════
 export default function AdvancedYogasPanel() {
   const data     = useAdvancedYogas();   // [Fix ⑦] prop hata, store se direct
   const [activeTab, setActiveTab] = useState("indu");
 
-  if (!data?.computed) {
-    return <EmptyState icon="⚡"
-      message={data?.error || "Advanced Yogas लोड हो रहे हैं..."}
-      subtext="Phase 2 background analysis..." />;
-  }
+  // IMPORTANT: Phase-2 engines are asynchronous. Do NOT block the whole
+  // panel while advanced_yogas is being calculated. The tab shell opens
+  // immediately from the fast chart response; individual tabs render their
+  // own small "data pending" state until enginesData arrives.
+  const summary = data?.summary || {};
+  const engineReady = Boolean(data?.computed);
 
-  const { summary } = data;
+  const pendingData = (
+    <EmptyState
+      icon="⚡"
+      message={data?.error || "Advanced Yogas डेटा तैयार हो रहा है..."}
+      subtext="D1 chart तुरंत उपलब्ध है; Phase 2 केवल analysis data भर रहा है।"
+    />
+  );
 
   const renderTab = () => {
+    if (!engineReady) return pendingData;
     switch (activeTab) {
       case "indu":   return <InduTab indu_lagna={data.indu_lagna} spouse_direction={data.spouse_direction} />;
       case "yogas":  return <YogasTab neech_uchha={data.neech_uchha} debt_trap={data.debt_trap} sudden_rise={data.sudden_rise} />;
       case "dhan":   return <DhanTab income_trapped={data.income_trapped} danger_zones={data.danger_zones} partner_compat={data.partner_compat} />;
+      
+      // 👇 यह रही सही लाइन (बिना डबल कोट्स के) 👇
+      case "vivah":  return <VivahDivorceTab vivah_promise={data.vivah_promise} divorce_separation={data.divorce_separation} />;
+      case "khar":   return <Khar64NavamsaTab khar_64th_navamsa={data.khar_64th_navamsa} />;
+      case "hora":   return <HoraTab hora_analysis={data.hora_analysis} />;
+      
       case "chakra": return <ChakraTab sudarshan_avg={data.sudarshan_avg} />;
       case "bhavat": return <BhavatTab bhavat_bhavam={data.bhavat_bhavam} />;
       case "rashis": return <RashiCycleTab life_cycle_rashis={data.life_cycle_rashis} />;

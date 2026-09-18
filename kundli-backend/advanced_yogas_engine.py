@@ -1247,6 +1247,1346 @@ def compute_d30_scandal(planets: Dict, bav_charts: Dict) -> List[Dict]:
     return results
 
 
+# ─────────────────────────────────────────────
+# 14. RAW MARRIAGE OBSERVATIONS — D1 + D9
+# ─────────────────────────────────────────────
+
+# Classical Parashari graha-drishti used here only to expose raw aspecting
+# planets. This section intentionally does NOT convert observations into a
+# marriage/divorce prediction.
+BENEFIC_PLANETS = {"Ju", "Ve", "Me", "Mo"}
+MALEFIC_PLANETS = {"Su", "Ma", "Sa", "Ra", "Ke"}
+OBSERVATION_PLANETS = ["Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa", "Ra", "Ke"]
+
+
+def _get_varga_idx(planet_data: dict, varga: str = "D9"):
+    """Return normalized 0-based rashi index from either supported Vargas shape.
+
+    Supported input:
+        Vargas[D9] = {"Idx": 5}
+    and legacy/alternate input:
+        Vargas[D9] = 5
+    """
+    if not isinstance(planet_data, dict):
+        return None
+
+    vargas = planet_data.get("Vargas", {})
+    if not isinstance(vargas, dict):
+        return None
+
+    raw = vargas.get(varga)
+
+    if isinstance(raw, dict):
+        idx = raw.get("Idx")
+        if isinstance(idx, (int, float)):
+            return int(idx) % 12
+        return None
+
+    if isinstance(raw, (int, float)):
+        return int(raw) % 12
+
+    return None
+
+
+def _planet_name(code: str) -> str:
+    return PLANET_NAMES_HI.get(code, code)
+
+
+# Hora: विषम राशियों में 0–15° सूर्य, 15–30° चंद्र; सम राशियों में क्रम उल्टा।
+ODD_RASHIS = {0, 2, 4, 6, 8, 10}  # 1,3,5,7,9,11 क्रमांक
+
+def _d1_hora_for_planet(planets: dict, planet_code: str) -> dict:
+    """Return raw D1 Hora evidence for a planet; no prediction."""
+    pdata = planets.get(planet_code, {}) or {}
+    idx = _get_varga_idx(pdata, "D1")
+    if idx is None:
+        idx = pdata.get("rashi_index")
+        try:
+            idx = int(idx) % 12 if idx is not None else None
+        except (TypeError, ValueError):
+            idx = None
+
+    full_degree = pdata.get("full_degree", pdata.get("Degree", 0))
+    try:
+        sign_degree = float(full_degree) % 30.0
+    except (TypeError, ValueError):
+        return {"available": False}
+
+    if idx is None:
+        return {"available": False, "degree": round(sign_degree, 4)}
+
+    first_half_sun = idx in ODD_RASHIS
+    if sign_degree < 15.0:
+        hora_lord = "Su" if first_half_sun else "Mo"
+        hora_no = 1
+        range_label = "0°–15°"
+    else:
+        hora_lord = "Mo" if first_half_sun else "Su"
+        hora_no = 2
+        range_label = "15°–30°"
+
+    return {
+        "available": True,
+        "rashi_index": idx,
+        "rashi_name": RASHI_NAMES_HI[idx],
+        "degree": round(sign_degree, 4),
+        "hora_no": hora_no,
+        "range": range_label,
+        "hora_lord_code": hora_lord,
+        "hora_lord": _planet_name(hora_lord),
+        "is_sun_hora": hora_lord == "Su",
+        "is_moon_hora": hora_lord == "Mo",
+    }
+
+
+# Parashar / Cancer-Leo (Uma Shambhu) Hora — D2 source of truth
+# Khar Lord ki Hora D1 degree se dobara calculate nahi ki ja rahi.
+# API/bridge mein preserved Vargas[D2] se Cancer (Chandra Hora) / Leo (Surya Hora) liya jayega.
+PARASHAR_HORA_SIGNS = {
+    3: ("Mo", "चंद्र"),  # Cancer
+    4: ("Su", "सूर्य"),  # Leo
+}
+
+def _d2_hora_for_planet(planets: dict, planet_code: str) -> dict:
+    """
+    Khar Lord ki Parashar Hora ko API-preserved D2 placement se read karo.
+
+    D2 hi source of truth hai; D1 degree se Hora recalculate nahi hoti.
+    Parashar/Uma-Shambhu Hora mein D2 ke Cancer ko Chandra Hora aur
+    Leo ko Surya Hora maana jata hai.
+    """
+    pdata = planets.get(planet_code, {}) or {}
+    vargas = pdata.get("Vargas") or {}
+    d2 = vargas.get("D2") if isinstance(vargas, dict) else None
+
+    if isinstance(d2, dict):
+        d2_idx = d2.get("Idx")
+        if d2_idx is None:
+            d2_idx = d2.get("rashi_index", d2.get("RashiIdx"))
+    elif isinstance(d2, (int, float)):
+        d2_idx = int(d2)
+    else:
+        d2_idx = None
+
+    try:
+        d2_idx = int(d2_idx) % 12 if d2_idx is not None else None
+    except (TypeError, ValueError):
+        d2_idx = None
+
+    base = {
+        "available": False,
+        "planet_code": planet_code,
+        "planet_name": _planet_name(planet_code),
+        "method": "Parashar / Cancer-Leo D2",
+    }
+
+    if d2_idx is None:
+        base["reason"] = "Vargas[D2].Idx unavailable"
+        return base
+
+    base.update({
+        "d2_rashi_index": d2_idx,
+        "d2_rashi_name": RASHI_NAMES_HI[d2_idx],
+    })
+
+    hora = PARASHAR_HORA_SIGNS.get(d2_idx)
+    if hora is None:
+        base["reason"] = "Parashar D2 में Cancer/Leo placement नहीं मिला"
+        return base
+
+    hora_code, hora_name = hora
+    base.update({
+        "available": True,
+        "hora_lord_code": hora_code,
+        "hora_lord": hora_name,
+        "hora_sign": RASHI_NAMES_HI[d2_idx],
+        "is_sun_hora": hora_code == "Su",
+        "is_moon_hora": hora_code == "Mo",
+    })
+    return base
+
+
+def _vedic_aspects_from_house(house: int, planet_code: str) -> list:
+    """Return 1-based houses receiving this planet's classical aspects."""
+    try:
+        house = int(house)
+    except (TypeError, ValueError):
+        return []
+
+    if house < 1 or house > 12:
+        return []
+
+    offsets = [7]  # all grahas: 7th aspect
+    if planet_code == "Ma":
+        offsets += [4, 8]
+    elif planet_code == "Ju":
+        offsets += [5, 9]
+    elif planet_code == "Sa":
+        offsets += [3, 10]
+
+    return [((house - 1 + offset - 1) % 12) + 1 for offset in offsets]
+
+
+def _get_house_aspects_from_chart(chart_planets: dict, target_house: int) -> dict:
+    """Find actual benefic/malefic planets aspecting a target house."""
+    benefic = []
+    malefic = []
+
+    for code in OBSERVATION_PLANETS:
+        pdata = chart_planets.get(code, {}) or {}
+        house = pdata.get("house")
+        if not house:
+            continue
+
+        if target_house not in _vedic_aspects_from_house(house, code):
+            continue
+
+        if code in BENEFIC_PLANETS:
+            benefic.append(code)
+        if code in MALEFIC_PLANETS:
+            malefic.append(code)
+
+    return {
+        "benefic": benefic,
+        "malefic": malefic,
+    }
+
+
+def _get_planet_aspects_from_chart(chart_planets: dict, target_code: str) -> dict:
+    """Find planets aspecting the house occupied by target planet."""
+    target = chart_planets.get(target_code, {}) or {}
+    target_house = target.get("house")
+    if not target_house:
+        return {"benefic": [], "malefic": []}
+    return _get_house_aspects_from_chart(chart_planets, target_house)
+
+
+def _chart_house_map_from_varga(planets: dict, varga: str, lagna_idx: int) -> dict:
+    """Build {1..12: [planet codes]} from a varga's rashi positions."""
+    houses = {i: [] for i in range(1, 13)}
+    if lagna_idx is None:
+        return houses
+
+    for code in OBSERVATION_PLANETS:
+        idx = _get_varga_idx(planets.get(code, {}), varga)
+        if idx is None:
+            continue
+        house = ((idx - lagna_idx + 12) % 12) + 1
+        houses[house].append(code)
+
+    return houses
+
+
+def _chart_planets_from_varga(planets: dict, varga: str, lagna_idx: int) -> dict:
+    """Create a normalized planet map with house/rashi for a D1/D9 chart."""
+    chart = {}
+    if lagna_idx is None:
+        return chart
+
+    for code in OBSERVATION_PLANETS:
+        source = planets.get(code, {}) or {}
+        idx = _get_varga_idx(source, varga)
+        if idx is None:
+            continue
+
+        house = ((idx - lagna_idx + 12) % 12) + 1
+        chart[code] = {
+            "house": house,
+            "rashi_index": idx,
+            "rashi_name": RASHI_NAMES_HI[idx],
+            "degree": source.get("degree", 0),
+            "full_degree": source.get("full_degree", source.get("Degree", 0)),
+            "dignity": source.get("dignity", source.get("Dignity", "")),
+            "retrograde": bool(
+                source.get("retrograde", False)
+                or source.get("Retrograde", False)
+                or source.get("Retro", False)
+            ),
+        }
+
+    return chart
+
+
+def _house_observation(chart_planets: dict, houses: dict, house_no: int) -> dict:
+    """Raw observation for one house: occupants + benefic/malefic aspects."""
+    occupants = list(houses.get(house_no, []))
+    aspects = _get_house_aspects_from_chart(chart_planets, house_no)
+
+    benefic_occupants = [p for p in occupants if p in BENEFIC_PLANETS]
+    malefic_occupants = [p for p in occupants if p in MALEFIC_PLANETS]
+
+    return {
+        "house_no": house_no,
+        "planets_present": [_planet_name(p) for p in occupants],
+        "planet_codes": occupants,
+        "benefic_planets_present": [_planet_name(p) for p in benefic_occupants],
+        "malefic_planets_present": [_planet_name(p) for p in malefic_occupants],
+        "benefic_drishti": [_planet_name(p) for p in aspects["benefic"]],
+        "benefic_drishti_codes": aspects["benefic"],
+        "malefic_drishti": [_planet_name(p) for p in aspects["malefic"]],
+        "malefic_drishti_codes": aspects["malefic"],
+        "has_benefic": bool(benefic_occupants or aspects["benefic"]),
+        "has_malefic": bool(malefic_occupants or aspects["malefic"]),
+    }
+
+
+def _paap_kartari_observation(houses: dict, target_house: int) -> dict:
+    """Raw Paap Kartari evidence around one target house."""
+    prev_house = ((target_house - 2) % 12) + 1
+    next_house = (target_house % 12) + 1
+
+    prev_planets = list(houses.get(prev_house, []))
+    next_planets = list(houses.get(next_house, []))
+
+    prev_malefics = [p for p in prev_planets if p in MALEFIC_PLANETS]
+    next_malefics = [p for p in next_planets if p in MALEFIC_PLANETS]
+    involved = prev_malefics + next_malefics
+
+    return {
+        "target_house": target_house,
+        "previous_house": prev_house,
+        "previous_house_planets": [_planet_name(p) for p in prev_planets],
+        "previous_house_malefics": [_planet_name(p) for p in prev_malefics],
+        "next_house": next_house,
+        "next_house_planets": [_planet_name(p) for p in next_planets],
+        "next_house_malefics": [_planet_name(p) for p in next_malefics],
+        "is_active": bool(prev_malefics and next_malefics),
+        "planets_involved": [_planet_name(p) for p in involved],
+        "planet_codes_involved": involved,
+    }
+
+
+def _lord_raw_observation(
+    chart_planets: dict,
+    houses: dict,
+    lord_code: str,
+    lord_house: int,
+) -> dict:
+    """Raw condition of a house lord: placement, yuti, aspects, dignity, retrograde."""
+    occupants = list(houses.get(lord_house, []))
+    yuti_malefics = [
+        p for p in occupants
+        if p in MALEFIC_PLANETS and p != lord_code
+    ]
+    yuti_benefics = [
+        p for p in occupants
+        if p in BENEFIC_PLANETS and p != lord_code
+    ]
+    aspects = _get_planet_aspects_from_chart(chart_planets, lord_code)
+    lord_data = chart_planets.get(lord_code, {}) or {}
+
+    return {
+        "planet_code": lord_code,
+        "planet_name": _planet_name(lord_code),
+        "house_no": lord_house,
+        "rashi_index": lord_data.get("rashi_index"),
+        "rashi_name": lord_data.get("rashi_name", ""),
+        "in_trik_6_8_12": lord_house in [6, 8, 12],
+        "yuti_malefics": [_planet_name(p) for p in yuti_malefics],
+        "yuti_malefic_codes": yuti_malefics,
+        "yuti_benefics": [_planet_name(p) for p in yuti_benefics],
+        "yuti_benefic_codes": yuti_benefics,
+        "malefic_drishti": [_planet_name(p) for p in aspects["malefic"]],
+        "malefic_drishti_codes": aspects["malefic"],
+        "benefic_drishti": [_planet_name(p) for p in aspects["benefic"]],
+        "benefic_drishti_codes": aspects["benefic"],
+        "is_retrograde": bool(lord_data.get("retrograde", False)),
+        "is_vakri_retrograde": bool(lord_data.get("retrograde", False)),
+        "dignity": lord_data.get("dignity", ""),
+    }
+
+
+def _build_chart_raw_observations(
+    planets: dict,
+    varga: str,
+    lagna_idx: int,
+) -> dict:
+    """Build the same raw observation structure for D1 or D9."""
+    chart_planets = _chart_planets_from_varga(planets, varga, lagna_idx)
+    houses = _chart_house_map_from_varga(planets, varga, lagna_idx)
+
+    seventh_sign_idx = (lagna_idx + 6) % 12
+    second_sign_idx = (lagna_idx + 1) % 12
+    third_sign_idx = (lagna_idx + 2) % 12
+    fourth_sign_idx = (lagna_idx + 3) % 12
+    fifth_sign_idx = (lagna_idx + 4) % 12
+    sixth_sign_idx = (lagna_idx + 5) % 12
+    eighth_sign_idx = (lagna_idx + 7) % 12
+    ninth_sign_idx = (lagna_idx + 8) % 12
+    tenth_sign_idx = (lagna_idx + 9) % 12
+    eleventh_sign_idx = (lagna_idx + 10) % 12
+    twelfth_sign_idx = (lagna_idx + 11) % 12
+
+    lagnesh_code = RASHI_LORD.get(lagna_idx)
+    seventh_lord_code = RASHI_LORD.get(seventh_sign_idx)
+    second_lord_code = RASHI_LORD.get(second_sign_idx)
+    third_lord_code = RASHI_LORD.get(third_sign_idx)
+    fourth_lord_code = RASHI_LORD.get(fourth_sign_idx)
+    fifth_lord_code = RASHI_LORD.get(fifth_sign_idx)
+    sixth_lord_code = RASHI_LORD.get(sixth_sign_idx)
+    eighth_lord_code = RASHI_LORD.get(eighth_sign_idx)
+    ninth_lord_code = RASHI_LORD.get(ninth_sign_idx)
+    tenth_lord_code = RASHI_LORD.get(tenth_sign_idx)
+    eleventh_lord_code = RASHI_LORD.get(eleventh_sign_idx)
+    twelfth_lord_code = RASHI_LORD.get(twelfth_sign_idx)
+
+    def lord_house(code, fallback=0):
+        if not code:
+            return fallback
+        return int((chart_planets.get(code, {}) or {}).get("house", fallback) or fallback)
+
+    lagnesh_house = lord_house(lagnesh_code, 1)
+    seventh_lord_house = lord_house(seventh_lord_code, 7)
+
+    house_details = {
+        str(h): _house_observation(chart_planets, houses, h)
+        for h in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    }
+
+    lagna_aspects = _get_house_aspects_from_chart(chart_planets, 1)
+    lagnesh_raw = _lord_raw_observation(
+        chart_planets, houses, lagnesh_code, lagnesh_house
+    ) if lagnesh_code else {}
+    seventh_lord_raw = _lord_raw_observation(
+        chart_planets, houses, seventh_lord_code, seventh_lord_house
+    ) if seventh_lord_code else {}
+
+    result = {
+        "computed": True,
+        "varga": varga,
+        "lagna": {
+            "rashi_index": lagna_idx,
+            "rashi_name": RASHI_NAMES_HI[lagna_idx],
+            "planets_present": [_planet_name(p) for p in houses[1]],
+            "planet_codes": list(houses[1]),
+            "benefic_planets_present": [
+                _planet_name(p) for p in houses[1] if p in BENEFIC_PLANETS
+            ],
+            "malefic_planets_present": [
+                _planet_name(p) for p in houses[1] if p in MALEFIC_PLANETS
+            ],
+            "benefic_drishti_planets": [
+                _planet_name(p) for p in lagna_aspects["benefic"]
+            ],
+            "benefic_drishti_codes": lagna_aspects["benefic"],
+            "malefic_drishti_planets": [
+                _planet_name(p) for p in lagna_aspects["malefic"]
+            ],
+            "malefic_drishti_codes": lagna_aspects["malefic"],
+            "paap_kartari": _paap_kartari_observation(houses, 1),
+        },
+        "lagnesh": lagnesh_raw,
+        "seventh_house": {
+            **house_details["7"],
+            "rashi_index": seventh_sign_idx,
+            "rashi_name": RASHI_NAMES_HI[seventh_sign_idx],
+            "paap_kartari": _paap_kartari_observation(houses, 7),
+        },
+        "seventh_lord": seventh_lord_raw,
+        "houses": house_details,
+        "sixth_house": {
+            **house_details["6"],
+            "rashi_index": sixth_sign_idx,
+            "rashi_name": RASHI_NAMES_HI[sixth_sign_idx],
+        },
+        "eighth_house": {
+            **house_details["8"],
+            "rashi_index": eighth_sign_idx,
+            "rashi_name": RASHI_NAMES_HI[eighth_sign_idx],
+        },
+        "ninth_house": {
+            **house_details["9"],
+            "rashi_index": ninth_sign_idx,
+            "rashi_name": RASHI_NAMES_HI[ninth_sign_idx],
+        },
+        "twelfth_house": {
+            **house_details["12"],
+            "rashi_index": twelfth_sign_idx,
+            "rashi_name": RASHI_NAMES_HI[twelfth_sign_idx],
+        },
+        "house_lords": {
+            "1": {"planet_code": lagnesh_code, "planet_name": _planet_name(lagnesh_code) if lagnesh_code else ""},
+            "2": {"planet_code": second_lord_code, "planet_name": _planet_name(second_lord_code) if second_lord_code else ""},
+            "3": {"planet_code": third_lord_code, "planet_name": _planet_name(third_lord_code) if third_lord_code else ""},
+            "4": {"planet_code": fourth_lord_code, "planet_name": _planet_name(fourth_lord_code) if fourth_lord_code else ""},
+            "5": {"planet_code": fifth_lord_code, "planet_name": _planet_name(fifth_lord_code) if fifth_lord_code else ""},
+            "6": {"planet_code": sixth_lord_code, "planet_name": _planet_name(sixth_lord_code) if sixth_lord_code else ""},
+            "7": {"planet_code": seventh_lord_code, "planet_name": _planet_name(seventh_lord_code) if seventh_lord_code else ""},
+            "8": {"planet_code": eighth_lord_code, "planet_name": _planet_name(eighth_lord_code) if eighth_lord_code else ""},
+            "9": {"planet_code": ninth_lord_code, "planet_name": _planet_name(ninth_lord_code) if ninth_lord_code else ""},
+            "10": {"planet_code": tenth_lord_code, "planet_name": _planet_name(tenth_lord_code) if tenth_lord_code else ""},
+            "11": {"planet_code": eleventh_lord_code, "planet_name": _planet_name(eleventh_lord_code) if eleventh_lord_code else ""},
+            "12": {"planet_code": twelfth_lord_code, "planet_name": _planet_name(twelfth_lord_code) if twelfth_lord_code else ""},
+        },
+    }
+
+    return result
+
+
+def _build_d1_planet_house_map(planets: dict) -> dict:
+    """D1 chart uses the already-normalized house values from the bridge."""
+    chart = {}
+    for code in OBSERVATION_PLANETS:
+        source = planets.get(code, {}) or {}
+        house = source.get("house")
+        if not house:
+            continue
+        rashi_idx = _get_varga_idx(source, "D1")
+        if rashi_idx is None:
+            rashi_idx = source.get("rashi_index")
+        chart[code] = {
+            "house": int(house),
+            "rashi_index": int(rashi_idx) % 12 if isinstance(rashi_idx, (int, float)) else None,
+            "rashi_name": (
+                RASHI_NAMES_HI[int(rashi_idx) % 12]
+                if isinstance(rashi_idx, (int, float)) else ""
+            ),
+            "degree": source.get("degree", 0),
+            "full_degree": source.get("full_degree", 0),
+            "dignity": source.get("dignity", ""),
+            "retrograde": bool(
+                source.get("retrograde", False)
+                or source.get("Retrograde", False)
+            ),
+        }
+    return chart
+
+
+def _build_d1_houses(chart_planets: dict) -> dict:
+    houses = {i: [] for i in range(1, 13)}
+    for code, pdata in chart_planets.items():
+        house = pdata.get("house")
+        if house in houses:
+            houses[house].append(code)
+    return houses
+
+
+def _build_d1_raw_observations(planets: dict, lagna_idx: int) -> dict:
+    """D1-specific builder because D1 houses are already supplied by the bridge."""
+    chart_planets = _build_d1_planet_house_map(planets)
+    houses = _build_d1_houses(chart_planets)
+
+    # Ensure D1 Lagna can still be represented even if La itself is not a graha.
+    # Lagna's rashi comes from La.Vargas.D1 when the bridge preserves it.
+    lagna_sign_idx = _get_varga_idx(planets.get("La", {}), "D1")
+    if lagna_sign_idx is None:
+        lagna_sign_idx = lagna_idx
+
+    # Reuse the same lord/house structure as D9, but use D1 house positions.
+    def lord_house(code, fallback=0):
+        return int((chart_planets.get(code, {}) or {}).get("house", fallback) or fallback)
+
+    seventh_sign_idx = (lagna_sign_idx + 6) % 12
+    lagnesh_code = RASHI_LORD.get(lagna_sign_idx)
+    seventh_lord_code = RASHI_LORD.get(seventh_sign_idx)
+    lagnesh_house = lord_house(lagnesh_code, 1)
+    seventh_lord_house = lord_house(seventh_lord_code, 7)
+
+    house_details = {
+        str(h): _house_observation(chart_planets, houses, h)
+        for h in range(1, 13)
+    }
+
+    lagna_aspects = _get_house_aspects_from_chart(chart_planets, 1)
+    lagnesh_raw = _lord_raw_observation(
+        chart_planets, houses, lagnesh_code, lagnesh_house
+    ) if lagnesh_code else {}
+    seventh_lord_raw = _lord_raw_observation(
+        chart_planets, houses, seventh_lord_code, seventh_lord_house
+    ) if seventh_lord_code else {}
+
+    return {
+        "computed": True,
+        "varga": "D1",
+        "lagna": {
+            "rashi_index": lagna_sign_idx,
+            "rashi_name": RASHI_NAMES_HI[lagna_sign_idx],
+            "planets_present": [_planet_name(p) for p in houses[1]],
+            "planet_codes": list(houses[1]),
+            "benefic_planets_present": [_planet_name(p) for p in houses[1] if p in BENEFIC_PLANETS],
+            "malefic_planets_present": [_planet_name(p) for p in houses[1] if p in MALEFIC_PLANETS],
+            "benefic_drishti_planets": [_planet_name(p) for p in lagna_aspects["benefic"]],
+            "benefic_drishti_codes": lagna_aspects["benefic"],
+            "malefic_drishti_planets": [_planet_name(p) for p in lagna_aspects["malefic"]],
+            "malefic_drishti_codes": lagna_aspects["malefic"],
+            "paap_kartari": _paap_kartari_observation(houses, 1),
+        },
+        "lagnesh": lagnesh_raw,
+        "seventh_house": {
+            **house_details["7"],
+            "rashi_index": seventh_sign_idx,
+            "rashi_name": RASHI_NAMES_HI[seventh_sign_idx],
+            "paap_kartari": _paap_kartari_observation(houses, 7),
+        },
+        "seventh_lord": seventh_lord_raw,
+        "houses": house_details,
+        "sixth_house": {**house_details["6"], "rashi_index": (lagna_sign_idx + 5) % 12, "rashi_name": RASHI_NAMES_HI[(lagna_sign_idx + 5) % 12]},
+        "eighth_house": {**house_details["8"], "rashi_index": (lagna_sign_idx + 7) % 12, "rashi_name": RASHI_NAMES_HI[(lagna_sign_idx + 7) % 12]},
+        "ninth_house": {**house_details["9"], "rashi_index": (lagna_sign_idx + 8) % 12, "rashi_name": RASHI_NAMES_HI[(lagna_sign_idx + 8) % 12]},
+        "twelfth_house": {**house_details["12"], "rashi_index": (lagna_sign_idx + 11) % 12, "rashi_name": RASHI_NAMES_HI[(lagna_sign_idx + 11) % 12]},
+    }
+
+
+def _build_d1_d9_balance(d1: dict, d9: dict) -> dict:
+    """Raw D1-vs-D9 comparison; deliberately no verdict/prediction."""
+    def compact(chart: dict) -> dict:
+        return {
+            "lagna": chart.get("lagna", {}),
+            "lagnesh": chart.get("lagnesh", {}),
+            "seventh_house": chart.get("seventh_house", {}),
+            "seventh_lord": chart.get("seventh_lord", {}),
+            "sixth_house": chart.get("sixth_house", {}),
+            "eighth_house": chart.get("eighth_house", {}),
+            "ninth_house": chart.get("ninth_house", {}),
+            "twelfth_house": chart.get("twelfth_house", {}),
+        }
+
+    return {
+        "d1": compact(d1),
+        "d9": compact(d9),
+        "comparison_type": "raw_observation_only",
+        "note": "D1 और D9 के placement/aspect/occupancy data को साथ दिखाया गया है; कोई अंतिम फलादेश नहीं।",
+    }
+
+
+def compute_vp_goel_vivah(planets: dict) -> dict:
+    """
+    V.P. Goel marriage/divorce section — RAW OBSERVATION LAYER.
+
+    This function intentionally reports evidence only:
+      - D1 and D9 Lagna condition
+      - Lagnesh / 7th lord placement
+      - occupants
+      - benefic/malefic influence
+      - actual graha drishti
+      - Paap Kartari evidence
+      - 6th/8th/9th/12th observations
+      - D1 vs D9 comparison
+
+    It does NOT return a divorce=true/false or marriage-break prediction.
+    """
+    try:
+        # D1 Lagna must be supplied by the bridge as La.Vargas.D1.
+        d1_lagna_idx = _get_varga_idx(planets.get("La", {}), "D1")
+        if d1_lagna_idx is None:
+            # Fallback to normalized La rashi_index if available.
+            la = planets.get("La", {}) or {}
+            raw = la.get("rashi_index")
+            if isinstance(raw, (int, float)):
+                d1_lagna_idx = int(raw) % 12
+
+        # D9 Lagna must be supplied by the bridge as La.Vargas.D9.
+        d9_lagna_idx = _get_varga_idx(planets.get("La", {}), "D9")
+
+        if d1_lagna_idx is None and d9_lagna_idx is None:
+            return {
+                "computed": False,
+                "reason": "D1/D9 Lagna data unavailable. Bridge must preserve La + Vargas.D1/D9."
+            }
+
+        d1 = _build_d1_raw_observations(planets, d1_lagna_idx) if d1_lagna_idx is not None else {"computed": False}
+        d9 = _build_chart_raw_observations(planets, "D9", d9_lagna_idx) if d9_lagna_idx is not None else {"computed": False}
+
+        # Compatibility shape for the existing frontend is retained, while
+        # D1/D9 raw data is now available under explicit chart keys.
+        d9_lagna = d9.get("lagna", {})
+        d9_lagnesh = d9.get("lagnesh", {})
+        d9_seventh = d9.get("seventh_house", {})
+        d9_seventh_lord = d9.get("seventh_lord", {})
+        d9_sixth = d9.get("sixth_house", {})
+        d9_ninth = d9.get("ninth_house", {})
+        d9_paap = d9_seventh.get("paap_kartari", {})
+
+        vivah_promise = {
+            # Legacy-compatible names
+            "lagna_analysis": {
+                "malefic_influence": bool(d9_lagna.get("malefic_planets_present") or d9_lagna.get("malefic_drishti_planets")),
+                "malefic_planets_present": d9_lagna.get("malefic_planets_present", []),
+                "malefic_drishti_planets": d9_lagna.get("malefic_drishti_planets", []),
+                "benefic_influence": bool(d9_lagna.get("benefic_planets_present") or d9_lagna.get("benefic_drishti_planets")),
+                "benefic_planets_present": d9_lagna.get("benefic_planets_present", []),
+                "benefic_drishti_planets": d9_lagna.get("benefic_drishti_planets", []),
+                "rashi_name": d9_lagna.get("rashi_name", ""),
+                "paap_kartari": d9_lagna.get("paap_kartari", {}),
+            },
+            "lagnesh_analysis": {
+                **d9_lagnesh,
+                "is_afflicted_by_malefics": bool(
+                    d9_lagnesh.get("yuti_malefics") or d9_lagnesh.get("malefic_drishti")
+                ),
+            },
+            "seventh_house": {
+                **d9_seventh,
+                "has_any_influence": bool(
+                    d9_seventh.get("planets_present")
+                    or d9_seventh.get("benefic_drishti")
+                    or d9_seventh.get("malefic_drishti")
+                ),
+                "has_sun": "सूर्य" in d9_seventh.get("planets_present", []),
+            },
+            "d1": d1,
+            "d9": d9,
+            "d1_vs_d9": _build_d1_d9_balance(d1, d9) if d1.get("computed") and d9.get("computed") else {
+                "d1": d1,
+                "d9": d9,
+                "comparison_type": "raw_observation_only",
+                "note": "दोनों chart उपलब्ध होने पर D1 vs D9 comparison तैयार होगा।",
+            },
+        }
+
+        divorce_separation = {
+            # Legacy-compatible names
+            "saptamesh_manager": {
+                **d9_seventh_lord,
+                "afflicted_by_malefics": bool(
+                    d9_seventh_lord.get("yuti_malefics")
+                    or d9_seventh_lord.get("malefic_drishti")
+                ),
+                "saved_by_benefic_drishti": bool(d9_seventh_lord.get("benefic_drishti")),
+            },
+            "sixth_house_negator": {
+                **d9_sixth,
+                "has_planets": bool(d9_sixth.get("planets_present")),
+            },
+            "ninth_house_dharma": {
+                **d9_ninth,
+                "will_endure_hardships": bool(d9_ninth.get("benefic_planets_present")),
+                "risk_of_abandonment": False,
+                "afflicting_planets": d9_ninth.get("malefic_planets_present", []),
+            },
+            "eighth_house": d9.get("eighth_house", {}),
+            "twelfth_house": d9.get("twelfth_house", {}),
+            "paap_kartari": d9_paap,
+            "d1": d1,
+            "d9": d9,
+            "d1_vs_d9": _build_d1_d9_balance(d1, d9) if d1.get("computed") and d9.get("computed") else {
+                "d1": d1,
+                "d9": d9,
+                "comparison_type": "raw_observation_only",
+                "note": "दोनों chart उपलब्ध होने पर D1 vs D9 comparison तैयार होगा।",
+            },
+        }
+
+        return {
+            "computed": True,
+            "mode": "raw_observations_only",
+            "note": "यह section केवल D1/D9 placement, occupancy, drishti और Paap Kartari evidence दिखाता है; कोई final marriage/divorce prediction नहीं।",
+            "vivah_promise": vivah_promise,
+            "divorce_separation": divorce_separation,
+        }
+
+    except Exception as e:
+        return {
+            "computed": False,
+            "error": str(e),
+            "mode": "raw_observations_only",
+        }
+
+
+
+# ─────────────────────────────────────────────
+# 15. KHAR / 64TH NAVAMSHA — D1 → D9 + D3 RAW ENGINE
+# ─────────────────────────────────────────────
+
+DUAL_SIGN_RASHIS = {2, 5, 8, 11}  # मिथुन, कन्या, धनु, मीन
+
+
+def _navamsha_no_from_d1_degree(full_degree) -> Optional[int]:
+    """D1 longitude से sign के भीतर 1..9 नवांश क्रम निकालें."""
+    try:
+        deg = float(full_degree) % 30.0
+    except (TypeError, ValueError):
+        return None
+    # 30/9 = 3°20'
+    no = int(deg / (30.0 / 9.0)) + 1
+    return max(1, min(9, no))
+
+
+def _relative_house_from_sign(target_sign: int, reference_sign: int) -> int:
+    """Reference sign से target sign तक 1-based house count."""
+    return ((target_sign - reference_sign) % 12) + 1
+
+
+def _khar_target_from_varga(planets: dict, code: str, varga: str, count_from: int):
+    """किसी ग्रह की D9/D3 राशि से count_from house का target sign/lord."""
+    idx = _get_varga_idx(planets.get(code, {}), varga)
+    if idx is None:
+        return {
+            "available": False,
+            "reason": f"{varga} position unavailable",
+        }
+
+    target_idx = (idx + count_from - 1) % 12
+    lord_code = RASHI_LORD.get(target_idx)
+
+    return {
+        "available": True,
+        "base_rashi_index": idx,
+        "base_rashi_name": RASHI_NAMES_HI[idx],
+        "target_house_from_planet": count_from,
+        "target_rashi_index": target_idx,
+        "target_rashi_name": RASHI_NAMES_HI[target_idx],
+        "lord_code": lord_code,
+        "lord_name": _planet_name(lord_code) if lord_code else "",
+    }
+
+
+def compute_khar_64th_navamsa(planets: dict, lagna_index: int = 0) -> dict:
+    """
+    Raw Khar / 64th-Navamsha + 22nd Drekkana + Vish Navamsha evidence.
+
+    Existing Khar / Double-Khar flow is preserved:
+      1. D1 dual-sign planets + degree.
+      2. D1 Navamsha 1/5/9 eligibility.
+      3. For eligible Khar candidates, D9 4th (64th Navamsha) and D3 8th
+         (22nd Drekkana), comparing only target-sign lords for Double Khar.
+
+    Additional evidence (does NOT alter Double-Khar calculation):
+      4. Every observed planet is independently checked for Vish Navamsha
+         according to its D1 sign-specific Vish Navamsha.
+      5. Vish planet -> D1 house placement -> D1 lordship -> natural
+         karakatwa -> Sarp/Giddh/Suar category -> D2 Hora evidence.
+      6. D9 4th and D3 8th target/lord evidence is also retained for every
+         planet, even when the planet is not a Double-Khar candidate.
+
+    No final prediction/decision is produced.
+    """
+    try:
+        dual_planets = []
+        all_planets = OBSERVATION_PLANETS
+        eligible_nav = {1, 5, 9}
+
+        # Source-framework: Vish Navamsha depends on the D1 sign.
+        # 1st = Sarp, 5th = Giddh, 9th = Suar.
+        vish_nav_by_rashi = {
+            0: (1, "सर्प"), 1: (1, "सर्प"), 5: (1, "सर्प"), 8: (1, "सर्प"),
+            2: (5, "गिद्ध"), 4: (5, "गिद्ध"), 6: (5, "गिद्ध"), 10: (5, "गिद्ध"),
+            3: (9, "सूअर"), 7: (9, "सूअर"), 9: (9, "सूअर"), 11: (9, "सूअर"),
+        }
+        natural_karakatwa = {
+            "Su": "पिता / authority",
+            "Mo": "मन / माता",
+            "Ma": "भाई-बहन / साहस / ऊर्जा",
+            "Me": "बुद्धि / वाणी / संवाद / मामा",
+            "Ju": "ज्ञान / गुरु / बड़े",
+            "Ve": "प्रेम / संबंध / विवाह / सुख-सुविधा",
+            "Sa": "श्रम / देरी / संघर्ष",
+            "Ra": "भौतिक लालसा / असामान्य अनुभव",
+            "Ke": "वैराग्य / पृथक्करण / सूक्ष्म कर्म",
+        }
+
+        def d1_lordship_for_planet(code: str):
+            houses = []
+            for house in range(1, 13):
+                sign_idx = (lagna_index + house - 1) % 12
+                if RASHI_LORD.get(sign_idx) == code:
+                    houses.append(house)
+            return houses
+
+        def build_vish_item(code, pdata, full_degree, d1_idx, sign_degree, nav_no):
+            vish_nav_no, vish_type = vish_nav_by_rashi.get(d1_idx, (None, None))
+            is_vish = nav_no == vish_nav_no
+            d1_house = pdata.get("house", pdata.get("House"))
+            try:
+                d1_house = int(d1_house) if d1_house is not None else None
+            except (TypeError, ValueError):
+                d1_house = None
+            if d1_house is None and lagna_index is not None:
+                d1_house = ((d1_idx - int(lagna_index)) % 12) + 1
+
+            hora = _d2_hora_for_planet(planets, code) if is_vish else {"available": False}
+            return {
+                "planet_code": code,
+                "planet_name": _planet_name(code),
+                "d1_rashi_index": d1_idx,
+                "d1_rashi_name": RASHI_NAMES_HI[d1_idx],
+                "d1_sign_degree": round(sign_degree, 4),
+                "d1_full_degree": round(full_degree, 4),
+                "navamsha_no": nav_no,
+                "vish_navamsha_no": vish_nav_no,
+                "vish_navamsha": is_vish,
+                "vish_category": vish_type if is_vish else "",
+                "d1_house": d1_house,
+                "d1_house_name": f"{d1_house}वां भाव" if d1_house else "",
+                "d1_lordship_houses": d1_lordship_for_planet(code),
+                "natural_karakatwa": natural_karakatwa.get(code, ""),
+                "vish_hora": hora,
+            }
+
+        # ── Independent Vish + D9/D3 evidence for every planet ──────────────
+        all_planet_checks = []
+        vish_planets = []
+        for code in all_planets:
+            pdata = planets.get(code, {}) or {}
+            # IMPORTANT: upstream charts may expose `Degree` as the degree
+            # WITHIN the sign (e.g. Moon = 14.1289 in Aquarius), while the
+            # absolute longitude may live in `full_degree`.  Therefore the D1
+            # sign must come from rashi_index / D1 Vargas first.  Never infer
+            # Aquarius from 14.1289° as if it were 14.1289° Aries.
+            raw_rashi = pdata.get("rashi_index", pdata.get("RashiIdx", pdata.get("rashi_num")))
+            raw_d1 = _get_varga_idx(pdata, "D1")
+            try:
+                d1_idx = int(raw_rashi) % 12 if raw_rashi is not None else None
+            except (TypeError, ValueError):
+                d1_idx = None
+            if d1_idx is None and raw_d1 is not None:
+                d1_idx = int(raw_d1) % 12
+
+            raw_degree = pdata.get("full_degree", pdata.get("Degree", pdata.get("degree", 0)))
+            try:
+                numeric_degree = float(raw_degree)
+            except (TypeError, ValueError):
+                continue
+
+            # For navamsha, only the degree inside the D1 sign matters.
+            # If the supplied value is already 0..30, retain it; otherwise
+            # normalize an absolute longitude with modulo 30.
+            sign_degree = numeric_degree if 0.0 <= numeric_degree < 30.0 else numeric_degree % 30.0
+            full_degree = numeric_degree
+            if d1_idx is None:
+                # Last-resort sign inference from absolute longitude only.
+                d1_idx = int(numeric_degree / 30.0) % 12
+
+            nav_no = _navamsha_no_from_d1_degree(full_degree)
+            vish_item = build_vish_item(code, pdata, full_degree, d1_idx, sign_degree, nav_no)
+
+            # 64th Navamsha = 4th from the planet's D9 sign.
+            # 22nd Drekkana = 8th from the planet's D3 sign.
+            d9_idx = _get_varga_idx(pdata, "D9")
+            d3_idx = _get_varga_idx(pdata, "D3")
+            d9_target = _khar_target_from_varga(planets, code, "D9", 4)
+            d3_target = _khar_target_from_varga(planets, code, "D3", 8)
+            d9_lord = d9_target.get("lord_code") if d9_target.get("available") else None
+            d3_lord = d3_target.get("lord_code") if d3_target.get("available") else None
+
+            vish_item.update({
+                "d9_rashi_index": d9_idx,
+                "d9_rashi_name": RASHI_NAMES_HI[d9_idx] if d9_idx is not None else "",
+                "d3_rashi_index": d3_idx,
+                "d3_rashi_name": RASHI_NAMES_HI[d3_idx] if d3_idx is not None else "",
+                "d9_fourth": d9_target,
+                "d3_eighth": d3_target,
+                "d9_64th_navamsha": d9_target,
+                "d3_22nd_drekkana": d3_target,
+                "d9_khar_lord_code": d9_lord,
+                "d9_khar_lord": _planet_name(d9_lord) if d9_lord else "",
+                "d3_khar_lord_code": d3_lord,
+                "d3_khar_lord": _planet_name(d3_lord) if d3_lord else "",
+                "d9_khar_lord_hora": _d2_hora_for_planet(planets, d9_lord) if d9_lord else {"available": False},
+                "d3_khar_lord_hora": _d2_hora_for_planet(planets, d3_lord) if d3_lord else {"available": False},
+                "double_khar": bool(d9_lord and d3_lord and d9_lord == d3_lord),
+                "double_khar_from_planet": _planet_name(code) if (d9_lord and d3_lord and d9_lord == d3_lord) else "",
+                "double_khar_planet_code": d9_lord if (d9_lord and d3_lord and d9_lord == d3_lord) else None,
+                "double_khar_hora": _d2_hora_for_planet(planets, d9_lord) if (d9_lord and d3_lord and d9_lord == d3_lord) else {"available": False},
+            })
+            all_planet_checks.append(vish_item)
+            if vish_item["vish_navamsha"]:
+                vish_planets.append(vish_item)
+
+            # Keep the original dual-sign Khar list unchanged in meaning.
+            if d1_idx not in DUAL_SIGN_RASHIS:
+                continue
+            item = {
+                "planet_code": code,
+                "planet_name": _planet_name(code),
+                "d1_rashi_index": d1_idx,
+                "d1_rashi_name": RASHI_NAMES_HI[d1_idx],
+                "d1_sign_degree": round(sign_degree, 4),
+                "d1_full_degree": round(full_degree, 4),
+                "dual_sign": True,
+                "navamsha_no": nav_no,
+                "navamsha_qualifies": nav_no in eligible_nav,
+                "eligible": nav_no in eligible_nav,
+            }
+
+            # Existing Khar candidate data is preserved; no new eligibility rule.
+            if nav_no in eligible_nav:
+                double_khar = bool(d9_lord and d3_lord and d9_lord == d3_lord)
+                item.update({
+                    "d9_rashi_index": d9_idx,
+                    "d9_rashi_name": RASHI_NAMES_HI[d9_idx] if d9_idx is not None else "",
+                    "d3_rashi_index": d3_idx,
+                    "d3_rashi_name": RASHI_NAMES_HI[d3_idx] if d3_idx is not None else "",
+                    "d9_fourth": d9_target,
+                    "d3_eighth": d3_target,
+                    "d9_64th_navamsha": d9_target,
+                    "d3_22nd_drekkana": d3_target,
+                    "d9_khar_lord_code": d9_lord,
+                    "d9_khar_lord": _planet_name(d9_lord) if d9_lord else "",
+                    "d3_khar_lord_code": d3_lord,
+                    "d3_khar_lord": _planet_name(d3_lord) if d3_lord else "",
+                    "d9_khar_lord_hora": _d2_hora_for_planet(planets, d9_lord) if d9_lord else {"available": False},
+                    "d3_khar_lord_hora": _d2_hora_for_planet(planets, d3_lord) if d3_lord else {"available": False},
+                    "double_khar": double_khar,
+                    "double_khar_from_planet": _planet_name(code),
+                    "double_khar_planet_code": d9_lord if double_khar else None,
+                    "double_khar_hora": _d2_hora_for_planet(planets, d9_lord) if double_khar else {"available": False},
+                })
+            dual_planets.append(item)
+
+        qualifying = [x for x in dual_planets if x.get("eligible")]
+        return {
+            "computed": True,
+            "mode": "raw_observations_only",
+            "rule": {
+                "eligible_rashis": [RASHI_NAMES_HI[i] for i in sorted(DUAL_SIGN_RASHIS)],
+                "eligible_navamsas": [1, 5, 9],
+                "d9_count_from_planet": 4,
+                "d3_count_from_planet": 8,
+                "d9_label": "64वाँ नवांश",
+                "d3_label": "22वाँ द्रेष्काण",
+                "lord_only": True,
+                "vish_rule": "मेष/वृषभ/कन्या/धनु = 1st; मिथुन/सिंह/तुला/कुंभ = 5th; कर्क/वृश्चिक/मकर/मीन = 9th",
+                "vish_categories": {"1": "सर्प", "5": "गिद्ध", "9": "सूअर"},
+                "vish_house_source": "D1",
+                "vish_d9_role": "supporting evidence only",
+            },
+            "dual_sign_planets": dual_planets,
+            "candidates": qualifying,
+            "double_khar_planets": [x["planet_name"] for x in qualifying if x.get("double_khar")],
+            "has_double_khar": any(x.get("double_khar") for x in qualifying),
+            "all_planet_checks": all_planet_checks,
+            "vish_navamsha_planets": vish_planets,
+            "has_vish_navamsha": bool(vish_planets),
+            "note": "मूल Khar/Double-Khar eligibility को बदले बिना, सभी ग्रहों के D9 4थे (64वाँ नवांश) और D3 8वें (22वाँ द्रेष्काण) evidence तथा D1-आधारित Vish Navamsha check अलग से रखा गया है।",
+        }
+    except Exception as e:
+        return {
+            "computed": False,
+            "error": str(e),
+            "mode": "raw_observations_only",
+        }
+
+
+# ─────────────────────────────────────────────
+# HORA ANALYSIS — FORMULA 1/2/3/4 + D2 HOUSE REFERENCE
+# Raw evidence only: no final prediction/decision.
+# Formula 1 = Parashari D2 (Sun/Moon Hora)
+# Formula 2 = Hora strength by 5-degree segment
+# Formula 3 = Labh Mandook / Kerala 12-sign D2 mapping
+# Formula 4 = Mansagari-style nature/speech flags supplied by user
+# ─────────────────────────────────────────────
+
+HORA_BENEFICS = {"Ju", "Ve", "Me", "Mo"}
+HORA_MALEFICS = {"Su", "Ma", "Sa", "Ra", "Ke"}
+HORA_CRUEL = {"Su", "Ma", "Sa", "Ra", "Ke"}
+
+# User-supplied Kerala / Labh Mandook mapping.
+# Values are 1-based rashi numbers in the source rule.
+KERALA_SUN_CONTRIBUTED = {
+    "Su": 5, "Me": 6, "Ve": 7, "Ma": 8, "Ju": 9, "Sa": 10,
+}
+KERALA_MOON_CONTRIBUTED = {
+    "Mo": 4, "Me": 3, "Ve": 2, "Ma": 1, "Ju": 12, "Sa": 11,
+}
+
+D2_HOUSE_REFERENCE = [
+    {"house": 1, "topic": "धन कमाने की सामान्य ताकत, स्वभाव और धन के प्रति सोच"},
+    {"house": 2, "topic": "धन संचय, बैंक बैलेंस और उपलब्ध संसाधन"},
+    {"house": 3, "topic": "पैसा कमाने की मेहनत और छोटे भाई-बहनों से आर्थिक संबंध"},
+    {"house": 4, "topic": "पैसे से मिलने वाली खुशी/संतोष और धन का उपयोग"},
+    {"house": 5, "topic": "धन कमाने के तरीके, जीवनसाथी का धन और बच्चों से आर्थिक संबंध"},
+    {"house": 6, "topic": "धन कमाने की रुकावटें और आर्थिक संघर्ष"},
+    {"house": 7, "topic": "दूसरों के माध्यम से धन और दूसरों के पास रखा धन"},
+    {"house": 8, "topic": "विरासत, अचानक प्राप्त धन और धन में अचानक उतार-चढ़ाव"},
+    {"house": 9, "topic": "धन की सुरक्षा, भाग्य और धन संबंधी यात्राएं"},
+    {"house": 10, "topic": "काम/करियर और वैध तरीके से धन कमाना"},
+    {"house": 11, "topic": "आसान आर्थिक लाभ और संपत्ति प्राप्ति की इच्छाएं"},
+    {"house": 12, "topic": "धन हानि और हर प्रकार का खर्च"},
+]
+
+
+def _hora_degree_from_planet(pdata: dict):
+    """Return sign-local D1 degree and D1 rashi index robustly."""
+    idx = _get_varga_idx(pdata, "D1")
+    if idx is None:
+        idx = pdata.get("rashi_index", pdata.get("rashi_num"))
+        try:
+            idx = int(idx)
+            # rashi_num is commonly 1..12; rashi_index is commonly 0..11.
+            if pdata.get("rashi_index") is None and 1 <= idx <= 12:
+                idx -= 1
+            idx %= 12
+        except (TypeError, ValueError):
+            idx = None
+
+    raw = pdata.get("full_degree", pdata.get("Degree", pdata.get("degree", 0)))
+    try:
+        full_degree = float(raw)
+        sign_degree = full_degree % 30.0
+    except (TypeError, ValueError):
+        return idx, None
+    return idx, sign_degree
+
+
+def _parashari_hora_from_d1(idx: int, sign_degree: float) -> dict:
+    """Exact user-supplied odd/even Parashari Hora rule."""
+    if idx is None or sign_degree is None:
+        return {"available": False}
+
+    odd = idx in ODD_RASHIS
+    first_half = sign_degree < 15.0
+    # Odd: 0-15 Sun, 15-30 Moon. Even: reverse.
+    hora_code = ("Su" if first_half else "Mo") if odd else ("Mo" if first_half else "Su")
+    hora_no = 1 if first_half else 2
+    return {
+        "available": True,
+        "rashi_index": idx,
+        "rashi_name": RASHI_NAMES_HI[idx],
+        "degree": round(sign_degree, 4),
+        "sign_type": "विषम" if odd else "सम",
+        "sign_type_en": "odd" if odd else "even",
+        "hora_no": hora_no,
+        "range": "0°–15°" if first_half else "15°–30°",
+        "hora_lord_code": hora_code,
+        "hora_lord": _planet_name(hora_code),
+        "hora_sign_index": 4 if hora_code == "Su" else 3,
+        "hora_sign": "सिंह" if hora_code == "Su" else "कर्क",
+        "is_sun_hora": hora_code == "Su",
+        "is_moon_hora": hora_code == "Mo",
+    }
+
+
+def _hora_strength(sign_degree: float) -> dict:
+    """Three-part strength supplied by the user; no percentage prediction."""
+    if sign_degree is None:
+        return {"available": False}
+    local = sign_degree if sign_degree < 15.0 else sign_degree - 15.0
+    if local < 5.0:
+        level, label = "strongest", "मजबूत"
+    elif local < 10.0:
+        level, label = "average", "औसत"
+    else:
+        level, label = "weakest", "कमजोर"
+    return {
+        "available": True,
+        "segment_degree": round(local, 4),
+        "level": level,
+        "label": label,
+        "range": ("0°–5°" if sign_degree < 15.0 else "15°–20°") if local < 5 else
+                 (("5°–10°" if sign_degree < 15.0 else "20°–25°") if local < 10 else
+                  ("10°–15°" if sign_degree < 15.0 else "25°–30°")),
+    }
+
+
+def _kerala_hora_mapping(lord_code: str, hora_code: str) -> dict:
+    """User-supplied Labh Mandook / Kerala 12-sign mapping."""
+    mapping = KERALA_SUN_CONTRIBUTED if hora_code == "Su" else KERALA_MOON_CONTRIBUTED
+    rashi_1 = mapping.get(lord_code)
+    return {
+        "available": rashi_1 is not None,
+        "lord_code": lord_code,
+        "lord_name": _planet_name(lord_code),
+        "hora_lord_code": hora_code,
+        "hora_lord": _planet_name(hora_code),
+        "mapped_rashi_number": rashi_1,
+        "mapped_rashi_name": RASHI_NAMES_HI[rashi_1 - 1] if rashi_1 else None,
+        "mapping": "Sun_Contributed_Signs" if hora_code == "Su" else "Moon_Contributed_Signs",
+    }
+
+
+def _formula4_flags(planets: dict, lagna_index: int, planet_rows: list) -> dict:
+    """Return source-rule matches only. It intentionally does not make final decisions."""
+    flags = []
+
+    # Soft spoken & fortunate: benefic + D1 even + Moon Hora + first 5 degrees of Hora.
+    for row in planet_rows:
+        if row["planet_code"] not in HORA_BENEFICS:
+            continue
+        h = row["parashari_hora"]
+        if h.get("available") and h["sign_type_en"] == "even" and h["is_moon_hora"] and row["hora_strength"]["range"] in ("0°–5°", "15°–20°"):
+            flags.append({
+                "code": "soft_spoken_fortunate",
+                "label": "मधुर वाणी / भाग्यशाली — सूत्र match",
+                "planet": row["planet_name"],
+                "evidence": f'{row["rashi_name"]} (सम), {row["degree"]}°, {h["hora_lord"]} होरा, {row["hora_strength"]["range"]}',
+                "source_rule": "शुभ ग्रह + सम राशि + चंद्र होरा + पहला 5° भाग",
+            })
+
+    # Harsh speech: Jupiter in Leo + Sun Hora + first 5 degrees of Hora.
+    ju = next((r for r in planet_rows if r["planet_code"] == "Ju"), None)
+    if ju and ju["rashi_index"] == 4:
+        h = ju["parashari_hora"]
+        if h.get("available") and h["is_sun_hora"] and ju["hora_strength"]["range"] in ("0°–5°", "15°–20°"):
+            flags.append({
+                "code": "harsh_speech_jupiter",
+                "label": "कठोर वाणी — सूत्र match",
+                "planet": "गुरु",
+                "evidence": f'गुरु सिंह में {ju["degree"]}°, सूर्य होरा, {ju["hora_strength"]["range"]}',
+                "source_rule": "गुरु सिंह + सूर्य होरा + पहला 5° भाग",
+            })
+
+    # Lagnesh cruel/odd/Sun Hora.
+    lagna_lord = RASHI_LORD.get(lagna_index)
+    ll = next((r for r in planet_rows if r["planet_code"] == lagna_lord), None)
+    if ll and lagna_lord in HORA_CRUEL:
+        h = ll["parashari_hora"]
+        if h.get("available") and h["sign_type_en"] == "odd" and h["is_sun_hora"]:
+            flags.append({
+                "code": "cruel_lagnesh_sun_hora",
+                "label": "क्रूर लग्नेश + सूर्य होरा — सूत्र match",
+                "planet": ll["planet_name"],
+                "evidence": f'लग्नेश {ll["planet_name"]}: {ll["rashi_name"]} (विषम), {ll["degree"]}°, सूर्य होरा',
+                "source_rule": "क्रूर लग्नेश + विषम राशि + सूर्य होरा",
+            })
+
+    # Voracious eater rule needs D30 cruel Shashtiamsha details. Do not guess if absent.
+    flags.append({
+        "code": "voracious_eater_d30_required",
+        "label": "अधिक भोजन — D30/क्रूर षष्ट्यांश evidence आवश्यक",
+        "planet": None,
+        "evidence": "इस engine में इस सूत्र को final match घोषित करने के लिए D30 के विशिष्ट दंडायुध/दावाग्नि/काल षष्ट्यांश data चाहिए।",
+        "source_rule": "लग्नेश या 2nd lord + पाप प्रभाव + क्रूर षष्ट्यांश",
+        "available": False,
+    })
+
+    return {
+        "computed": True,
+        "flags": flags,
+        "note": "ये केवल सूत्र-आधारित evidence/flags हैं; अंतिम फलादेश या निर्णय नहीं।",
+    }
+
+
+def _raw_d2_rashi_index(pdata: dict):
+    """Read the preserved D2 rashi index directly from Vargas[D2].
+    This is used for D2 house placement; it does not recalculate Hora.
+    """
+    vargas = (pdata or {}).get("Vargas") or {}
+    d2 = vargas.get("D2") if isinstance(vargas, dict) else None
+    if isinstance(d2, dict):
+        value = d2.get("Idx")
+        if value is None:
+            value = d2.get("rashi_index", d2.get("RashiIdx"))
+    elif isinstance(d2, (int, float)):
+        value = int(d2)
+    else:
+        value = None
+    try:
+        return int(value) % 12 if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+HORA_MANSAGARI_RULES = [
+    {"planet": "सूर्य", "placement": "चंद्र होरा", "rule": "सुख-सुविधा/धन, अपने प्रयास से अर्जन, गरिमा/स्त्री-सदृश disposition और ग्रंथ में रोग-संबंधी उल्लेख।"},
+    {"planet": "सूर्य", "placement": "अपनी होरा", "rule": "साहस, परिश्रम, इंद्रिय-संयम, विद्या और पराक्रम का ग्रंथीय वर्णन।"},
+    {"planet": "चंद्र", "placement": "सूर्य होरा", "rule": "स्त्री-संबंधी कष्ट, कामुकता, शत्रु/मित्र संबंध और बुद्धि के बारे में ग्रंथीय वर्णन।"},
+    {"planet": "मंगल", "placement": "सूर्य होरा", "rule": "प्रियता, साहस, धन और संरक्षण/स्थिरता का ग्रंथीय वर्णन।"},
+    {"planet": "मंगल", "placement": "चंद्र होरा", "rule": "विवाह/धार्मिक आचरण संबंधी नकारात्मक फल का ग्रंथीय वर्णन।"},
+    {"planet": "बुध", "placement": "सूर्य होरा", "rule": "धन और वाणी/परनिंदा संबंधी फल का ग्रंथीय वर्णन।"},
+    {"planet": "बुध", "placement": "चंद्र होरा", "rule": "प्रसिद्धि और spouse-related फल का ग्रंथीय वर्णन।"},
+    {"planet": "गुरु", "placement": "सूर्य होरा", "rule": "रोग/आयु संबंधी नकारात्मक फल का ग्रंथीय वर्णन।"},
+    {"planet": "गुरु", "placement": "चंद्र होरा", "rule": "उत्तम चरित्र/सज्जनता और धन संबंधी फल का ग्रंथीय वर्णन।"},
+    {"planet": "शुक्र", "placement": "सूर्य होरा", "rule": "काम/संबंध संबंधी ग्रंथीय वर्णन।"},
+    {"planet": "शुक्र", "placement": "चंद्र होरा", "rule": "पत्नी/जीवनसाथी संबंधी सकारात्मक वर्णन।"},
+    {"planet": "शनि", "placement": "सूर्य होरा", "rule": "विवाह/जीवनसाथी संबंधी ग्रंथीय वर्णन।"},
+    {"planet": "शनि", "placement": "चंद्र होरा", "rule": "वैवाहिक dynamics संबंधी ग्रंथीय वर्णन।"},
+    {"planet": "बलवान पाप ग्रह", "placement": "सूर्य होरा", "rule": "धन/ऐश्वर्य के साथ कुछ नकारात्मक जीवन-विषयों का ग्रंथीय वर्णन।"},
+    {"planet": "शुभ ग्रह", "placement": "चंद्र होरा", "rule": "स्त्री-संबंधी स्नेह/सुख का ग्रंथीय वर्णन।"},
+    {"planet": "कोई ग्रह", "placement": "सूर्य होरा", "rule": "सूर्य होरा में जन्म के संबंध में धर्म, सत्य, स्व-प्रयास, संगीत और संतान आदि का ग्रंथीय वर्णन।"},
+]
+
+
+def compute_hora_analysis(planets: Dict, lagna_index: int = 0) -> Dict:
+    """Complete standalone Hora/D2 evidence.
+    D1 sign + exact degree is the input to the Parashari rule that determines
+    the D2 Hora; preserved Vargas[D2] remains the source of truth when reading
+    an already-computed D2 placement, including Khar Lord Hora.
+    No final predictive decision is produced."""
+    try:
+        rows = []
+        for code in ["La", "Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa", "Ra", "Ke"]:
+            pdata = planets.get(code)
+            if not pdata:
+                continue
+            idx, deg = _hora_degree_from_planet(pdata)
+            h = _parashari_hora_from_d1(idx, deg)
+            strength = _hora_strength(deg)
+            lord = RASHI_LORD.get(idx) if idx is not None else None
+            kerala = _kerala_hora_mapping(lord, h.get("hora_lord_code")) if lord and h.get("available") else {"available": False}
+            rows.append({
+                "planet_code": code,
+                "planet_name": _planet_name(code),
+                "rashi_index": idx,
+                "rashi_name": RASHI_NAMES_HI[idx] if idx is not None else None,
+                "degree": round(deg, 4) if deg is not None else None,
+                "parashari_hora": h,
+                "hora_strength": strength,
+                "rashi_lord_code": lord,
+                "rashi_lord": _planet_name(lord) if lord else None,
+                "kerala_hora": kerala,
+            })
+
+        # D2 house placement must read the preserved D2 chart directly.
+        # Do NOT use _d2_hora_for_planet() here because that helper intentionally
+        # classifies Cancer/Leo as Moon/Sun Hora for Khar.
+        d2_lagna_index = _raw_d2_rashi_index(planets.get("La", {}))
+        d2_lagna = {
+            "available": d2_lagna_index is not None,
+            "rashi_index": d2_lagna_index,
+            "rashi_name": RASHI_NAMES_HI[d2_lagna_index] if d2_lagna_index is not None else None,
+            "source": "preserved Vargas[D2]",
+        }
+        if d2_lagna_index is not None:
+            for row in rows:
+                # row rashi_index is D1; D2 placement is separately derived from
+                # the Parashari formula and therefore the house is not assigned here
+                # unless a preserved D2 rashi is available for that planet.
+                pdata = planets.get(row["planet_code"], {}) or {}
+                d2_idx = _raw_d2_rashi_index(pdata)
+                if d2_idx is not None:
+                    row["d2_rashi_index"] = d2_idx
+                    row["d2_rashi_name"] = RASHI_NAMES_HI[d2_idx]
+                    row["d2_house"] = ((d2_idx - d2_lagna_index) % 12) + 1
+
+        formula4 = _formula4_flags(planets, lagna_index, rows)
+
+        return {
+            "computed": True,
+            "engine": "hora_analysis v1.0",
+            "method_note": "Formula 1: Parashari D2 odd/even rule. Formula 2: 5° strength segments. Formula 3: supplied Kerala/Labh Mandook mapping. Formula 4: supplied nature/speech source-rules. Raw evidence only.",
+            "formula_1_parashari": {
+                "computed": True,
+                "rule": "विषम: 0°–15° सूर्य, 15°–30° चंद्र | सम: 0°–15° चंद्र, 15°–30° सूर्य",
+                "rows": rows,
+            },
+            "formula_2_hora_strength": {
+                "computed": True,
+                "rule": "प्रत्येक 15° होरा को 0–5° मजबूत, 5–10° औसत, 10–15° कमजोर भाग में विभाजित किया गया है।",
+                "rows": [{
+                    "planet_code": r["planet_code"], "planet_name": r["planet_name"],
+                    "degree": r["degree"], "hora": r["parashari_hora"], "strength": r["hora_strength"],
+                } for r in rows],
+            },
+            "formula_3_kerala_hora": {
+                "computed": True,
+                "sun_contributed_signs": {k: {"planet_name": _planet_name(k), "rashi_number": v, "rashi_name": RASHI_NAMES_HI[v-1]} for k, v in KERALA_SUN_CONTRIBUTED.items()},
+                "moon_contributed_signs": {k: {"planet_name": _planet_name(k), "rashi_number": v, "rashi_name": RASHI_NAMES_HI[v-1]} for k, v in KERALA_MOON_CONTRIBUTED.items()},
+                "rows": [{
+                    "planet_code": r["planet_code"], "planet_name": r["planet_name"],
+                    "d1_rashi": r["rashi_name"], "d1_rashi_lord": r["rashi_lord"],
+                    "hora_lord": r["parashari_hora"].get("hora_lord"), "mapping": r["kerala_hora"],
+                } for r in rows],
+            },
+            "mansagari_textual_rules": {
+                "computed": True,
+                "note": "ये source में दिए गए ग्रंथीय फल-संदर्भ हैं; software इन्हें automatic prediction/decision में convert नहीं करता।",
+                "rules": HORA_MANSAGARI_RULES,
+            },
+            "formula_4_nature_speech": formula4,
+            "d2_house_reference": {
+                "computed": True,
+                "d2_lagna": d2_lagna,
+                "rows": D2_HOUSE_REFERENCE,
+                "note": "यह reference/evidence framework है; किसी भाव से automatic final result नहीं निकाला गया।",
+            },
+            "rows": rows,
+            "final_decision_note": "सॉफ्टवेयर केवल गणना, rule-match और evidence निकालता है। अंतिम निर्णय व्यक्ति/ज्योतिषी करेगा।",
+        }
+    except Exception as e:
+        return {"computed": False, "error": str(e), "engine": "hora_analysis v1.0"}
+
+
 def compute_advanced_yogas(
     planets: Dict,
     sav: List[int],
@@ -1310,6 +2650,18 @@ def compute_advanced_yogas(
             "ceo_level":        result["sudarshan_avg"].get("ceo_avg", 0),
             "self_moon_sav":    self_moon_sav,
         }
+
+        # KHAR / 64TH NAVAMSHA (D1 + D9 + D3)
+        result["khar_64th_navamsa"] = compute_khar_64th_navamsa(planets, lagna_index)
+
+        # STANDALONE HORA TAB — formulas/evidence only; no final prediction
+        result["hora_analysis"] = compute_hora_analysis(planets, lagna_index)
+
+        # VIVAH & DIVORCE (V.P. GOEL)
+        vp_goel_data = compute_vp_goel_vivah(planets)
+        if vp_goel_data.get("computed"):
+            result["vivah_promise"] = vp_goel_data["vivah_promise"]
+            result["divorce_separation"] = vp_goel_data["divorce_separation"]
 
         return result
 
