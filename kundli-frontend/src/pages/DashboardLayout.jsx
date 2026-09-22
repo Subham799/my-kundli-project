@@ -2118,6 +2118,7 @@ function ChartAnnotationOverlay({ chartKey, drawColor, onDrawColorChange }) {
   const storageKey = `kundli-chart-annotations-${chartKey}`;
   const [drawing, setDrawing] = useState(false);
   const [tool, setTool] = useState("pen"); // pen | line | arrow | circle | rect | eraser
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [strokes, setStrokes] = useState(() => {
     try {
       const raw = JSON.parse(localStorage.getItem(storageKey) || "[]");
@@ -2242,23 +2243,30 @@ function ChartAnnotationOverlay({ chartKey, drawColor, onDrawColorChange }) {
 
   return (
     <>
-      <div className="absolute left-2 top-9 z-50 flex flex-wrap items-center gap-1 max-w-[90%]">
-        <button type="button" onClick={() => setDrawing(v => !v)}
-          className={`px-2 py-1 rounded-md text-[9px] font-bold border backdrop-blur ${drawing ? "bg-amber-500/20 text-amber-200 border-amber-400/50" : "bg-slate-950/90 text-slate-300 border-slate-700"}`}>
-          {drawing ? "Pen On" : "Draw"}
+      <div className="absolute left-1 top-8 z-50 flex flex-wrap items-start gap-0.5 max-w-[88%]">
+        <button type="button" onClick={() => setToolsOpen(v => !v)}
+          className="md:hidden px-2 py-0.5 rounded-md text-[8px] font-bold border bg-slate-950/95 text-slate-300 border-slate-700 backdrop-blur shadow-sm">
+          Drawing Tools {toolsOpen ? "▴" : "▾"}
         </button>
-        {[
-          ["pen", "Free"], ["line", "Line"], ["arrow", "Arrow"], ["circle", "Circle"], ["rect", "Rect"], ["eraser", "Eraser"]
-        ].map(([id, label]) => (
-          <button key={id} type="button" onClick={() => { setTool(id); setDrawing(true); }}
-            className={`px-2 py-1 rounded-md text-[9px] font-bold border ${tool === id && drawing ? "bg-cyan-500/15 text-cyan-200 border-cyan-400/40" : "bg-slate-950/90 text-slate-400 border-slate-700"}`}>
-            {label}
+
+        <div className={`${toolsOpen ? "flex" : "hidden"} md:flex flex-wrap items-center gap-0.5 w-fit max-w-[88vw] md:w-auto p-0.5 md:p-0 rounded-md md:rounded-none bg-slate-950/95 md:bg-transparent border border-slate-700/60 md:border-0 backdrop-blur md:backdrop-blur-none shadow-lg`}>
+          <button type="button" onClick={() => setDrawing(v => !v)}
+            className={`px-1.5 py-0.5 rounded-md text-[8px] font-bold border backdrop-blur ${drawing ? "bg-amber-500/20 text-amber-200 border-amber-400/50" : "bg-slate-950/90 text-slate-300 border-slate-700"}`}>
+            {drawing ? "Pen On" : "Draw"}
           </button>
-        ))}
-        {strokes.length > 0 && <button type="button" onClick={undo}
-          className="px-2 py-1 rounded-md text-[9px] font-bold border bg-slate-950/90 text-slate-400 border-slate-700">Undo</button>}
-        {strokes.length > 0 && <button type="button" onClick={clear}
-          className="px-2 py-1 rounded-md text-[9px] font-bold border bg-slate-950/90 text-slate-400 border-slate-700">Clear</button>}
+          {[
+            ["pen", "Free"], ["line", "Line"], ["arrow", "Arrow"], ["circle", "Circle"], ["rect", "Rect"], ["eraser", "Eraser"]
+          ].map(([id, label]) => (
+            <button key={id} type="button" onClick={() => { setTool(id); setDrawing(true); }}
+              className={`px-1.5 py-0.5 rounded-md text-[8px] font-bold border ${tool === id && drawing ? "bg-cyan-500/15 text-cyan-200 border-cyan-400/40" : "bg-slate-950/90 text-slate-400 border-slate-700"}`}>
+              {label}
+            </button>
+          ))}
+          {strokes.length > 0 && <button type="button" onClick={undo}
+            className="px-1.5 py-0.5 rounded-md text-[8px] font-bold border bg-slate-950/90 text-slate-400 border-slate-700">Undo</button>}
+          {strokes.length > 0 && <button type="button" onClick={clear}
+            className="px-1.5 py-0.5 rounded-md text-[8px] font-bold border bg-slate-950/90 text-slate-400 border-slate-700">Clear</button>}
+        </div>
       </div>
 
       {(drawing || strokes.length > 0) && (

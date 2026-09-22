@@ -497,7 +497,6 @@ export default function InteractiveKundli({
         </div>{/* end SVG wrapper */}
       </div>{/* end chart container */}
 
-    
     </div>
   );
 }
