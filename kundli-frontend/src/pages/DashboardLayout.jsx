@@ -1,7 +1,7 @@
 // pages/DashboardLayout.jsx
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { User, Moon, Zap, Download, FileText } from "lucide-react";
 import useKundliStore from "../store/useKundliStore";
 import { TABS } from "../constants";
@@ -17,25 +17,18 @@ import PlanetDrawer       from "../components/panels/PlanetDrawer";
 import DashaTimeline      from "../components/panels/DashaTimeline";
 import DrishtiGrid        from "../components/panels/DrishtiGrid";
 import AshtakavargaGrid   from "../components/panels/AshtakavargaGrid";
-import HousePanel         from "../components/panels/HousePanel";
 import AdvancedAstrologyPanel         from "../components/panels/AdvancedAstrologyPanel";
 import Badge              from "../components/ui/Badge";
 
 // ── Phase 1 (but conclusion is heavy — lazy ok) ───────────────────────────
-const MasterConclusion  = lazy(() => import("../components/panels/MasterConclusion"));
 
 // ── Phase 2 panels — only loaded when user clicks that tab ────────────────
 // Browser downloads 0 bytes for these until the user actually opens them.
 const YogaPanel         = lazy(() => import("../components/panels/YogaPanel"));
 const AdvancedAVPanel   = lazy(() => import("../components/panels/AdvancedAVPanel"));
-const KamuktaPanel      = lazy(() => import("../components/panels/KamuktaPanel"));
 const GocharPanel       = lazy(() => import("../components/panels/GocharPanel"));
-const NadiJyotishPanel  = lazy(() => import("../components/panels/NadiJyotishPanel"));
-const AVSutrasPanel     = lazy(() => import("../components/panels/AVSutrasPanel"));
-const ChandraSuryaPanel = lazy(() => import("../components/panels/ChandraSuryaPanel"));
 const AdvancedYogasPanel= lazy(() => import("../components/panels/Advancedyogaspanel"));
 const KPBTRPanel        = lazy(() => import("../components/panels/KPBTRPanel"));
-const VivahPanel        = lazy(() => import("../components/panels/VivahPanel"));
 const PrashnaKundli = lazy(() => import("../components/panels/PrashnaKundli"));
 const Chalit = lazy(() => import("../components/panels/Chalit"));
 
@@ -64,7 +57,6 @@ function LoadingState() {
     { icon:"🌌", text:"ब्रह्मांडीय ऊर्जाओं को अलाइन किया जा रहा है...",             sub:"Render सर्वर जाग रहा है (Cold Start)" },
     { icon:"🪐", text:"Swiss Ephemeris से ग्रहों की सटीक डिग्री निकाली जा रही है...", sub:"9 ग्रह · 12 भाव · लग्न स्पष्ट" },
     { icon:"📐", text:"अष्टकवर्ग और सर्वाष्टकवर्ग के 337 बिंदु जोड़े जा रहे हैं...",  sub:"8 ग्रहों के BAV + SAV गणना" },
-    { icon:"📜", text:"भृगु नंदी नाड़ी के 62 गुप्त सूत्रों का मिलान हो रहा है...",    sub:"नाड़ी AI Engine v2.0" },
     { icon:"⚡", text:"13 विश्लेषण इंजन एक साथ चल रहे हैं...",                         sub:"योग · दशा · गोचर · विवाह · KP · AV सूत्र..." },
     { icon:"🔮", text:"आपकी सम्पूर्ण वैदिक कुंडली लगभग तैयार है...",                 sub:"बस कुछ ही पल..." },
   ];
@@ -81,7 +73,6 @@ function LoadingState() {
     { icon:"📊", tab:"विस्तृत AV",      desc:"जीवन समृद्धि · संघर्ष मीटर · करियर टाइप · AV मैप" },
     { icon:"💕", tab:"कामुकता",         desc:"प्रेम स्वभाव · आकर्षण · दांपत्य रसायन · कुंडली मिलान" },
     { icon:"🌍", tab:"गोचर",            desc:"आज के ग्रहों का प्रभाव · 7/7 महामुहूर्त · दैनिक पूर्वानुमान" },
-    { icon:"🔮", tab:"नाड़ी ज्योतिष",   desc:"भृगु नंदी नाड़ी के 62 सूत्र · कर्म पैटर्न · पुनर्जन्म" },
     { icon:"🔢", tab:"AV सूत्र",        desc:"27-वर्ष सौभाग्य चक्र · भाग्योदय वर्ष · ग्रह बल सूत्र" },
     { icon:"🌙", tab:"चंद्र-सूर्य",     desc:"चंद्र उपचय · पक्ष बल · शुभ मास · मानसिक संतुलन" },
     { icon:"⚡", tab:"उन्नत योग",       desc:"इन्दु लग्न · भावत भावम · पाप कर्तरी · मेगा रूल्स" },
@@ -91,13 +82,11 @@ function LoadingState() {
 
   // ── Jyotish facts — shown as floating pills ─────────────────
   const FACTS = [
-    "💡 नाड़ी ज्योतिष 5000 वर्ष पुरानी भविष्यवाणी पद्धति है",
     "💡 अष्टकवर्ग में अधिकतम 337 बिंदु संभव हैं",
     "💡 विंशोत्तरी दशा = 120 वर्ष का जीवन चक्र",
     "💡 27 नक्षत्र × 4 पाद = 108 नवांश",
     "💡 Swiss Ephemeris सटीकता: 0.001 आर्कसेकंड",
     "💡 KP पद्धति में Sub-Lord विवाह का सबसे सटीक संकेत देता है",
-    "💡 भृगु नंदी नाड़ी में हर ग्रह युति एक 'सूत्र' बनाती है",
   ];
   const [factIdx, setFactIdx] = useState(0);
 
@@ -236,7 +225,7 @@ function LoadingState() {
 
       {/* ── Bottom hint ── */}
       <div className="text-[10px] text-slate-700 text-center">
-        सर्वर लोड हो रहा है{dots} · Nadi AI Jyotish Engine
+        सर्वर लोड हो रहा है{dots}
       </div>
 
     </div>
@@ -312,7 +301,7 @@ function buildPDFPage(pageNum, chartData) {
   const lagnaNak  = meta.lagnaNakshatra || "";
   const lagnaDeg  = meta.lagnaRashiDegree ? meta.lagnaRashiDegree + "°" : "";
 
-  const RASHI  = ["मेष","वृषभ","मिथुन","कर्क","सिंह","कन्या","तुला","वृश्चिक","धनु","मकर","कुंभ","मीन"];
+  const RASHI  = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
   const PH     = {Su:"सूर्य",Mo:"चंद्र",Ma:"मंगल",Me:"बुध",Ju:"गुरु",Ve:"शुक्र",Sa:"शनि",Ra:"राहु",Ke:"केतु"};
   const PS     = {Su:"☉",Mo:"☽",Ma:"♂",Me:"☿",Ju:"♃",Ve:"♀",Sa:"♄",Ra:"☊",Ke:"☋"};
   const DC     = {Uchcha:"#4ADE80",उच्च:"#4ADE80",Neecha:"#FB7185",नीच:"#FB7185",Swa:"#22D3EE",Swagraha:"#22D3EE",स्वराशि:"#22D3EE",Mitra:"#C084FC",मित्र:"#C084FC",Shatru:"#FB923C",शत्रु:"#FB923C",Sama:"#64748B",सम:"#64748B",Yogakaraka:"#F59E0B"};
@@ -1973,6 +1962,640 @@ function PDFModal({ chartData, onClose }) {
 // RIGHT PANEL (Clean & Correct Version)
 // ─────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// JAIMINI RASHI DRISHTI — sign-based aspect view
+// Uses the D1 house/sign structure already present in chartData.
+// Chara Karaka is intentionally not calculated here because this
+// view does not guarantee the exact planetary longitudes needed for
+// a reliable 7-Karaka ranking.
+// ─────────────────────────────────────────────────────────────
+const JAIMINI_SIGN_NAMES = [
+  "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+  "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
+];
+
+const JAIMINI_RASHI_ASPECTS = {
+  0:[4,7,10],   // Aries -> Leo, Scorpio, Aquarius
+  1:[3,6,9],    // Taurus -> Cancer, Libra, Capricorn
+  2:[5,8,11],   // Gemini -> Virgo, Sagittarius, Pisces
+  3:[7,10,1],   // Cancer -> Scorpio, Aquarius, Taurus
+  4:[6,9,0],    // Leo -> Libra, Capricorn, Aries
+  5:[2,8,11],   // Virgo -> Gemini, Sagittarius, Pisces
+  6:[10,1,4],   // Libra -> Aquarius, Taurus, Leo
+  7:[9,0,3],    // Scorpio -> Capricorn, Aries, Cancer
+  8:[2,5,11],   // Sagittarius -> Gemini, Virgo, Pisces
+  9:[1,4,7],    // Capricorn -> Taurus, Leo, Scorpio
+  10:[0,3,6],   // Aquarius -> Aries, Cancer, Libra
+  11:[2,5,8],   // Pisces -> Gemini, Virgo, Sagittarius
+};
+
+function getJaiminiPlanetPlacements(houses = []) {
+  const result = [];
+  for (const h of houses || []) {
+    const signIndex = Number(h?.sign_index);
+    if (!Number.isInteger(signIndex) || signIndex < 0 || signIndex > 11) continue;
+    for (const planet of (h?.planets || [])) {
+      if (planet === "La") continue;
+      result.push({ planet, house: Number(h.num), signIndex, sign: JAIMINI_SIGN_NAMES[signIndex] });
+    }
+  }
+  return result;
+}
+
+function getJaiminiBhavaPlacements(houses = []) {
+  return (houses || []).map(h => {
+    const signIndex = Number(h?.sign_index);
+    return {
+      house: Number(h?.num),
+      signIndex,
+      // Always derive the display name from sign_index so legacy Hindi/transliterated
+      // backend strings such as Mesha/Vrishabha never leak into the UI.
+      sign: JAIMINI_SIGN_NAMES[signIndex],
+    };
+  }).filter(x => Number.isInteger(x.signIndex) && x.signIndex >= 0 && x.signIndex <= 11);
+}
+
+function JaiminiDrishtiPanel({ houses = [] }) {
+  const [view, setView] = useState("graha");
+  const planets = getJaiminiPlanetPlacements(houses);
+  const bhavas = getJaiminiBhavaPlacements(houses);
+
+  const targetHousesForSign = (signIndex) =>
+    (JAIMINI_RASHI_ASPECTS[signIndex] || []).map(targetSign =>
+      bhavas.filter(b => b.signIndex === targetSign).map(b => b.house)
+    ).flat();
+
+  const signType = (signIndex) => {
+    if ([0,3,6,9].includes(signIndex)) return "Movable";
+    if ([1,4,7,10].includes(signIndex)) return "Fixed";
+    return "Dual";
+  };
+
+  return (
+    <div className="w-full space-y-3">
+      <div className="flex flex-wrap gap-1.5 p-1 rounded-xl border border-cyan-500/15 bg-slate-900/40">
+        <button type="button" onClick={() => setView("graha")}
+          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border ${view === "graha" ? "bg-cyan-500/10 text-cyan-300 border-cyan-500/30" : "text-slate-400 border-transparent"}`}>
+          Jaimini Graha Drishti
+        </button>
+        <button type="button" onClick={() => setView("bhava")}
+          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border ${view === "bhava" ? "bg-cyan-500/10 text-cyan-300 border-cyan-500/30" : "text-slate-400 border-transparent"}`}>
+          Jaimini Bhava Drishti
+        </button>
+      </div>
+
+      <div className="rounded-2xl border border-cyan-500/15 bg-slate-950/30 p-3">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div>
+              <div className="text-sm font-bold text-slate-200">Jaimini Rashi Drishti</div>
+              <div className="text-[9px] text-slate-500">Sign-based aspect: the planet/house carries the aspect of its occupied sign.</div>
+            </div>
+            <span className="text-[9px] text-cyan-300/80 border border-cyan-500/20 rounded-lg px-2 py-1">3 targets / sign</span>
+          </div>
+
+          {view === "graha" ? (
+            <div className="space-y-2">
+              {planets.length === 0 ? (
+                <div className="text-xs text-slate-500">Planet-sign data is not available.</div>
+              ) : planets.map(({ planet, house, signIndex, sign }) => {
+                const targetSigns = JAIMINI_RASHI_ASPECTS[signIndex] || [];
+                const targetHouses = targetHousesForSign(signIndex);
+                return (
+                  <div key={`${planet}-${house}`} className="rounded-xl border border-slate-800/70 bg-slate-900/45 p-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-black text-amber-300 text-sm">{planet}</span>
+                      <span className="text-[10px] text-slate-400">{sign} · House {house}</span>
+                      <span className="text-[9px] text-slate-600">{signType(signIndex)}</span>
+                      <span className="ml-auto text-[9px] text-slate-500">Jaimini Rashi Drishti</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {targetSigns.map((si, i) => (
+                        <span key={si} className="text-[9px] px-2 py-1 rounded-lg border border-cyan-500/20 bg-cyan-500/5 text-cyan-200">
+                          {JAIMINI_SIGN_NAMES[si]}{targetHouses[i] ? ` · H${targetHouses[i]}` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {bhavas.map(({ house, signIndex, sign }) => {
+                const targetSigns = JAIMINI_RASHI_ASPECTS[signIndex] || [];
+                const targetHouses = targetHousesForSign(signIndex);
+                return (
+                  <div key={`bhava-${house}`} className="rounded-xl border border-slate-800/70 bg-slate-900/45 p-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-amber-300 text-sm">House {house}</span>
+                      <span className="text-[10px] text-slate-400">{sign}</span>
+                      <span className="text-[9px] text-slate-600">{signType(signIndex)}</span>
+                      <span className="ml-auto text-[9px] text-slate-500">Bhava → Bhava</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {targetSigns.map((si, i) => (
+                        <span key={si} className="text-[9px] px-2 py-1 rounded-lg border border-cyan-500/20 bg-cyan-500/5 text-cyan-200">
+                          House {targetHouses[i] || "—"} · {JAIMINI_SIGN_NAMES[si]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+    </div>
+  );
+}
+
+// SHODASHVARGA GRID — one chart surface, toggled by the "Charts" tab
+// D1 is included here so the universal chart is not rendered a second time.
+// ─────────────────────────────────────────────────────────────
+const VARGA_KEYS = ["D1","D2","D3","D4","D6","D7","D9","D10","D12","D16","D20","D24","D27","D30","D40","D45","D60"];
+
+function ChartAnnotationOverlay({ chartKey, drawColor, onDrawColorChange }) {
+  const storageKey = `kundli-chart-annotations-${chartKey}`;
+  const [drawing, setDrawing] = useState(false);
+  const [tool, setTool] = useState("pen"); // pen | line | arrow | circle | rect | eraser
+  const [strokes, setStrokes] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      return Array.isArray(raw) ? raw.slice(-20) : [];
+    } catch { return []; }
+  });
+  const activeStroke = useRef(null);
+  const [previewPoints, setPreviewPoints] = useState([]);
+
+  // Keep annotations lightweight and isolated per chart.
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, JSON.stringify(strokes.slice(-20))); } catch {}
+  }, [storageKey, strokes]);
+
+  const pointFromEvent = (e, svg) => {
+    const r = svg.getBoundingClientRect();
+    if (!r.width || !r.height) return { x: 0, y: 0 };
+    return {
+      x: Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100)),
+      y: Math.max(0, Math.min(100, ((e.clientY - r.top) / r.height) * 100)),
+    };
+  };
+
+  const normalizeShape = (points, selectedTool) => {
+    if (!points?.length) return null;
+    if (selectedTool === "line") {
+      return { type: "line", start: points[0], end: points[points.length - 1] };
+    }
+    if (selectedTool === "arrow") {
+      return { type: "arrow", start: points[0], end: points[points.length - 1] };
+    }
+    if (selectedTool === "rect") {
+      const xs = points.map(p => p.x), ys = points.map(p => p.y);
+      const x = Math.min(...xs), y = Math.min(...ys);
+      return { type: "rect", x, y, w: Math.max(0.5, Math.max(...xs) - x), h: Math.max(0.5, Math.max(...ys) - y) };
+    }
+    if (selectedTool === "circle") {
+      const first = points[0], last = points[points.length - 1];
+      const xs = points.map(p => p.x), ys = points.map(p => p.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const w = maxX - minX, h = maxY - minY;
+      if (w < 2 || h < 2) return { type: "path", points };
+      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+      const r = (w + h) / 4;
+      // If the user draws a reasonably closed circle, clean it automatically.
+      const closure = Math.hypot(last.x - first.x, last.y - first.y);
+      const deviations = points.map(p => Math.abs(Math.hypot(p.x - cx, p.y - cy) - r));
+      const avgDeviation = deviations.reduce((a, v) => a + v, 0) / deviations.length;
+      if (closure <= 18 && Math.abs(w - h) / Math.max(w, h) < 0.30 && avgDeviation < r * 0.25) {
+        return { type: "circle", cx, cy, r };
+      }
+      return { type: "circle", cx, cy, r };
+    }
+    return { type: "path", points: points.slice(-160) };
+  };
+
+  const start = (e) => {
+    if (!drawing) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const first = pointFromEvent(e, e.currentTarget);
+     activeStroke.current = [first];
+     setPreviewPoints([first]);
+  };
+
+  const move = (e) => {
+    if (!drawing || !activeStroke.current) return;
+    e.preventDefault();
+    const pts = activeStroke.current;
+    // Shape tools only need start/end; keeping one extra point avoids a large React update loop.
+    if (tool !== "pen") {
+      const next = pointFromEvent(e, e.currentTarget);
+      activeStroke.current = [pts[0], next];
+      // Live preview for straight line / arrow / circle / rectangle.
+      setPreviewPoints([pts[0], next]);
+      return;
+    }
+    if (pts.length >= 160) return;
+    const next = [...pts, pointFromEvent(e, e.currentTarget)];
+    activeStroke.current = next;
+    // Keep the in-progress freehand stroke visible while drawing.
+    setPreviewPoints(next);
+  };
+
+  const end = (e) => {
+    try { e?.currentTarget?.releasePointerCapture?.(e.pointerId); } catch {}
+    const pts = activeStroke.current;
+    activeStroke.current = null;
+    setPreviewPoints([]);
+    if (!drawing || !pts?.length) return;
+    const shape = normalizeShape(pts, tool);
+    if (!shape) return;
+    setStrokes(prev => [...prev.slice(-19), { ...shape, id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, color: drawColor }]);
+  };
+
+  const clear = () => {
+    activeStroke.current = null;
+    setPreviewPoints([]);
+    setStrokes([]);
+  };
+
+  const undo = () => setStrokes(prev => prev.slice(0, -1));
+
+  const eraseShape = (id) => {
+    setStrokes(prev => prev.filter((shape, i) => (shape.id ?? i) !== id));
+  };
+
+  const renderShape = (shape, i, isPreview = false) => {
+    if (!shape) return null;
+    const common = { key: shape.id ?? i, fill: "none", stroke: shape.color || "#F59E0B", strokeWidth: "0.65", style: { pointerEvents: (!isPreview && tool === "eraser" && drawing) ? "stroke" : "none", cursor: (!isPreview && tool === "eraser" && drawing) ? "pointer" : undefined } };
+    const onErase = (!isPreview && tool === "eraser" && drawing) ? (e) => { e.stopPropagation(); eraseShape(shape.id ?? i); } : undefined;
+    if (shape.type === "circle") return <circle {...common} cx={shape.cx} cy={shape.cy} r={shape.r} onPointerDown={onErase} />;
+    if (shape.type === "rect") return <rect {...common} x={shape.x} y={shape.y} width={shape.w} height={shape.h} onPointerDown={onErase} />;
+    if (shape.type === "line") return <line {...common} x1={shape.start.x} y1={shape.start.y} x2={shape.end.x} y2={shape.end.y} strokeLinecap="round" onPointerDown={onErase} />;
+    if (shape.type === "arrow") {
+      const markerId = isPreview ? "kundli-arrowhead-preview" : `kundli-arrowhead-${shape.id ?? i}`;
+      return <line {...common} x1={shape.start.x} y1={shape.start.y} x2={shape.end.x} y2={shape.end.y} strokeLinecap="round" markerEnd={`url(#${markerId})`} onPointerDown={onErase} />;
+    }
+    return <polyline {...common} points={(shape.points || []).map(p => `${p.x},${p.y}`).join(" ")} strokeLinecap="round" strokeLinejoin="round" onPointerDown={onErase} />;
+  };
+
+  return (
+    <>
+      <div className="absolute left-2 top-9 z-50 flex flex-wrap items-center gap-1 max-w-[90%]">
+        <button type="button" onClick={() => setDrawing(v => !v)}
+          className={`px-2 py-1 rounded-md text-[9px] font-bold border backdrop-blur ${drawing ? "bg-amber-500/20 text-amber-200 border-amber-400/50" : "bg-slate-950/90 text-slate-300 border-slate-700"}`}>
+          {drawing ? "Pen On" : "Draw"}
+        </button>
+        {[
+          ["pen", "Free"], ["line", "Line"], ["arrow", "Arrow"], ["circle", "Circle"], ["rect", "Rect"], ["eraser", "Eraser"]
+        ].map(([id, label]) => (
+          <button key={id} type="button" onClick={() => { setTool(id); setDrawing(true); }}
+            className={`px-2 py-1 rounded-md text-[9px] font-bold border ${tool === id && drawing ? "bg-cyan-500/15 text-cyan-200 border-cyan-400/40" : "bg-slate-950/90 text-slate-400 border-slate-700"}`}>
+            {label}
+          </button>
+        ))}
+        {strokes.length > 0 && <button type="button" onClick={undo}
+          className="px-2 py-1 rounded-md text-[9px] font-bold border bg-slate-950/90 text-slate-400 border-slate-700">Undo</button>}
+        {strokes.length > 0 && <button type="button" onClick={clear}
+          className="px-2 py-1 rounded-md text-[9px] font-bold border bg-slate-950/90 text-slate-400 border-slate-700">Clear</button>}
+      </div>
+
+      {(drawing || strokes.length > 0) && (
+        <svg className={`absolute inset-0 w-full h-full ${drawing ? "z-40 cursor-crosshair" : "z-20 pointer-events-none"}`}
+          viewBox="0 0 100 100" preserveAspectRatio="none" style={drawing ? { touchAction: "none" } : undefined}
+           onDoubleClick={(e) => e.preventDefault()}
+          onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
+          <defs>
+            {(strokes || []).filter(shape => shape?.type === "arrow").map((shape, i) => (
+              <marker
+                key={`arrowhead-${shape.id ?? i}`}
+                id={`kundli-arrowhead-${shape.id ?? i}`}
+                markerWidth="5"
+                markerHeight="5"
+                refX="4"
+                refY="2.5"
+                orient="auto"
+                markerUnits="strokeWidth"
+              >
+                <path d="M0,0 L5,2.5 L0,5 z" fill={shape.color || "#F59E0B"} />
+              </marker>
+            ))}
+            {previewPoints.length > 0 && tool === "arrow" && (
+              <marker id="kundli-arrowhead-preview" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L5,2.5 L0,5 z" fill={drawColor || "#F59E0B"} />
+              </marker>
+            )}
+          </defs>
+          {strokes.map((shape, i) => renderShape(shape, i))}
+          {drawing && tool !== "eraser" && previewPoints.length > 0 && renderShape({ ...normalizeShape(previewPoints, tool), color: drawColor }, "active", true)}
+        </svg>
+      )}
+    </>
+  );
+}
+
+function downloadVargaChart(cardEl, chartKey) {
+  if (!cardEl) return;
+  const svgEls = Array.from(cardEl.querySelectorAll("svg"));
+  const mainSvg = svgEls.find(el => el.getAttribute("viewBox") === "0 0 440 440");
+  const overlaySvg = svgEls.find(el => el.getAttribute("viewBox") === "0 0 100 100");
+  if (!mainSvg) return;
+
+  const W = 1000, H = 1080;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#020713";
+  ctx.fillRect(0, 0, W, H);
+
+  const drawSvg = (svg, x, y, w, h) => new Promise(resolve => {
+    const clone = svg.cloneNode(true);
+    clone.setAttribute("width", String(w));
+    clone.setAttribute("height", String(h));
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    const xml = new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => { ctx.drawImage(img, x, y, w, h); URL.revokeObjectURL(url); resolve(); };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    img.src = url;
+  });
+
+  (async () => {
+    ctx.textAlign = "center";
+    ctx.font = "900 28px Inter, Arial, sans-serif";
+    ctx.fillStyle = "#FCD34D";
+    ctx.fillText(chartKey, W / 2, 42);
+
+    const chartX = 20, chartY = 58, chartW = 960, chartH = 960;
+    await drawSvg(mainSvg, chartX, chartY, chartW, chartH);
+    if (overlaySvg) await drawSvg(overlaySvg, chartX, chartY, chartW, chartH);
+
+    ctx.font = "700 20px Inter, Arial, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,.65)";
+    ctx.fillText("www.kundalimaker.com", W / 2, 1055);
+
+    const a = document.createElement("a");
+    a.download = `KundaliMaker-${chartKey}.png`;
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+  })();
+}
+
+
+async function downloadVargaView(gridEl, visibleCharts, columns) {
+  if (!gridEl || !visibleCharts?.length) return;
+
+  const cards = visibleCharts.map(key => gridEl.querySelector(`[data-varga-card="${key}"]`)).filter(Boolean);
+  if (!cards.length) return;
+
+  // Compose the currently visible chart grid into one PNG, including annotations.
+  const CARD_W = 760;
+  const CARD_H = 830;
+  const GAP = 18;
+  const COLS = Math.max(1, Number(columns) || 1);
+  const ROWS = Math.ceil(cards.length / COLS);
+  const PAD = 18;
+  const HEADER_H = 48;
+  const FOOTER_H = 34;
+  const W = PAD * 2 + Math.min(COLS, cards.length) * CARD_W + Math.max(0, Math.min(COLS, cards.length) - 1) * GAP;
+  const H = PAD * 2 + ROWS * CARD_H + Math.max(0, ROWS - 1) * GAP;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  ctx.fillStyle = '#020713';
+  ctx.fillRect(0, 0, W, H);
+
+  const drawSvg = (svg, x, y, w, h) => new Promise(resolve => {
+    if (!svg) return resolve();
+    const clone = svg.cloneNode(true);
+    clone.setAttribute('width', String(w));
+    clone.setAttribute('height', String(h));
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const xml = new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, x, y, w, h);
+      URL.revokeObjectURL(url);
+      resolve();
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    img.src = url;
+  });
+
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
+    const key = visibleCharts[i];
+    const col = i % COLS;
+    const row = Math.floor(i / COLS);
+    const x = PAD + col * (CARD_W + GAP);
+    const y = PAD + row * (CARD_H + GAP);
+
+    ctx.fillStyle = '#07101f';
+    ctx.strokeStyle = 'rgba(100,116,139,.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, CARD_W, CARD_H, 18);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.font = '900 20px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#FCD34D';
+    ctx.fillText(key, x + 18, y + 30);
+    if (key === 'D1') {
+      ctx.font = '600 11px Inter, Arial, sans-serif';
+      ctx.fillStyle = 'rgba(148,163,184,.65)';
+      ctx.fillText('Birth Chart', x + 54, y + 29);
+    }
+
+    const svgEls = Array.from(card.querySelectorAll('svg'));
+    const mainSvg = svgEls.find(el => el.getAttribute('viewBox') === '0 0 440 440');
+    const overlaySvg = svgEls.find(el => el.getAttribute('viewBox') === '0 0 100 100');
+    const chartX = x + 20;
+    const chartY = y + HEADER_H;
+    const chartW = CARD_W - 40;
+    const chartH = CARD_H - HEADER_H - FOOTER_H - 10;
+
+    await drawSvg(mainSvg, chartX, chartY, chartW, chartH);
+    if (overlaySvg) await drawSvg(overlaySvg, chartX, chartY, chartW, chartH);
+
+    ctx.textAlign = 'center';
+    ctx.font = '700 12px Inter, Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.62)';
+    ctx.fillText('www.kundalimaker.com', x + CARD_W / 2, y + CARD_H - 12);
+  }
+
+  const a = document.createElement('a');
+  a.download = `KundaliMaker-Charts-View.png`;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+function VargaGrid({ chartData }) {
+  const { selectedPlanet, hoverHouse } = useKundliStore();
+  const chartsGridRef = useRef(null);
+  const [globalDrawColor, setGlobalDrawColor] = useState("#F59E0B");
+  const SETTINGS_KEY = "kundli-varga-view-settings";
+  const readSettings = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
+      return saved || { viewCount: "4", selectedCharts: ["D1"], rotation: Object.fromEntries(VARGA_KEYS.map(k => [k, 1])) };
+    } catch {
+      return { viewCount: "4", selectedCharts: ["D1"], rotation: Object.fromEntries(VARGA_KEYS.map(k => [k, 1])) };
+    }
+  };
+  // Persist chart selection/row count/rotation so switching tabs does not reset the user's workspace.
+  const [viewCount, setViewCount] = useState(() => readSettings().viewCount);
+  const [selectedCharts, setSelectedCharts] = useState(() => readSettings().selectedCharts);
+  const [rotation, setRotation] = useState(() => readSettings().rotation);
+
+  useEffect(() => {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ viewCount, selectedCharts, rotation })); } catch {}
+  }, [viewCount, selectedCharts, rotation]);
+
+  const toggleChart = (key) => {
+    setSelectedCharts(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  const visibleCharts = selectedCharts.filter(k => VARGA_KEYS.includes(k));
+  const columns = viewCount === "all"
+    ? Math.max(1, visibleCharts.length)
+    : Math.min(Number(viewCount), Math.max(1, visibleCharts.length));
+
+  const setChartRotation = (key, value) => {
+    setRotation(prev => ({ ...prev, [key]: value }));
+  };
+
+  const resetChartWorkspace = () => {
+    const defaults = { viewCount: "4", selectedCharts: ["D1"], rotation: Object.fromEntries(VARGA_KEYS.map(k => [k, 1])) };
+    setViewCount(defaults.viewCount);
+    setSelectedCharts(defaults.selectedCharts);
+    setRotation(defaults.rotation);
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(defaults)); } catch {}
+  };
+
+  return (
+    <div className="w-full pb-6">
+      <div className="rounded-2xl border border-slate-700/40 bg-slate-900/35 p-3 mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-2.5">
+          <div className="flex items-center gap-2">
+            <div>
+              <div className="text-sm font-bold text-slate-200">Charts</div>
+              <div className="text-[10px] text-slate-500">Choose charts to add, then set how many fit in one row</div>
+            </div>
+            <div className="flex items-center gap-1 px-1.5 py-1 rounded-md border border-slate-700 bg-slate-950/90" title="Drawing colour">
+              {["#F59E0B","#EF4444","#22D3EE","#4ADE80","#A78BFA","#F472B6","#FFFFFF"].map(c => (
+                <button key={c} type="button" aria-label={`Colour ${c}`} onClick={() => setGlobalDrawColor(c)}
+                  className="w-3.5 h-3.5 rounded-full border"
+                  style={{ background: c, borderColor: globalDrawColor === c ? "white" : "rgba(255,255,255,.25)", boxShadow: globalDrawColor === c ? "0 0 0 1px rgba(245,158,11,.8)" : "none" }} />
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            <span className="text-[9px] text-slate-500 mr-1">Charts per row</span>
+            {[2,4,6,8].map(n => (
+              <button key={n} type="button" onClick={() => setViewCount(String(n))}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${viewCount === String(n) ? "bg-amber-500/15 text-amber-300 border-amber-500/40" : "text-slate-400 border-slate-700/60 hover:text-slate-200"}`}>
+                {n}
+              </button>
+            ))}
+            <button type="button" onClick={() => setViewCount("all")}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${viewCount === "all" ? "bg-amber-500/15 text-amber-300 border-amber-500/40" : "text-slate-400 border-slate-700/60 hover:text-slate-200"}`}>
+              All
+            </button>
+            <button type="button" onClick={() => downloadVargaView(chartsGridRef.current, visibleCharts, columns)}
+              className="px-2.5 py-1 rounded-lg text-[10px] font-bold border text-slate-300 border-slate-700/60 hover:text-amber-300 hover:border-amber-500/40"
+              title="Download the current visible Charts grid as one PNG">
+              Download View
+            </button>
+            <button type="button" onClick={resetChartWorkspace}
+              className="px-2.5 py-1 rounded-lg text-[10px] font-bold border text-slate-400 border-slate-700/60 hover:text-amber-300 hover:border-amber-500/40">
+              Reset
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {VARGA_KEYS.map(key => {
+            const active = selectedCharts.includes(key);
+            return (
+              <button key={key} type="button" onClick={() => toggleChart(key)}
+                title={active ? `Remove ${key}` : `Add ${key}`}
+                aria-pressed={active}
+                className={`px-2 py-1 rounded-md text-[9px] font-bold border transition ${active ? "bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-red-500/10 hover:text-red-300 hover:border-red-500/30" : "text-slate-300 border-slate-700 hover:text-amber-300 hover:border-amber-500/40"}`}>
+                {key}{active ? " ✓" : " +"}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-2 text-[9px] text-slate-600">
+          {visibleCharts.length} charts selected · {columns} chart{columns === 1 ? "" : "s"} per row · D1 is included in this same grid
+        </div>
+      </div>
+
+      <div ref={chartsGridRef}
+        className={`grid gap-3 ${visibleCharts.length === 1 ? "place-items-center" : ""}`}
+        style={{
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+        }}
+      >
+        {visibleCharts.map((key) => (
+          <div key={key} data-varga-card={key} className={`relative min-w-0 w-full rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2.5 ${visibleCharts.length === 1 ? "max-w-[560px]" : ""}`}>
+            <ChartAnnotationOverlay chartKey={key} drawColor={globalDrawColor} onDrawColorChange={setGlobalDrawColor} />
+            <div className="relative z-30 flex items-center justify-between gap-2 px-1 pb-2 pt-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-black tracking-wide text-amber-300">{key}</span>
+                {key === "D1" && <span className="text-[8px] text-slate-600">Birth Chart</span>}
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[8px] text-slate-600">Rotate</span>
+                <select value={rotation[key] || 1} onChange={e => setChartRotation(key, Number(e.target.value))}
+                  className="bg-slate-950 border border-slate-700 rounded-md text-[9px] text-slate-300 px-1 py-0.5">
+                  {Array.from({length:12}, (_,i) => i+1).map(n => <option key={n} value={n}>H{n}</option>)}
+                </select>
+                <button type="button" onClick={e => downloadVargaChart(e.currentTarget.closest("[data-varga-card]"), key)}
+                  className="px-2 py-0.5 rounded-md text-[9px] font-bold border text-slate-300 border-slate-700 hover:text-amber-300 hover:border-amber-500/40"
+                  title={`Download ${key} chart as PNG`}>
+                  Download
+                </button>
+              </div>
+            </div>
+            <InteractiveKundli
+              houses={key === "D1" ? chartData.houses : []}
+              planets={chartData.planets || {}}
+              lagnaVargas={chartData.meta?.lagnaVargas || chartData.lagnaVargas || {}}
+              vargaKey={key}
+              rotation={rotation[key] || 1}
+              selectedPlanet={selectedPlanet}
+              onHouseHover={hoverHouse}
+              showHeader={false}
+            />
+            <div className="pt-1.5 text-center text-[9px] font-semibold tracking-wide text-slate-500">www.kundalimaker.com</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const REMOVED_DASHBOARD_TABS = new Set(["kamukta", "conclusion", "vivah", "chandra_surya", "houses"]);
+const DASHBOARD_TABS = [
+  { id: "charts", label: "Charts", phase: 1 },
+  ...TABS.filter((t) => !REMOVED_DASHBOARD_TABS.has(t.id)),
+];
+
+// ─────────────────────────────────────────────────────────────
 // MOBILE CHART HEADER — Compact chart for mobile (collapsible)
 // ─────────────────────────────────────────────────────────────
 function MobileChartHeader({ chartData }) {
@@ -2104,7 +2727,7 @@ function RightPanel({ chartData }) {
       <div
         className="main-tab-bar flex flex-wrap gap-1 p-1 rounded-2xl bg-slate-800/40 border border-slate-700/30 mb-4 flex-shrink-0"
         style={{ scrollbarWidth:"none", ...(isMobile && { display:"none" }) }}>
-        {TABS.map((t) => {
+        {DASHBOARD_TABS.map((t) => {
           // KP BTR tab ke liye SSL badge
           const kpData   = t.id === "kp_btr" ? chartData?.enginesData?.kp_btr : null;
           const kpPass   = kpData?.current_check?.overall_score === 100;
@@ -2152,6 +2775,7 @@ function RightPanel({ chartData }) {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
             >
+            {activeTab === "charts" && <VargaGrid chartData={chartData} />}
             {activeTab === "planets" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-4">
                 {Object.entries(chartData.planets).map(([code, pdata]) => (
@@ -2160,13 +2784,24 @@ function RightPanel({ chartData }) {
               </div>
             )}
             {activeTab === "drishti" && (
-  <DrishtiGrid
-    drishti={chartData.drishti}
-    bhavDrishti={chartData.bhavDrishti || {}}
-    advancedDrishti={chartData.chalit?._advancedDrishti || []}
-    planets={chartData.planets}
-    houses={chartData.houses || []}
-  />
+  <div className="space-y-4">
+    <div className="rounded-2xl border border-cyan-500/15 bg-slate-950/30 p-3">
+      <div className="text-sm font-bold text-cyan-300 mb-1">Jaimini Rashi Drishti</div>
+      <div className="text-[10px] text-slate-500 mb-3">Jaimini Graha Drishti + Jaimini Bhava Drishti</div>
+      <JaiminiDrishtiPanel houses={chartData.houses || []} />
+    </div>
+    <div className="rounded-2xl border border-indigo-500/15 bg-slate-950/30 p-3">
+      <div className="text-sm font-bold text-indigo-300 mb-1">Parashari Drishti</div>
+      <div className="text-[10px] text-slate-500 mb-3">Graha Drishti + Bhava Drishti + Aspect Strength</div>
+      <DrishtiGrid
+      drishti={chartData.drishti}
+      bhavDrishti={chartData.bhavDrishti || {}}
+      advancedDrishti={chartData.chalit?._advancedDrishti || []}
+      planets={chartData.planets}
+      houses={chartData.houses || []}
+    />
+    </div>
+  </div>
 )}
 
 {activeTab === "dasha" && (
@@ -2198,10 +2833,6 @@ function RightPanel({ chartData }) {
     )
 )}
 
-{activeTab === "houses" && (
-  <HousePanel chartData={chartData} />
-)}
-
 {activeTab === "advanced" && (
   enginesLoading
     ? <TabSkeleton />
@@ -2213,27 +2844,9 @@ function RightPanel({ chartData }) {
       />
     )
 )}
-            {activeTab === "kamukta" && <KamuktaPanel chartData={chartData} />}
             {activeTab === "gochar" && <GocharPanel chartData={chartData} />}
-            {activeTab === "nadi" && (
-              enginesLoading
-                ? <TabSkeleton />
-                : <NadiJyotishPanel chartData={chartData} />
-            )}
-            {activeTab === "conclusion" && <MasterConclusion data={chartData.masterConclusion} />}
-            {activeTab === "av_sutras" && (
-              enginesLoading
-                ? <TabSkeleton />
-                : <AVSutrasPanel data={chartData?.enginesData?.av_sutras} chartData={chartData} />
-            )}
-            {activeTab === "chandra_surya" && (
-              enginesLoading
-                ? <TabSkeleton />
-                : <ChandraSuryaPanel data={chartData?.enginesData?.chandra_surya} />
-            )}
             {activeTab === "advanced_yogas" && <AdvancedYogasPanel />}
             {activeTab === "kp_btr"         && <KPBTRPanel />}
-            {activeTab === "vivah"           && <VivahPanel />}
             {activeTab === "prashna"         && <PrashnaKundli />}  {/* 🔥 PRASHNA KUNDLI TAB */}
             {activeTab === "chalit" && <Chalit />}
             {/* 🌟 नया कारक टैब यहाँ जोड़ें */}
@@ -2260,7 +2873,7 @@ function RightPanel({ chartData }) {
       {/* 8. Mobile Tab Drawer — only renders on <768px */}
       {isMobile && (
         <MobileTabDrawer
-          tabs={TABS}
+          tabs={DASHBOARD_TABS}
           activeTab={activeTab}
           onTabChange={setActiveTab}
           enginesReady={chartData?._enginesReady}
@@ -2275,7 +2888,11 @@ function RightPanel({ chartData }) {
 // MAIN CHART + META (centre column)
 // ─────────────────────────────────────────────────────────────
 function ChartColumn({ chartData }) {
-  const { selectedPlanet, hoverHouse } = useKundliStore();
+  const { activeTab, selectedPlanet, hoverHouse } = useKundliStore();
+
+  // The multi-chart tab owns the chart surface. Do not render the universal D1
+  // beside it, otherwise D1 would appear twice.
+  if (activeTab === "charts") return null;
 
   // Quick stat counts
   const exalted    = Object.values(chartData.planets).filter((p) => p.dignity === "Uchcha").length;
@@ -2350,7 +2967,7 @@ function ChartColumn({ chartData }) {
 // DASHBOARD LAYOUT (exported)
 // ─────────────────────────────────────────────────────────────
 export default function DashboardLayout() {
-  const { chartData, loading } = useKundliStore();
+  const { chartData, loading, activeTab } = useKundliStore();
   const isMobile = useIsMobile();
 
   return (
@@ -2367,8 +2984,10 @@ export default function DashboardLayout() {
             /* ── MOBILE LAYOUT: single scroll column ── */
             <div className="flex-1 overflow-y-auto flex flex-col"
               style={{ scrollbarWidth:"none" }}>
-              {/* Chart — compact, non-sticky */}
-              <MobileChartHeader chartData={chartData} />
+              {/* Universal D1 is hidden while the multi-chart tab is active. */}
+              {activeTab !== "charts" && (
+                <MobileChartHeader chartData={chartData} />
+              )}
               {/* Panels — full width below chart */}
               <div className="flex-1 p-3 pb-24">
                 {/* pb-24 = space so MobileTabDrawer button doesn't cover last panel */}

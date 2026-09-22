@@ -4,16 +4,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { PLANET_META, HOUSE_CAT_COLOR } from "../../constants";
 
 // ── Rashi data ───────────────────────────────────────────────
-const RASHI = ["मेष","वृषभ","मिथुन","कर्क","सिंह","कन्या","तुला","वृश्चिक","धनु","मकर","कुंभ","मीन"];
+const RASHI = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
 // Rashi lords (abbreviated Hindi)
 const RASHI_LORD = {
-  0:"मं",1:"शु",2:"बु",3:"चं",4:"सू",5:"बु",
-  6:"शु",7:"मं",8:"गु",9:"श",10:"श",11:"गु"
+  0:"Ma",1:"Ve",2:"Me",3:"Mo",4:"Su",5:"Me",
+  6:"Ve",7:"Ma",8:"Ju",9:"Sa",10:"Sa",11:"Ju"
 };
 // Full lord name for tooltip
 const RASHI_LORD_FULL = {
-  0:"मंगल",1:"शुक्र",2:"बुध",3:"चंद्र",4:"सूर्य",5:"बुध",
-  6:"शुक्र",7:"मंगल",8:"गुरु",9:"शनि",10:"शनि",11:"गुरु"
+  0:"Mars",1:"Venus",2:"Mercury",3:"Moon",4:"Sun",5:"Mercury",
+  6:"Venus",7:"Mars",8:"Jupiter",9:"Saturn",10:"Saturn",11:"Jupiter"
 };
 // Lord planet code for color
 const RASHI_LORD_CODE = {
@@ -97,13 +97,65 @@ function getCatStyle(cat="") {
 const avColor = v => v >= 6 ? "#4ADE80" : v >= 4 ? "#FCD34D" : "#FB7185";
 
 // ─────────────────────────────────────────────────────────────
-export default function InteractiveKundli({ houses=[], selectedPlanet, onHouseHover }) {
+// Build the same 12-house structure as the backend for any Shodashvarga.
+// Existing D1 callers can keep passing `houses`; Varga callers pass `vargaKey` + chartData.
+function buildVargaHouses(vargaKey, planets = {}, lagnaVargas = {}) {
+  if (!vargaKey || !Object.keys(planets || {}).length) return [];
+  const lagna = lagnaVargas?.[vargaKey]?.Idx;
+  if (typeof lagna !== "number") return [];
+
+  const names = ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
+  const rashiEn = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
+  const houses = Array.from({length:12}, (_, i) => {
+    const signIdx = (lagna + i) % 12;
+    return {
+      num: i + 1,
+      sign: rashiEn[signIdx],
+      sign_index: signIdx,
+      planets: [],
+      category: "",
+      av: 0,
+    };
+  });
+
+  names.forEach(code => {
+    const idx = planets?.[code]?.vargas?.[vargaKey]?.Idx;
+    if (typeof idx !== "number") return;
+    const houseNum = ((idx - lagna + 12) % 12) + 1;
+    houses[houseNum - 1].planets.push(code);
+  });
+  houses[0].planets.unshift("La");
+  return houses;
+}
+
+export default function InteractiveKundli({
+  houses = [],
+  selectedPlanet,
+  onHouseHover,
+  vargaKey = "D1",
+  planets = {},
+  lagnaVargas = {},
+  showHeader = true,
+  rotation = 1,
+}) {
   const [hovered, setHov] = useState(null);
   const [clicked, setCli] = useState(null);
   const svgRef            = useRef(null);
   const [tipXY, setTipXY] = useState({x:0,y:0});
 
-  const houseMap = Object.fromEntries((houses||[]).map(h=>[h.num,h]));
+  const resolvedHouses = (vargaKey && vargaKey !== "D1")
+    ? buildVargaHouses(vargaKey, planets, lagnaVargas)
+    : (houses || []);
+  // Visual rotation: rotation=4 means source House 4 is displayed in the House 1 position.
+  const safeRotation = Math.min(12, Math.max(1, Number(rotation) || 1));
+  const houseMap = Object.fromEntries(Array.from({length:12}, (_, i) => {
+    const displayHouse = i + 1;
+    const sourceHouse = ((displayHouse + safeRotation - 2) % 12) + 1;
+    const source = (resolvedHouses || []).find(h => h.num === sourceHouse) || {
+      num: sourceHouse, sign_index: sourceHouse - 1, planets: [], av: 0, category: ""
+    };
+    return [displayHouse, { ...source, actualHouse: sourceHouse }];
+  }));
 
   const onEnter = (n,e) => {
     setHov(n);
@@ -117,12 +169,14 @@ export default function InteractiveKundli({ houses=[], selectedPlanet, onHouseHo
   return (
     <div className="relative w-full select-none">
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2 px-1">
-        <span className="text-[9px] tracking-[0.35em] uppercase text-amber-500/60"
-          style={{fontFamily:"'Cinzel',serif"}}>D1 · लग्न कुंडली</span>
-        <span className="text-[9px] text-slate-600">hover = tooltip · click = lock</span>
-      </div>
+      {/* Header — hidden when used inside the multi-Varga grid */}
+      {showHeader && (
+        <div className="flex items-center justify-between mb-2 px-1">
+          <span className="text-[9px] tracking-[0.35em] uppercase text-amber-500/60"
+            style={{fontFamily:"'Cinzel',serif"}}>{vargaKey === "D1" ? "D1 · Birth Chart" : vargaKey}</span>
+          <span className="text-[9px] text-slate-600">Hover = tooltip · Click = lock</span>
+        </div>
+      )}
 
       {/* Chart container — fixed aspect ratio, NO overflow:visible on parent */}
       <div className="relative w-full rounded-xl" style={{
@@ -253,28 +307,28 @@ export default function InteractiveKundli({ houses=[], selectedPlanet, onHouseHo
                   {/* Rashi name — white */}
                   <text x={pos.cx} y={pos.ny}
                     textAnchor="middle" fontSize="12" fontWeight="600"
-                    fill={nameColor} fontFamily="'Noto Sans Devanagari',sans-serif"
+                    fill={nameColor} fontFamily="Inter, sans-serif"
                     filter={isC||isH?"url(#ik-gp)":undefined}>
-                    {hd.signHindi || RASHI[ri]}
+                    {RASHI[ri]}
                   </text>
 
                   {/* Lord in brackets — colored with lord's planet color */}
                   <text x={pos.cx} y={pos.ly}
                     textAnchor="middle" fontSize="9.5" fontWeight="600"
-                    fill={lordColor} fontFamily="'Noto Sans Devanagari',sans-serif"
+                    fill={lordColor} fontFamily="Inter, sans-serif"
                     opacity=".78">
                     ({lordAbbr})
                   </text>
 
                   {/* Lagna marker — shown BELOW lord if this house has Lagna */}
-                  {/* Only shown as a small "ल॰" label separate from planets */}
+                  {/* Only shown as a small "La" label separate from planets */}
                   {hasLagna && grahas.length === 0 && (
                     <text x={pos.cx} y={pos.py}
                       textAnchor="middle" fontSize="11" fontWeight="900"
                       fill={PLANET_META["La"].color}
-                      fontFamily="'Noto Sans Devanagari',sans-serif"
+                      fontFamily="Inter, sans-serif"
                       filter="url(#ik-gp)" opacity=".9">
-                      लग्न
+                      La
                     </text>
                   )}
 
@@ -291,10 +345,10 @@ export default function InteractiveKundli({ houses=[], selectedPlanet, onHouseHo
                             textAnchor="middle"
                             fontSize="15" fontWeight="900"
                             fill={pm.color}
-                            fontFamily="'Noto Sans Devanagari',sans-serif"
+                            fontFamily="Inter, sans-serif"
                             filter={isSel?"url(#ik-gs)":"url(#ik-gp)"}
                             opacity={isSel?1:.95}>
-                            {pm.hi||p}
+                            {p}
                           </text>
                         );
                       })}
@@ -305,9 +359,9 @@ export default function InteractiveKundli({ houses=[], selectedPlanet, onHouseHo
                           y={pos.py - 5}
                           textAnchor="middle" fontSize="8" fontWeight="900"
                           fill={PLANET_META["La"].color}
-                          fontFamily="'Noto Sans Devanagari',sans-serif"
+                          fontFamily="Inter, sans-serif"
                           opacity=".8">
-                          ल॰
+                          La
                         </text>
                       )}
                     </g>
@@ -326,7 +380,7 @@ export default function InteractiveKundli({ houses=[], selectedPlanet, onHouseHo
               style={{pointerEvents:"none"}}/>
             <text x={M} y={M+8} textAnchor="middle" fontSize="20"
               fill="rgba(245,158,11,.82)"
-              fontFamily="'Noto Sans Devanagari',sans-serif"
+              fontFamily="Inter, sans-serif"
               filter="url(#ik-gp)" style={{pointerEvents:"none"}}>ॐ</text>
 
             {/* Corner dots */}
@@ -373,20 +427,20 @@ export default function InteractiveKundli({ houses=[], selectedPlanet, onHouseHo
                       <span className="text-xs font-black px-2 py-0.5 rounded-lg"
                         style={{background:"rgba(245,158,11,.15)",color:"#F59E0B",
                           border:"1px solid rgba(245,158,11,.28)"}}>
-                        भाव {active}
+                        House {hd.actualHouse || active}
                       </span>
                       <span className="text-sm font-bold text-white"
-                        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
-                        {hd.signHindi||RASHI[ri]}
+                        style={{fontFamily:"Inter, sans-serif"}}>
+                        {hd.sign||RASHI[ri]}
                       </span>
                       <span className="text-[9px] text-slate-500 ml-auto"
-                        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
-                        स्वामी: {lord}
+                        style={{fontFamily:"Inter, sans-serif"}}>
+                        Lord: {lord}
                       </span>
                     </div>
                     {hd.category&&(
                       <div className="text-[9px] text-slate-500 mb-2 -mt-1"
-                        style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
+                        style={{fontFamily:"Inter, sans-serif"}}>
                         {hd.category}
                       </div>
                     )}
@@ -400,14 +454,14 @@ export default function InteractiveKundli({ houses=[], selectedPlanet, onHouseHo
                                 px-2 py-0.5 rounded-lg"
                                 style={{color:pm.color,background:`${pm.color}14`,
                                   border:`1px solid ${pm.color}28`}}>
-                                {pm.symbol} <span style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>{pm.hi}</span>
+                                {p}
                               </span>
                             );
                           })}
                         </div>
                       : <div className="text-[10px] text-slate-600 mb-2 italic"
-                          style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
-                          रिक्त भाव
+                          style={{fontFamily:"Inter, sans-serif"}}>
+                          Empty house
                         </div>
                     }
                     {/* AV bar */}
@@ -415,7 +469,7 @@ export default function InteractiveKundli({ houses=[], selectedPlanet, onHouseHo
                       <div className="pt-2 border-t border-white/5">
                         <div className="flex justify-between mb-1">
                           <span className="text-[8px] uppercase tracking-widest text-slate-600">
-                            अष्टकवर्ग
+                            Ashtakavarga
                           </span>
                           <span className="text-[11px] font-black" style={{color:avColor(hd.av)}}>
                             {hd.av}/8
@@ -443,20 +497,7 @@ export default function InteractiveKundli({ houses=[], selectedPlanet, onHouseHo
         </div>{/* end SVG wrapper */}
       </div>{/* end chart container */}
 
-      {/* Planet legend */}
-      <div className="mt-2.5 flex flex-wrap gap-1.5 justify-center">
-        {Object.entries(PLANET_META).filter(([k])=>k!=="La").map(([code,meta])=>(
-          <div key={code} className="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-md"
-            style={{background:`${meta.color}10`,color:meta.color,
-              border:`1px solid ${meta.color}22`,
-              fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
-            <span style={{fontSize:11,fontWeight:900}}>{meta.symbol}</span>
-            <span style={{fontWeight:700}}>{meta.hi}</span>
-            <span className="text-slate-700 mx-0.5">=</span>
-            <span style={{opacity:.55}}>{meta.label}</span>
-          </div>
-        ))}
-      </div>
+    
     </div>
   );
 }
