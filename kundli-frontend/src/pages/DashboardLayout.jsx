@@ -1700,7 +1700,6 @@ async function shareOrCopyKundliLink(url, chartData) {
     if (navigator.share) {
       await navigator.share({
         title: `${chartData?.meta?.name || "Kundli"} — KundliMaker`,
-        text: "KundliMaker पर यह Kundli खोलें",
         url,
       });
       return { ok: true, message: "Link shared" };
