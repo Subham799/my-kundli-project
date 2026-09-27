@@ -1,8 +1,9 @@
 // App.jsx — Root component
-import React, { Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import React, { Suspense, lazy, useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
 import Header from "./components/layout/Header";
 import { HelmetProvider } from 'react-helmet-async'; // 🌟 SEO के लिए ज़रूरी
+import useKundliStore from "./store/useKundliStore";
 
 // 🚀 Lazy Load Pages (यह पेज तभी डाउनलोड होंगे जब यूज़र इन्हें खोलेगा)
 const DashboardLayout = lazy(() => import("./pages/DashboardLayout"));
@@ -59,6 +60,129 @@ function StarField() {
   );
 }
 
+
+// ─────────────────────────────────────────────────────────────
+// SHARED KUNDLI ROUTE
+// Token contains compact birth/UI state only. The same existing Zustand
+// fetch flow recalculates the chart for the receiving user.
+// ─────────────────────────────────────────────────────────────
+const SHARED_VARGA_STORAGE_KEY = "kundli-varga-view-settings";
+const SHARED_REPORT_STORAGE_KEY = "kundli-report-dasha-selection";
+
+function decodeKundliSharePayload(token) {
+  const normalized = String(token || "")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const json = new TextDecoder().decode(bytes);
+  const payload = JSON.parse(json);
+  if (payload?.v !== 1) throw new Error("Unsupported share link version");
+  return payload;
+}
+
+const VALID_SHARED_TABS = new Set([
+  "charts","planets","drishti","dasha","av","yogas","advanced",
+  "gochar","advanced_yogas","kp_btr","prashna","chalit","karaka"
+]);
+
+function SharedKundliPage() {
+  const { token } = useParams();
+  const { setForm, fetchChart, setActiveTab, selectPlanet } = useKundliStore();
+  const [shareError, setShareError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSharedKundli = async () => {
+      try {
+        const payload = decodeKundliSharePayload(token);
+        const birth = payload?.birth || {};
+        if (!birth.name || !birth.dob || !birth.time || !birth.city) {
+          throw new Error("इस share link में birth details अधूरी हैं");
+        }
+
+        // Restore the same Varga workspace and report MD/AD selection before
+        // the target tabs mount.
+        try {
+          if (payload?.ui?.varga) {
+            localStorage.setItem(SHARED_VARGA_STORAGE_KEY, JSON.stringify(payload.ui.varga));
+          }
+          if (payload?.ui?.report) {
+            localStorage.setItem(SHARED_REPORT_STORAGE_KEY, JSON.stringify(payload.ui.report));
+            if (payload.ui.report.openReport) localStorage.setItem("kundli-shared-report-open", "1");
+          }
+          localStorage.setItem("kundli-shared-ui-state", JSON.stringify(payload.ui || {}));
+        } catch {}
+
+        useKundliStore.getState().resetChart();
+
+        const fields = {
+          name: birth.name,
+          dob: birth.dob,
+          time: birth.time,
+          city: birth.city,
+          chartType: birth.chartType || "D1",
+          lat: birth.lat ?? null,
+          lon: birth.lon ?? null,
+          age: birth.age || 0,
+        };
+        Object.entries(fields).forEach(([key, value]) => setForm(key, value));
+
+        await fetchChart(Number(birth.dashaYearType || 360.0));
+        const stateAfterFetch = useKundliStore.getState();
+        if (!stateAfterFetch.chartData) {
+          throw new Error(stateAfterFetch.error || "Kundli load नहीं हो पाई");
+        }
+
+        if (cancelled) return;
+
+        const requestedTab = VALID_SHARED_TABS.has(payload?.ui?.activeTab)
+          ? payload.ui.activeTab
+          : "planets";
+        setActiveTab(requestedTab);
+
+        // setActiveTab clears the drawer, so restore the selected planet after it.
+        if (payload?.ui?.selectedPlanet) {
+          selectPlanet(payload.ui.selectedPlanet);
+        }
+        setShareError("");
+      } catch (error) {
+        if (!cancelled) setShareError(error?.message || "Invalid Kundli share link");
+      }
+    };
+
+    loadSharedKundli();
+    return () => { cancelled = true; };
+  }, [token, setForm, fetchChart, setActiveTab, selectPlanet]);
+
+  if (shareError) {
+    return (
+      <>
+        <Header />
+        <div className="flex-1 flex items-center justify-center p-6 bg-[#020B18]">
+          <div className="max-w-md w-full rounded-2xl border border-rose-500/20 bg-slate-900/60 p-6 text-center">
+            <div className="text-lg font-black text-rose-300 mb-2">Kundli Link नहीं खुल पाया</div>
+            <div className="text-sm text-slate-400 mb-4">{shareError}</div>
+            <a href="/" className="inline-flex px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-sm font-bold">
+              नई Kundli बनाएं
+            </a>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Header />
+      <DashboardLayout />
+    </>
+  );
+}
+
 export default function App() {
   return (
     // 🌟 HelmetProvider से पूरी ऐप को Wrap करना ज़रूरी है
@@ -110,6 +234,9 @@ export default function App() {
                   </>
                 } 
               />
+
+              {/* 🔗 Shared Kundli Route — opens the same pre-filled chart state */}
+              <Route path="/kundli/share/:token" element={<SharedKundliPage />} />
 
               {/* 💼 Consultancy Route */}
               <Route 

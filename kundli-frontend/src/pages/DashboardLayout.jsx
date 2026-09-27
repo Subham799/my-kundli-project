@@ -1629,6 +1629,106 @@ const REPORT_RASHI_EN = [
   "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
 ];
 
+// ─────────────────────────────────────────────────────────────
+// SHAREABLE KUNDLI LINK — stores only compact birth/UI state
+// The receiving browser recalculates the live chart through the same
+// existing /api/chart/fast + /api/chart/engines flow.
+// ─────────────────────────────────────────────────────────────
+const KUNDLI_SHARE_VERSION = 1;
+const VARGA_SETTINGS_STORAGE_KEY = "kundli-varga-view-settings";
+const REPORT_DASHA_STORAGE_KEY = "kundli-report-dasha-selection";
+const SHARED_UI_STORAGE_KEY = "kundli-shared-ui-state";
+
+function encodeKundliSharePayload(payload) {
+  const json = JSON.stringify({ v: KUNDLI_SHARE_VERSION, ...payload });
+  const bytes = new TextEncoder().encode(json);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+export function buildKundliShareUrl(chartData, formData = {}, uiOverrides = {}) {
+  if (typeof window === "undefined") return "";
+
+  let vargaState = null;
+  let reportDashaState = null;
+  try {
+    vargaState = JSON.parse(localStorage.getItem(VARGA_SETTINGS_STORAGE_KEY) || "null");
+  } catch {}
+  try {
+    reportDashaState = JSON.parse(localStorage.getItem(REPORT_DASHA_STORAGE_KEY) || "null");
+  } catch {}
+
+  const birth = {
+    name: formData?.name || chartData?.meta?.name || "",
+    dob: formData?.dob || "",
+    time: formData?.time || "",
+    city: formData?.city || chartData?.meta?.city || "",
+    chartType: formData?.chartType || chartData?.meta?.chartType || "D1",
+    lat: formData?.lat ?? null,
+    lon: formData?.lon ?? null,
+    age: formData?.age ?? 0,
+    dashaYearType: formData?.dashaYearType ?? chartData?.meta?.dashaYearType ?? 360.0,
+  };
+
+  const ui = {
+    activeTab: uiOverrides?.activeTab || "planets",
+    selectedPlanet: uiOverrides?.selectedPlanet || null,
+    varga: {
+      viewCount: vargaState?.viewCount || "4",
+      selectedCharts: Array.isArray(vargaState?.selectedCharts) ? vargaState.selectedCharts : ["D1"],
+      rotation: vargaState?.rotation || {},
+    },
+    report: {
+      selectedMD: uiOverrides?.reportMD || reportDashaState?.selectedMD || "",
+      selectedAD: uiOverrides?.reportAD || reportDashaState?.selectedAD || "",
+      openReport: !!uiOverrides?.openReport,
+    },
+  };
+
+  const token = encodeKundliSharePayload({ birth, ui });
+  return `${window.location.origin}/kundli/share/${token}`;
+}
+
+async function shareOrCopyKundliLink(url, chartData) {
+  if (!url) return { ok: false, message: "Share link नहीं बन पाया" };
+
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: `${chartData?.meta?.name || "Kundli"} — KundliMaker`,
+        text: "KundliMaker पर यह Kundli खोलें",
+        url,
+      });
+      return { ok: true, message: "Link shared" };
+    }
+  } catch (e) {
+    if (e?.name === "AbortError") return { ok: true, message: "Share cancelled" };
+  }
+
+  try {
+    await navigator.clipboard.writeText(url);
+    return { ok: true, message: "Link copied" };
+  } catch {}
+
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = url;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const copied = document.execCommand("copy");
+    ta.remove();
+    return { ok: copied, message: copied ? "Link copied" : "Copy failed" };
+  } catch {
+    return { ok: false, message: "Copy failed" };
+  }
+}
+
 function reportDashaLord(item) {
   return item?.planet || item?.lord || item?.name || "—";
 }
@@ -1993,11 +2093,25 @@ function DashaSelectorCard({ label, value, options, onChange, currentValue, acce
   );
 }
 
-function CopyableKundliReportModal({ chartData, onClose }) {
+function CopyableKundliReportModal({ chartData, onClose, onShareLink }) {
   const initial = selectedDashaBundle(chartData);
-  const [selectedMD, setSelectedMD] = useState(initial.mdName);
-  const [selectedAD, setSelectedAD] = useState(initial.adName);
+  let savedDasha = null;
+  try { savedDasha = JSON.parse(localStorage.getItem(REPORT_DASHA_STORAGE_KEY) || "null"); } catch {}
+
+  const savedMD = savedDasha?.selectedMD && initial.sequence?.some(x => reportDashaLord(x) === savedDasha.selectedMD)
+    ? savedDasha.selectedMD
+    : initial.mdName;
+  const savedBundle = selectedDashaBundle(chartData, savedMD, savedDasha?.selectedAD || "");
+  const [selectedMD, setSelectedMD] = useState(savedMD);
+  const [selectedAD, setSelectedAD] = useState(savedBundle.adName);
   const [copied, setCopied] = useState(false);
+  const [shareMsg, setShareMsg] = useState("");
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(REPORT_DASHA_STORAGE_KEY, JSON.stringify({ selectedMD, selectedAD }));
+    } catch {}
+  }, [selectedMD, selectedAD]);
 
   const bundle = selectedDashaBundle(chartData, selectedMD, selectedAD);
   const rows = reportRows(chartData);
@@ -2091,6 +2205,13 @@ function CopyableKundliReportModal({ chartData, onClose }) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1500);
   };
 
+  const shareLinkFromReport = async () => {
+    if (!onShareLink) return;
+    const result = await onShareLink({ reportMD: selectedMD, reportAD: selectedAD, openReport: true });
+    setShareMsg(result?.message || "");
+    window.setTimeout(() => setShareMsg(""), 1800);
+  };
+
   return (
     <div
       className="fixed inset-0 z-[1300] flex items-center justify-center p-2 sm:p-5"
@@ -2146,8 +2267,20 @@ function CopyableKundliReportModal({ chartData, onClose }) {
             ⬇ Download TXT
           </button>
 
+          <button
+            type="button"
+            onClick={shareLinkFromReport}
+            className="px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 text-[11px] font-bold"
+          >
+            🔗 Share Kundli Link
+          </button>
+
+          {shareMsg && (
+            <span className="text-[10px] text-emerald-300 font-semibold">✓ {shareMsg}</span>
+          )}
+
           <span className="text-[10px] text-slate-500">
-            Mobile पर Share JPG से Photos / Gallery या दूसरी app में भेज सकते हैं.
+            Link खोलते ही DOB / Time / Place और यही page-state अपने आप load होगा.
           </span>
         </div>
 
@@ -2315,11 +2448,23 @@ function DashaReportTable({ title, rows }) {
 function RightPanel({ chartData }) {
   // State for PDF Modal
   const [showPDFModal, setShowPDFModal] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(() => {
+    try { return localStorage.getItem("kundli-shared-report-open") === "1"; } catch { return false; }
+  });
+  const [shareMsg, setShareMsg] = useState("");
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("kundli-shared-report-open") === "1") {
+        localStorage.removeItem("kundli-shared-report-open");
+      }
+    } catch {}
+  }, []);
 
   const { 
     activeTab, 
     selectedPlanet, 
+    formData,
     drawerOpen, 
     setActiveTab, 
     selectPlanet, 
@@ -2330,10 +2475,24 @@ function RightPanel({ chartData }) {
 
   const isMobile = useIsMobile();
 
+  const handleShareKundli = async (overrides = {}) => {
+    const url = buildKundliShareUrl(chartData, formData, {
+      activeTab,
+      selectedPlanet,
+      reportMD: overrides?.reportMD,
+      reportAD: overrides?.reportAD,
+      openReport: !!overrides?.openReport,
+    });
+    const result = await shareOrCopyKundliLink(url, chartData);
+    setShareMsg(result?.message || "");
+    window.setTimeout(() => setShareMsg(""), 1800);
+    return result;
+  };
+
   return (
     <div className="flex flex-col min-h-0">
       {/* 1. Export options */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-3">
         <button
           type="button"
           onClick={() => setShowPDFModal(true)}
@@ -2364,6 +2523,21 @@ function RightPanel({ chartData }) {
           <span>📋 Copy / Save Report</span>
           <Download size={14} style={{ opacity: 0.7 }} />
         </button>
+
+        <button
+          type="button"
+          onClick={() => handleShareKundli()}
+          className="w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl font-bold text-[13px] transition-all hover:scale-[1.01] active:scale-[.99] flex-shrink-0"
+          style={{
+            background: "linear-gradient(135deg,rgba(16,185,129,.12),rgba(34,211,238,.10))",
+            border: "1.5px solid rgba(16,185,129,.3)",
+            color: "#6EE7B7",
+            fontFamily: "'Noto Sans Devanagari', sans-serif"
+          }}
+        >
+          <span>🔗 Share Kundli Link</span>
+          {shareMsg ? <span className="text-[10px]">✓ {shareMsg}</span> : <span className="text-[10px] opacity-70">Live page</span>}
+        </button>
       </div>
 
       {/* 2. PDF Modal */}
@@ -2374,6 +2548,7 @@ function RightPanel({ chartData }) {
         <CopyableKundliReportModal
           chartData={chartData}
           onClose={() => setShowReportModal(false)}
+          onShareLink={handleShareKundli}
         />
       )}
 
