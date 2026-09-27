@@ -1607,12 +1607,715 @@ function MobileChartHeader({ chartData }) {
 }
 
 
+
+// ─────────────────────────────────────────────────────────────
+// COPYABLE KUNDLI REPORT — Degree + D1–D60 + selectable MD/AD/PD
+// Separate from the existing cleaned PDF system.
+// ─────────────────────────────────────────────────────────────
+const REPORT_VARGA_KEYS = [
+  "D1","D2","D3","D4","D6","D7","D9","D10","D12",
+  "D16","D20","D24","D27","D30","D40","D45","D60"
+];
+
+const REPORT_PLANET_KEYS = ["La","Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
+
+const REPORT_PLANET_NAMES = {
+  La:"लग्न", Su:"सूर्य", Mo:"चंद्र", Ma:"मंगल", Me:"बुध",
+  Ju:"गुरु", Ve:"शुक्र", Sa:"शनि", Ra:"राहु", Ke:"केतु"
+};
+
+const REPORT_RASHI_EN = [
+  "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+  "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
+];
+
+function reportDashaLord(item) {
+  return item?.planet || item?.lord || item?.name || "—";
+}
+
+function reportDashaStart(item) {
+  return item?.start || item?.startDate || item?.from || "—";
+}
+
+function reportDashaEnd(item) {
+  return item?.end || item?.endDate || item?.to || "—";
+}
+
+function reportDashaADs(item) {
+  return item?.antardashas || item?.subperiods || [];
+}
+
+function reportDashaPDs(item) {
+  return item?.pratyantardashas || item?.pratyantar || item?.subperiods || [];
+}
+
+function reportVargaSign(source, key) {
+  const cell = source?.[key];
+  const idx =
+    typeof cell === "number"
+      ? cell
+      : (cell && typeof cell.Idx === "number" ? cell.Idx : null);
+
+  return typeof idx === "number" ? (REPORT_RASHI_EN[idx] || "—") : "—";
+}
+
+function reportRows(chartData) {
+  const meta = chartData?.meta || {};
+
+  return REPORT_PLANET_KEYS.map(code => {
+    const isLagna = code === "La";
+    const p = chartData?.planets?.[code] || {};
+    const vargaSource = isLagna ? meta?.lagnaVargas : p?.vargas;
+
+    const degree = isLagna
+      ? (meta?.lagnaRashiDegree ?? meta?.lagnaFullDegree ?? "—")
+      : (p?.degree ?? "—");
+
+    const status = isLagna
+      ? "—"
+      : [
+          p?.dignityHindi || p?.dignity || "",
+          p?.Retrograde || p?.retrograde ? "वक्री" : "",
+          p?.Combust || p?.combust ? "अस्त" : ""
+        ].filter(Boolean).join(" · ") || "—";
+
+    return {
+      code,
+      name: REPORT_PLANET_NAMES[code] || code,
+      sign: isLagna ? (meta?.lagnaSign || meta?.lagna || "—") : (p?.sign || p?.hindi_sign || "—"),
+      house: isLagna ? 1 : (p?.house || "—"),
+      degree: typeof degree === "number" ? `${Number(degree).toFixed(2)}°` : degree,
+      nakshatra: isLagna ? (meta?.lagnaNakshatra || "—") : (p?.nakshatra || "—"),
+      nakLord: isLagna ? "—" : (p?.nakshatraLord || "—"),
+      rashiLord: isLagna ? "—" : (p?.rashiLord || p?.lord || "—"),
+      status,
+      nature: isLagna ? "—" : (p?.functionalNature || "Neutral"),
+      strength: isLagna ? "—" : (p?.strength != null ? `${p.strength}%` : "—"),
+      vargas: REPORT_VARGA_KEYS.map(k => reportVargaSign(vargaSource, k))
+    };
+  });
+}
+
+function selectedDashaBundle(chartData, selectedMD, selectedAD) {
+  const dasha = chartData?.dasha || {};
+  const current = dasha?.current || {};
+  const sequence = Array.isArray(dasha?.sequence) ? dasha.sequence : [];
+
+  const currentMD = current?.mahadasha || reportDashaLord(sequence[0]);
+  const mdName = selectedMD || currentMD;
+  const mdObj = sequence.find(x => reportDashaLord(x) === mdName) || sequence[0] || null;
+
+  const ads = reportDashaADs(mdObj);
+  const currentAD = current?.antardasha || reportDashaLord(ads[0]);
+  const adName = selectedAD || currentAD;
+  const adObj = ads.find(x => reportDashaLord(x) === adName) || ads[0] || null;
+
+  const pds = reportDashaPDs(adObj);
+  const currentPD = current?.pratyantara || "";
+  const pdObj = pds.find(x => reportDashaLord(x) === currentPD) || pds[0] || null;
+
+  return {
+    sequence,
+    current,
+    currentMD,
+    currentAD,
+    currentPD,
+    mdName,
+    adName: adObj ? reportDashaLord(adObj) : "",
+    mdObj,
+    adObj,
+    pdObj,
+    ads,
+    pds
+  };
+}
+
+function buildKundliCopyText(chartData, selectedMD, selectedAD) {
+  const meta = chartData?.meta || {};
+  const rows = reportRows(chartData);
+  const b = selectedDashaBundle(chartData, selectedMD, selectedAD);
+  const out = [];
+
+  out.push("🪐 सम्पूर्ण वैदिक कुंडली");
+  out.push("Vedic Jyotish Report — Swiss Ephemeris + Nadi AI");
+  out.push("");
+  out.push(`नाम\t${meta?.name || "—"}`);
+  out.push(`लग्न\t${meta?.lagnaSign || meta?.lagna || "—"} ${meta?.lagnaRashiDegree != null ? `${meta.lagnaRashiDegree}°` : ""}`.trim());
+  out.push(`जन्म तिथि\t${meta?.dob || "—"}`);
+  out.push(`समय / स्थान\t${meta?.time || "—"} | ${meta?.city || "—"}`);
+  out.push(`लग्न नक्षत्र\t${meta?.lagnaNakshatra || "—"}${meta?.lagnaNakshatraPada ? ` (चरण ${meta.lagnaNakshatraPada})` : ""}`);
+  out.push(`वर्तमान दशा\t${b.current?.mahadasha || "—"} → ${b.current?.antardasha || "—"} → ${b.current?.pratyantara || "—"}`);
+  out.push("");
+
+  out.push("ग्रह स्थिति + षोडशवर्ग");
+  out.push([
+    "ग्रह","राशि","भाव","डिग्री","नक्षत्र","नक्ष.स्वामी","राशि स्वामी",
+    "अवस्था","स्वभाव","बल%",...REPORT_VARGA_KEYS
+  ].join("\t"));
+
+  rows.forEach(r => {
+    out.push([
+      r.name,r.sign,r.house,r.degree,r.nakshatra,r.nakLord,r.rashiLord,
+      r.status,r.nature,r.strength,...r.vargas
+    ].join("\t"));
+  });
+
+  out.push("");
+  out.push("महादशा — पूर्ण 120 वर्ष समयरेखा");
+  out.push("महादशा\tआरंभ\tसमाप्ति");
+  b.sequence.forEach(md => {
+    out.push([reportDashaLord(md),reportDashaStart(md),reportDashaEnd(md)].join("\t"));
+  });
+
+  out.push("");
+  out.push(`चयनित महादशा\t${reportDashaLord(b.mdObj)}\t${reportDashaStart(b.mdObj)} → ${reportDashaEnd(b.mdObj)}`);
+  out.push("अंतर्दशा — चयनित महादशा");
+  out.push("अंतर्दशा\tआरंभ\tसमाप्ति");
+  b.ads.forEach(ad => {
+    out.push([reportDashaLord(ad),reportDashaStart(ad),reportDashaEnd(ad)].join("\t"));
+  });
+
+  out.push("");
+  out.push(`चयनित अंतर्दशा\t${reportDashaLord(b.adObj)}\t${reportDashaStart(b.adObj)} → ${reportDashaEnd(b.adObj)}`);
+  out.push("प्रत्यंतर — चयनित अंतर्दशा");
+  out.push("प्रत्यंतर\tआरंभ\tसमाप्ति");
+  b.pds.forEach(pd => {
+    out.push([reportDashaLord(pd),reportDashaStart(pd),reportDashaEnd(pd)].join("\t"));
+  });
+
+  out.push("");
+  out.push("www.kundalimaker.com");
+  return out.join("\n");
+}
+
+function reportCanvasText(ctx, value, x, y, width, font, color) {
+  ctx.font = font;
+  ctx.fillStyle = color;
+  const str = String(value ?? "—");
+
+  if (ctx.measureText(str).width <= width) {
+    ctx.fillText(str, x, y);
+    return;
+  }
+
+  let s = str;
+  while (s.length > 1 && ctx.measureText(`${s}…`).width > width) {
+    s = s.slice(0, -1);
+  }
+  ctx.fillText(`${s}…`, x, y);
+}
+
+function buildKundliJpgCanvas(chartData, selectedMD, selectedAD) {
+  const meta = chartData?.meta || {};
+  const rows = reportRows(chartData);
+  const b = selectedDashaBundle(chartData, selectedMD, selectedAD);
+
+  const W = 4300;
+  const H = 2350;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+
+  const BG = "#07111F";
+  const PANEL = "#0E1928";
+  const GRID = "#253348";
+  const GOLD = "#F59E0B";
+  const CYAN = "#22D3EE";
+  const PURPLE = "#C084FC";
+  const WHITE = "#E2E8F0";
+  const MUTED = "#94A3B8";
+
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.font = "900 34px 'Noto Sans Devanagari', Arial, sans-serif";
+  ctx.fillStyle = GOLD;
+  ctx.fillText("🪐 सम्पूर्ण वैदिक कुंडली", 55, 58);
+
+  ctx.font = "500 16px Arial, sans-serif";
+  ctx.fillStyle = MUTED;
+  ctx.fillText("Vedic Jyotish Report — Swiss Ephemeris + Nadi AI", 55, 88);
+
+  ctx.fillStyle = PANEL;
+  ctx.fillRect(45, 110, W - 90, 125);
+  ctx.strokeStyle = GRID;
+  ctx.strokeRect(45, 110, W - 90, 125);
+
+  const metaRows = [
+    ["नाम", meta?.name || "—", "लग्न", `${meta?.lagnaSign || meta?.lagna || "—"} ${meta?.lagnaRashiDegree ?? "—"}°`],
+    ["जन्म तिथि", meta?.dob || "—", "समय / स्थान", `${meta?.time || "—"} | ${meta?.city || "—"}`],
+    ["लग्न नक्षत्र", `${meta?.lagnaNakshatra || "—"}${meta?.lagnaNakshatraPada ? ` (${meta.lagnaNakshatraPada})` : ""}`, "वर्तमान दशा", `${b.current?.mahadasha || "—"} → ${b.current?.antardasha || "—"} → ${b.current?.pratyantara || "—"}`]
+  ];
+
+  metaRows.forEach((r, i) => {
+    const yy = 145 + i * 36;
+    reportCanvasText(ctx, r[0], 65, yy, 120, "700 13px 'Noto Sans Devanagari', Arial", GOLD);
+    reportCanvasText(ctx, r[1], 185, yy, 790, "700 14px 'Noto Sans Devanagari', Arial", WHITE);
+    reportCanvasText(ctx, r[2], 1000, yy, 180, "700 13px 'Noto Sans Devanagari', Arial", CYAN);
+    reportCanvasText(ctx, r[3], 1190, yy, W - 1250, "700 14px 'Noto Sans Devanagari', Arial", WHITE);
+  });
+
+  let y = 272;
+  ctx.font = "900 21px 'Noto Sans Devanagari', Arial";
+  ctx.fillStyle = GOLD;
+  ctx.fillText("ग्रह स्थिति + षोडशवर्ग (D1 सहित)", 55, y);
+  y += 24;
+
+  const headers = [
+    "ग्रह","राशि","भाव","डिग्री","नक्षत्र","नक्ष.स्वामी","राशि स्वामी",
+    "अवस्था","स्वभाव","बल%",...REPORT_VARGA_KEYS
+  ];
+  const widths = [95,145,55,95,185,120,120,165,245,65,...REPORT_VARGA_KEYS.map(() => 90)];
+  const xs = [];
+  let xx = 45;
+  widths.forEach(w => {
+    xs.push(xx);
+    xx += w;
+  });
+
+  headers.forEach((h, i) => {
+    ctx.fillStyle = PANEL;
+    ctx.fillRect(xs[i], y, widths[i], 38);
+    ctx.strokeStyle = GRID;
+    ctx.strokeRect(xs[i], y, widths[i], 38);
+    reportCanvasText(
+      ctx, h, xs[i] + 4, y + 24, widths[i] - 8,
+      "800 10px 'Noto Sans Devanagari', Arial",
+      i >= 10 ? CYAN : GOLD
+    );
+  });
+
+  y += 38;
+
+  rows.forEach((r, ri) => {
+    const values = [
+      r.name,r.sign,r.house,r.degree,r.nakshatra,r.nakLord,r.rashiLord,
+      r.status,r.nature,r.strength,...r.vargas
+    ];
+
+    values.forEach((v, i) => {
+      ctx.fillStyle = ri % 2 === 0 ? "#0A1725" : "#0D1B2B";
+      ctx.fillRect(xs[i], y, widths[i], 40);
+      ctx.strokeStyle = GRID;
+      ctx.strokeRect(xs[i], y, widths[i], 40);
+
+      reportCanvasText(
+        ctx, v, xs[i] + 4, y + 25, widths[i] - 8,
+        i === 0 ? "800 11px 'Noto Sans Devanagari', Arial" : "600 10px 'Noto Sans Devanagari', Arial",
+        i === 0 ? GOLD : WHITE
+      );
+    });
+
+    y += 40;
+  });
+
+  y += 24;
+
+  const drawDashaTable = (title, data, accent) => {
+    ctx.font = "900 17px 'Noto Sans Devanagari', Arial";
+    ctx.fillStyle = accent;
+    ctx.fillText(title, 55, y);
+    y += 23;
+
+    const tw = [230,170,170];
+    const hh = ["नाम","आरंभ","समाप्ति"];
+    let tx = 55;
+
+    hh.forEach((h, i) => {
+      ctx.fillStyle = PANEL;
+      ctx.fillRect(tx, y, tw[i], 31);
+      ctx.strokeStyle = GRID;
+      ctx.strokeRect(tx, y, tw[i], 31);
+      reportCanvasText(ctx, h, tx + 5, y + 20, tw[i] - 10, "800 10px 'Noto Sans Devanagari', Arial", accent);
+      tx += tw[i];
+    });
+    y += 31;
+
+    data.forEach((item, ri) => {
+      const vals = [reportDashaLord(item),reportDashaStart(item),reportDashaEnd(item)];
+      tx = 55;
+      vals.forEach((v, i) => {
+        ctx.fillStyle = ri % 2 === 0 ? "#0A1725" : "#0D1B2B";
+        ctx.fillRect(tx, y, tw[i], 29);
+        ctx.strokeStyle = GRID;
+        ctx.strokeRect(tx, y, tw[i], 29);
+        reportCanvasText(ctx, v, tx + 5, y + 19, tw[i] - 10, "600 10px 'Noto Sans Devanagari', Arial", WHITE);
+        tx += tw[i];
+      });
+      y += 29;
+    });
+
+    y += 14;
+  };
+
+  drawDashaTable("महादशा — पूर्ण 120 वर्ष", b.sequence, GOLD);
+  drawDashaTable(`अंतर्दशा — ${reportDashaLord(b.mdObj)}`, b.ads, CYAN);
+  drawDashaTable(`प्रत्यंतर — ${reportDashaLord(b.adObj)}`, b.pds, PURPLE);
+
+  ctx.font = "600 12px Arial, sans-serif";
+  ctx.fillStyle = MUTED;
+  ctx.fillText("www.kundalimaker.com", 55, H - 24);
+
+  return canvas;
+}
+
+function DashaSelectorCard({ label, value, options, onChange, currentValue, accent = "amber" }) {
+  const cls = accent === "cyan"
+    ? "border-cyan-500/30 bg-cyan-500/5"
+    : "border-amber-500/30 bg-amber-500/5";
+
+  return (
+    <div className={`rounded-xl border p-2.5 ${cls}`}>
+      <div className="text-[9px] text-slate-500 mb-1">{label}</div>
+      <select
+        value={value || ""}
+        onChange={e => onChange(e.target.value)}
+        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-[10px] text-slate-200 outline-none"
+      >
+        {options.length === 0 ? (
+          <option value="">डेटा उपलब्ध नहीं</option>
+        ) : (
+          options.map((item, i) => {
+            const name = reportDashaLord(item);
+            const isCurrent = name === currentValue;
+            return (
+              <option key={`${name}-${i}`} value={name}>
+                {isCurrent ? "▶ " : ""}{name}
+              </option>
+            );
+          })
+        )}
+      </select>
+    </div>
+  );
+}
+
+function CopyableKundliReportModal({ chartData, onClose }) {
+  const initial = selectedDashaBundle(chartData);
+  const [selectedMD, setSelectedMD] = useState(initial.mdName);
+  const [selectedAD, setSelectedAD] = useState(initial.adName);
+  const [copied, setCopied] = useState(false);
+
+  const bundle = selectedDashaBundle(chartData, selectedMD, selectedAD);
+  const rows = reportRows(chartData);
+  const reportText = buildKundliCopyText(chartData, selectedMD, selectedAD);
+  const meta = chartData?.meta || {};
+
+  const changeMD = (value) => {
+    const next = selectedDashaBundle(chartData, value, "");
+    setSelectedMD(value);
+    setSelectedAD(next.adName || "");
+  };
+
+  const copyFullReport = async () => {
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(reportText);
+      ok = true;
+    } catch {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = reportText;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ok = document.execCommand("copy");
+        ta.remove();
+      } catch {}
+    }
+
+    setCopied(ok);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
+
+  const getSafeName = () => (
+    String(meta?.name || "Kundli")
+      .replace(/[^\w\u0900-\u097F-]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "Kundli"
+  );
+
+  const downloadJpg = async () => {
+    const blob = await new Promise(resolve =>
+      buildKundliJpgCanvas(chartData, selectedMD, selectedAD).toBlob(resolve, "image/jpeg", 0.94)
+    );
+    if (!blob) return;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${getSafeName()}_Kundli_Report.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  };
+
+  const shareJpg = async () => {
+    const blob = await new Promise(resolve =>
+      buildKundliJpgCanvas(chartData, selectedMD, selectedAD).toBlob(resolve, "image/jpeg", 0.94)
+    );
+    if (!blob) return;
+
+    const file = new File([blob], `${getSafeName()}_Kundli_Report.jpg`, { type:"image/jpeg" });
+
+    if (navigator.share && navigator.canShare?.({ files:[file] })) {
+      try {
+        await navigator.share({
+          title: "Kundli Report",
+          text: "www.kundalimaker.com",
+          files: [file]
+        });
+        return;
+      } catch (e) {
+        if (e?.name === "AbortError") return;
+      }
+    }
+
+    await downloadJpg();
+  };
+
+  const downloadTxt = () => {
+    const blob = new Blob([reportText], { type:"text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${getSafeName()}_Kundli_Report.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[1300] flex items-center justify-center p-2 sm:p-5"
+      style={{ background:"rgba(0,0,0,.80)" }}
+    >
+      <div className="w-full max-w-[1500px] max-h-[96vh] flex flex-col overflow-hidden rounded-2xl border border-amber-500/25 bg-[#07111F]">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800/70 bg-slate-900/80">
+          <div className="min-w-0">
+            <div className="text-sm sm:text-base font-black text-amber-300">📋 Copy / Save Kundli Report</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">
+              Degree + D1–D60 Shodashvarga + selectable MD → AD → PD
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 rounded-lg bg-white/5 text-slate-400 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="px-4 py-3 border-b border-slate-800/70 flex flex-wrap gap-2 items-center">
+          <button
+            type="button"
+            onClick={copyFullReport}
+            className="px-3 py-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 text-[11px] font-bold"
+          >
+            {copied ? "✓ Copied" : "📋 Copy Full Report"}
+          </button>
+
+          <button
+            type="button"
+            onClick={downloadJpg}
+            className="px-3 py-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200 text-[11px] font-bold"
+          >
+            ⬇ Download JPG
+          </button>
+
+          <button
+            type="button"
+            onClick={shareJpg}
+            className="px-3 py-2 rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-200 text-[11px] font-bold"
+          >
+            ↗ Share JPG
+          </button>
+
+          <button
+            type="button"
+            onClick={downloadTxt}
+            className="px-3 py-2 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 text-[11px] font-bold"
+          >
+            ⬇ Download TXT
+          </button>
+
+          <span className="text-[10px] text-slate-500">
+            Mobile पर Share JPG से Photos / Gallery या दूसरी app में भेज सकते हैं.
+          </span>
+        </div>
+
+        <div className="flex-1 overflow-auto p-3 sm:p-4 space-y-4">
+          <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-3 sm:p-4">
+            <div className="text-lg font-black text-slate-100">🪐 सम्पूर्ण वैदिक कुंडली</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">Vedic Jyotish Report — Swiss Ephemeris + Nadi AI</div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-4 text-[10px] sm:text-[11px]">
+              <div><span className="text-slate-500">नाम:</span> <b className="text-slate-200">{meta?.name || "—"}</b></div>
+              <div><span className="text-slate-500">लग्न:</span> <b className="text-amber-300">{meta?.lagnaSign || meta?.lagna || "—"} {meta?.lagnaRashiDegree != null ? `${meta.lagnaRashiDegree}°` : ""}</b></div>
+              <div><span className="text-slate-500">जन्म:</span> <b className="text-slate-200">{meta?.dob || "—"}</b></div>
+              <div><span className="text-slate-500">समय / स्थान:</span> <b className="text-slate-200">{meta?.time || "—"} | {meta?.city || "—"}</b></div>
+              <div><span className="text-slate-500">लग्न नक्षत्र:</span> <b className="text-slate-200">{meta?.lagnaNakshatra || "—"}{meta?.lagnaNakshatraPada ? ` · चरण ${meta.lagnaNakshatraPada}` : ""}</b></div>
+              <div className="sm:col-span-2 lg:col-span-3"><span className="text-slate-500">वर्तमान:</span> <b className="text-cyan-200">{bundle.current?.mahadasha || "—"} → {bundle.current?.antardasha || "—"} → {bundle.current?.pratyantara || "—"}</b></div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-3 sm:p-4">
+            <div className="text-sm font-black text-cyan-300 mb-2">दशा चुनें</div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <DashaSelectorCard
+                label="महादशा — Current default, कोई भी MD चुनें"
+                value={bundle.mdName}
+                options={bundle.sequence}
+                onChange={changeMD}
+                currentValue={bundle.currentMD}
+                accent="amber"
+              />
+
+              <DashaSelectorCard
+                label={`अंतर्दशा — ${bundle.mdName || "selected MD"} में`}
+                value={bundle.adName}
+                options={bundle.ads}
+                onChange={setSelectedAD}
+                currentValue={bundle.currentAD}
+                accent="cyan"
+              />
+            </div>
+
+            <div className="mt-2 rounded-xl border border-purple-500/20 bg-purple-500/5 px-3 py-2 text-[10px]">
+              <span className="text-slate-500">चयनित:</span>{" "}
+              <b className="text-amber-300">{reportDashaLord(bundle.mdObj)}</b>
+              <span className="text-slate-600 mx-1">→</span>
+              <b className="text-cyan-200">{reportDashaLord(bundle.adObj)}</b>
+              <span className="text-slate-600 mx-1">→</span>
+              <b className="text-purple-200">{reportDashaLord(bundle.pdObj)}</b>
+              <span className="text-slate-600 ml-2">
+                {reportDashaStart(bundle.pdObj)} → {reportDashaEnd(bundle.pdObj)}
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-800/60">
+              <div className="text-sm font-black text-amber-300">ग्रह स्थिति + षोडशवर्ग</div>
+              <div className="text-[10px] text-slate-500">
+                Degree और सभी listed D-Charts एक ही table में.
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-[2450px] w-full text-[9px]">
+                <thead className="bg-slate-950/85">
+                  <tr>
+                    {[
+                      "ग्रह","राशि","भाव","डिग्री","नक्षत्र","नक्ष.स्वामी","राशि स्वामी",
+                      "अवस्था","स्वभाव","बल%",...REPORT_VARGA_KEYS
+                    ].map((h, i) => (
+                      <th
+                        key={h}
+                        className={`px-2 py-2 text-left border-b border-slate-800 whitespace-nowrap ${i >= 10 ? "text-cyan-300" : "text-amber-300"}`}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.code} className="border-b border-slate-800/60">
+                      {[
+                        r.name,r.sign,r.house,r.degree,r.nakshatra,r.nakLord,
+                        r.rashiLord,r.status,r.nature,r.strength,...r.vargas
+                      ].map((v, i) => (
+                        <td
+                          key={`${r.code}-${i}`}
+                          className={`px-2 py-2 whitespace-nowrap ${i === 0 ? "font-black text-amber-300" : i >= 10 ? "text-slate-200" : "text-slate-300"}`}
+                        >
+                          {v}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+            <DashaReportTable title="महादशा — पूर्ण 120 वर्ष" rows={bundle.sequence} />
+            <DashaReportTable title={`अंतर्दशा — ${reportDashaLord(bundle.mdObj)}`} rows={bundle.ads} />
+            <DashaReportTable title={`प्रत्यंतर — ${reportDashaLord(bundle.adObj)}`} rows={bundle.pds} />
+          </div>
+
+          <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="text-[11px] text-slate-500">Copy-ready text</div>
+              <div className="text-[9px] text-slate-600">Tab-separated — Word / Excel / Notes में paste-friendly</div>
+            </div>
+            <textarea
+              readOnly
+              value={reportText}
+              className="w-full h-72 resize-y rounded-xl border border-slate-700 bg-[#050B14] p-3 text-[10px] leading-5 text-slate-300 outline-none"
+            />
+          </div>
+
+          <div className="text-center text-[10px] text-slate-600 py-1">
+            www.kundalimaker.com
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DashaReportTable({ title, rows }) {
+  return (
+    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 overflow-hidden">
+      <div className="px-3 py-2 border-b border-slate-800/60 text-[11px] font-black text-cyan-300">{title}</div>
+      <div className="max-h-72 overflow-auto">
+        <table className="w-full text-[9px]">
+          <thead className="bg-slate-950/70">
+            <tr>
+              <th className="px-2 py-2 text-left text-amber-300">Lord</th>
+              <th className="px-2 py-2 text-left text-amber-300">Start</th>
+              <th className="px-2 py-2 text-left text-amber-300">End</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(rows || []).map((r, i) => (
+              <tr key={`${reportDashaLord(r)}-${i}`} className="border-b border-slate-800/50">
+                <td className="px-2 py-1.5 text-slate-200 font-bold">{reportDashaLord(r)}</td>
+                <td className="px-2 py-1.5 text-slate-400">{reportDashaStart(r)}</td>
+                <td className="px-2 py-1.5 text-slate-400">{reportDashaEnd(r)}</td>
+              </tr>
+            ))}
+            {(!rows || rows.length === 0) && (
+              <tr>
+                <td colSpan={3} className="px-2 py-4 text-center text-slate-600">डेटा उपलब्ध नहीं</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────
 // RIGHT PANEL (Tabbed)
 // ─────────────────────────────────────────────────────────────
 function RightPanel({ chartData }) {
   // State for PDF Modal
   const [showPDFModal, setShowPDFModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const { 
     activeTab, 
@@ -1629,24 +2332,50 @@ function RightPanel({ chartData }) {
 
   return (
     <div className="flex flex-col min-h-0">
-      {/* 1. PDF Export Button */}
-      <button
-        onClick={() => setShowPDFModal(true)}
-        className="w-full flex items-center justify-center gap-2.5 py-3 mb-3 rounded-2xl font-bold text-[13px] transition-all hover:scale-[1.01] active:scale-[.99] flex-shrink-0"
-        style={{
-          background: "linear-gradient(135deg,rgba(245,158,11,.18),rgba(34,211,238,.12))",
-          border: "1.5px solid rgba(245,158,11,.4)",
-          color: "#F59E0B",
-          fontFamily: "'Noto Sans Devanagari', sans-serif"
-        }}
-      >
-        <FileText size={16} />
-        <span>📄 कुंडली PDF — पेज चुनें</span>
-        <Download size={14} style={{ opacity: 0.7 }} />
-      </button>
+      {/* 1. Export options */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+        <button
+          type="button"
+          onClick={() => setShowPDFModal(true)}
+          className="w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl font-bold text-[13px] transition-all hover:scale-[1.01] active:scale-[.99] flex-shrink-0"
+          style={{
+            background: "linear-gradient(135deg,rgba(245,158,11,.18),rgba(34,211,238,.12))",
+            border: "1.5px solid rgba(245,158,11,.4)",
+            color: "#F59E0B",
+            fontFamily: "'Noto Sans Devanagari', sans-serif"
+          }}
+        >
+          <FileText size={16} />
+          <span>📄 कुंडली PDF</span>
+          <Download size={14} style={{ opacity: 0.7 }} />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowReportModal(true)}
+          className="w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl font-bold text-[13px] transition-all hover:scale-[1.01] active:scale-[.99] flex-shrink-0"
+          style={{
+            background: "linear-gradient(135deg,rgba(34,211,238,.12),rgba(168,85,247,.10))",
+            border: "1.5px solid rgba(34,211,238,.3)",
+            color: "#67E8F9",
+            fontFamily: "'Noto Sans Devanagari', sans-serif"
+          }}
+        >
+          <span>📋 Copy / Save Report</span>
+          <Download size={14} style={{ opacity: 0.7 }} />
+        </button>
+      </div>
 
       {/* 2. PDF Modal */}
       {showPDFModal && <PDFModal chartData={chartData} onClose={() => setShowPDFModal(false)} />}
+
+      {/* 2A. Copy / Save Report Modal */}
+      {showReportModal && (
+        <CopyableKundliReportModal
+          chartData={chartData}
+          onClose={() => setShowReportModal(false)}
+        />
+      )}
 
       {/* 3. Engines loading strip */}
       {enginesLoading && (
