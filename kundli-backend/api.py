@@ -1696,6 +1696,10 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
     ashtakavarga_special = ' | '.join(ashtakavarga_special_notes) if ashtakavarga_special_notes else 'कोई विशेष नहीं'
     disease_12th = check_disease_12th(astro, houses)
     jyotish_evaluation = generate_planet_evaluation_report(astro, houses, lagna_rashi)
+    # FIX: response payload uses these three compatibility variables.
+    yogas = jyotish_evaluation.get('yogakaraka_planets', [])
+    weak = jyotish_evaluation.get('weak_planets', [])
+    high_risk = jyotish_evaluation.get('high_risk_planets', [])
     house_aspects = get_house_aspects(houses, short_names)
     badhak_house_num = get_badhak_house(lagna_rashi)
 
@@ -2046,169 +2050,6 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
                     "display":     asp.get("display", ""),
                 })
 
-    # ── Master Conclusion ─────────────────────────────────────────
-    all_risks = [(p, d["risk_score"]) for p, d in jyotish_evaluation["planets"].items()]
-    yogas     = jyotish_evaluation.get("yogakaraka_planets", [])
-    weak      = jyotish_evaluation.get("weak_planets", [])
-    high_risk = jyotish_evaluation.get("high_risk_planets", [])
-    overall_score = max(0, min(100, 75 - len(high_risk)*8 + len(yogas)*10 - len(weak)*5))
-
-    PLANET_HINDI_MC = {"Su":"सूर्य","Mo":"चंद्र","Ma":"मंगल","Me":"बुध","Ju":"गुरु","Ve":"शुक्र","Sa":"शनि","Ra":"राहु","Ke":"केतु"}
-
-    # ── Lagnesh ──────────────────────────────────────────────────
-    lagna_lord_code = SIGN_LORDS[lagna_rashi]
-    ll_eval = jyotish_evaluation["planets"].get(lagna_lord_code, {})
-    ll_str  = ll_eval.get("strength", {})
-    lagnesh_obj = {
-        "code":             lagna_lord_code,
-        "hindi":            PLANET_HINDI_MC.get(lagna_lord_code, lagna_lord_code),
-        "house":            planet_house_map.get(lagna_lord_code, 0),
-        "rashi":            RASHI_HI[astro[lagna_lord_code]["Vargas"]["D1"]["Idx"]] if lagna_lord_code in astro else "",
-        "strength":         int(ll_str.get("score", 50)),
-        "functionalNature": "लग्नेश (सदा शुभ — 8/12 दोष नहीं लगता)",
-    }
-
-    # ── Shubh / Ashubh ────────────────────────────────────────────
-    shubh_list, ashubh_list = [], []
-    for pc in ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"]:
-        ev  = jyotish_evaluation["planets"].get(pc, {})
-        fn  = ev.get("functional", {})
-        dosh_parts = []
-        if fn.get("trishadaya"):      dosh_parts.append("त्रिशडाय")
-        if fn.get("badhakesh"):       dosh_parts.append("बाधकेश")
-        if fn.get("maraka"):          dosh_parts.append("मारक")
-        if fn.get("yogakaraka"):
-            shubh_list.append({"code":pc,"hindi":PLANET_HINDI_MC[pc],"dosha":"योगकारक"})
-        elif fn.get("benefic") and not fn.get("maraka"):
-            shubh_list.append({"code":pc,"hindi":PLANET_HINDI_MC[pc],"dosha":" · ".join(dosh_parts) or "शुभ"})
-        elif fn.get("malefic") or fn.get("trishadaya") or fn.get("badhakesh") or fn.get("maraka"):
-            ashubh_list.append({"code":pc,"hindi":PLANET_HINDI_MC[pc],"dosha":" · ".join(dosh_parts) or "अशुभ"})
-
-    # ── Risk Table ────────────────────────────────────────────────
-    risk_table = []
-    RISK_LABEL = lambda r: "अत्यंत उच्च" if r>=70 else ("उच्च" if r>=50 else ("मध्यम" if r>=30 else ("निम्न" if r>=15 else "न्यूनतम")))
-    for pc in ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"]:
-        ev  = jyotish_evaluation["planets"].get(pc, {})
-        fn  = ev.get("functional", {})
-        str_score = int(ev.get("strength", {}).get("score", 50))
-        risk_val  = int(ev.get("risk_score", 0))
-        dosh_parts = []
-        if fn.get("trishadaya"): dosh_parts.append("त्रिशडाय")
-        if fn.get("badhakesh"):  dosh_parts.append("बाधकेश")
-        if fn.get("maraka"):     dosh_parts.append("मारक")
-        risk_table.append({
-            "code":       pc,
-            "hindi":      PLANET_HINDI_MC[pc],
-            "house":      planet_house_map.get(pc, 0),
-            "strength":   str_score,
-            "risk":       risk_val,
-            "riskLabel":  RISK_LABEL(risk_val),
-            "dosh":       " · ".join(dosh_parts) if dosh_parts else "—",
-        })
-
-    # ── Aspect Dominance ──────────────────────────────────────────
-    guru_drishti, ghatak_list = [], []
-    drishti_matrix = jyotish_evaluation.get("drishti_matrix", {})
-    for pc, dm_data in drishti_matrix.items():
-        for asp in dm_data.get("aspects", []):
-            nature = asp.get("nature","")
-            if "amrit" in nature.lower() or "amrut" in nature.lower():
-                guru_drishti.append(f"{PLANET_HINDI_MC.get(pc,pc)} ({planet_house_map.get(pc,0)}वें भाव से) → भाव {asp['target_house']}")
-            if "ghatak" in nature.lower() or "nishtak" in nature.lower() or "axis" in nature.lower():
-                ghatak_list.append(f"{PLANET_HINDI_MC.get(pc,pc)} → {asp.get('display','घातक दृष्टि')}")
-
-    # ── Special Yogas (structured with desc) ─────────────────────
-    special_yogas_list = []
-    for pc in ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"]:
-        ev  = jyotish_evaluation["planets"].get(pc, {})
-        str_ev = ev.get("strength", {})
-        for yoga in str_ev.get("special_yogas", []):
-            special_yogas_list.append({
-                "planet": pc,
-                "title":  yoga,
-                "desc":   str_ev.get("yoga_desc", {}).get(yoga, ""),
-            })
-
-    # ── AV Turning Points — Aayु Sutra calculated here ───────────
-    # Sutra: Σ(bhav 1→graha_bhav) × 7 ÷ 27 = turning year (integer)
-    AGE_GROUP = lambda y: (
-        "बाल्यकाल"         if y <= 12  else
-        "किशोरावस्था"       if y <= 20  else
-        "युवावस्था"         if y <= 30  else
-        "प्रौढ़ता प्रारंभ"  if y <= 40  else
-        "मध्यावस्था"        if y <= 55  else
-        "परिपक्व आयु"
-    )
-    av_turning = []
-    for pc in ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"]:
-        h = planet_house_map.get(pc, 0)
-        if h < 1: continue
-        # 🔥 FIX: Sum bhav 1 to h using houses[]["av"] (already rotated)
-        av_sum = sum(houses[i]["av"] for i in range(1, h+1))
-        remainder = (av_sum * 7) % 27
-        year = remainder if remainder != 0 else 27
-        formula_str = f"Σ(1→{h})={av_sum} | {av_sum}×7={av_sum*7} | {av_sum*7}%27 = {year}वर्ष"
-        nak_index = (av_sum * 7 % 27) if (av_sum * 7 % 27) > 0 else 27
-        nakshatra = NAKSHATRA[nak_index - 1]
-        av_turning.append({
-            "code":      pc,
-            "hindi":     PLANET_HINDI_MC[pc],
-            "house":     h,
-            "avSum":     av_sum,
-            "year":      year,
-            "ageGroup":  AGE_GROUP(year),
-            "formula":   formula_str,
-            "nakshatra": nakshatra,
-        })
-
-    # ── AV Bhavas (12 houses) ────────────────────────────────────
-    RASHI_HI_MC = ["मेष","वृषभ","मिथुन","कर्क","सिंह","कन्या","तुला","वृश्चिक","धनु","मकर","कुंभ","मीन"]
-    av_bhavas = [
-        {"n": i+1, "rashi": RASHI_HI_MC[houses[i+1]["sign_index"]], "av": houses[i+1]["av"]}
-        for i in range(12)
-    ]
-
-    # ── Dasha list (full sequence with functionalNature) ─────────
-    dasha_list = []
-    for d in dashas:
-        dc    = PLANET_CODE_MAP.get(d["planet"], "")
-        d_ev  = jyotish_evaluation["planets"].get(dc, {})
-        d_fn  = d_ev.get("functional", {})
-        fn_parts = []
-        if d_fn.get("yogakaraka"):  fn_parts.append("योगकारक")
-        if d_fn.get("benefic"):     fn_parts.append("शुभ")
-        if d_fn.get("malefic"):     fn_parts.append("अशुभ")
-        if d_fn.get("trishadaya"):  fn_parts.append("त्रिशडाय")
-        if d_fn.get("badhakesh"):   fn_parts.append("बाधकेश")
-        if d_fn.get("maraka"):      fn_parts.append("मारक")
-        dasha_list.append({
-            "code":             dc,
-            "hindi":            d["planet"],
-            "start":            d["start"],
-            "end":              d["end"],
-            "active":           d["planet"] == current_md["planet"],
-            "functionalNature": " · ".join(fn_parts) if fn_parts else "सामान्य",
-        })
-
-    master_conclusion = {
-        "overallScore":      overall_score,
-        "summary":           f"{'बलवान' if overall_score >= 70 else 'सामान्य'} कुंडली। योगकारक: {', '.join([PLANET_HINDI_MC.get(y,y) for y in yogas]) or 'कोई नहीं'}। उच्च जोखिम: {', '.join([PLANET_HINDI_MC.get(p,p) for p in high_risk]) or 'कोई नहीं'}।",
-        "bestPeriod":        f"{current_md['planet']} – {current_ad['planet']} ({current_ad['start'][:4]}–{current_ad['end'][:4]})",
-        "caution":           f"सावधान: {', '.join([PLANET_HINDI_MC.get(p,p) for p in (weak[:2] + high_risk[:1])]) or 'कोई विशेष नहीं'}",
-        "lagnesh":           lagnesh_obj,
-        "lagnaMeta":         {"rashi": RASHI_HI[lagna_rashi], "desc": ""},
-        "shubhPlanets":      shubh_list,
-        "ashubhPlanets":     ashubh_list,
-        "riskTable":         risk_table,
-        "aspectDominance":   {"guruDrishti": guru_drishti, "ghatak": ghatak_list},
-        "specialYogas":      special_yogas_list,
-        "yogakaraka":        PLANET_HINDI_MC.get(yogas[0], None) if yogas else None,
-        "avTurningPoints":   av_turning,
-        "avBhavas":          av_bhavas,
-        "avTotal":           sum(sav_points),
-        "dasha":             dasha_list,
-    }
-
     # ── All 7 Engines (Yoga, Sutras, Saturn, Navatara, AV, Vedic, Sutras) ──
     engines_data = {}
     try:
@@ -2343,7 +2184,6 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         "drishti":          drishti_out,
         "bhavDrishti":      bhav_drishti,
         "sav":              sav_points,
-        "masterConclusion": master_conclusion,
         "nadiEvents":       nadi_events,
         "nadiAiOutput":     nadi_ai_output,
         "jyotishEvaluation": {

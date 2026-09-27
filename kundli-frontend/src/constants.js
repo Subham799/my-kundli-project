@@ -88,11 +88,9 @@ export const TABS = [
   { id: "conclusion", label: "निष्कर्ष",    phase: 1 },
   // ── Phase 2 tabs (need enginesData) ──
   { id: "yogas",      label: "योग",          phase: 2 },
-  { id: "advanced",   label: "विस्तृत AV",   phase: 2 },
   { id: "kamukta",    label: "💕 कामुकता",   phase: 2 },
   { id: "gochar",     label: "🌍 गोचर",      phase: 2 },
   // ── Nadi Jyotish mega-tab ──
-  { id: "av_sutras",      label: "🔢 AV सूत्र",    phase: 2 },
   { id: "chandra_surya",  label: "🌙 चंद्र-सूर्य",  phase: 2 },
   { id: "advanced_yogas", label: "⚡ उन्नत योग",    phase: 2 },
   { id: "kp_btr",         label: "🔗 KP शुद्धि",      phase: 2 },

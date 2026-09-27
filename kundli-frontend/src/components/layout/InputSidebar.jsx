@@ -1,9 +1,8 @@
 // components/layout/InputSidebar.jsx
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { User, Calendar, Clock, MapPin, Layers, Zap } from "lucide-react";
+import { User, Calendar, Clock, MapPin, Zap } from "lucide-react";
 import useKundliStore from "../../store/useKundliStore";
-import { CHART_TYPES } from "../../constants";
 
 const STORAGE_KEY = "kundliFormData";
 
@@ -176,29 +175,6 @@ export default function InputSidebar() {
             </div>
           ))}
 
-          {/* Chart type selector */}
-          <div>
-            <label className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 uppercase tracking-widest mb-2">
-              <Layers size={12} className="text-amber-500/80" />
-              Varga Chart
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {CHART_TYPES.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setForm("chartType", c)}
-                  className={[
-                    "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border",
-                    formData.chartType === c
-                      ? "bg-amber-500/20 border-amber-500/50 text-amber-300"
-                      : "bg-slate-800/40 border-slate-700/40 text-slate-500 hover:text-slate-300 hover:border-slate-600",
-                  ].join(" ")}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Submit — [MODIFIED] validates lat/lon before calling fetchChart */}

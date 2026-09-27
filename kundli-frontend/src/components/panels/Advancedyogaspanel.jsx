@@ -35,17 +35,9 @@ const qColor = (level) => ({
 }[level] || C.amber);
 
 const TABS = [
-  { id: "indu",    label: "💰 इन्दु लग्न" },
-  { id: "yogas",   label: "⚡ नीच-भंग" },
-  { id: "dhan",    label: "💑 धन-विवाह" },
-  { id: "chakra",  label: "🔯 सुदर्शन" },
-  { id: "bhavat",  label: "🌀 भवत्-भवम्" },
-  { id: "rashis",  label: "📅 राशि चक्र" },
-  { id: "tulna",   label: "⚖️ भाव तुलना" },
-  { id: "mega",    label: "📊 सारांश" },
-  { id: "vivah",   label: "💍 विवाह-तलाक (सूत्र)" },
-  { id: "khar",    label: "☠️ 64वाँ नवांश / खर" },
-  { id: "hora",    label: "☀️ D2 होरा" },
+  { id: "indu", label: "💰 इन्दु लग्न" },
+  { id: "khar", label: "☠️ 64वाँ नवांश / खर" },
+  { id: "hora", label: "☀️ D2 होरा" },
 ];
 
 // [Fix ④] SutraCard{} REMOVED.
@@ -1351,20 +1343,18 @@ export default function AdvancedYogasPanel() {
   const renderTab = () => {
     if (!engineReady) return pendingData;
     switch (activeTab) {
-      case "indu":   return <InduTab indu_lagna={data.indu_lagna} spouse_direction={data.spouse_direction} />;
-      case "yogas":  return <YogasTab neech_uchha={data.neech_uchha} debt_trap={data.debt_trap} sudden_rise={data.sudden_rise} />;
-      case "dhan":   return <DhanTab income_trapped={data.income_trapped} danger_zones={data.danger_zones} partner_compat={data.partner_compat} />;
-      
-      // 👇 यह रही सही लाइन (बिना डबल कोट्स के) 👇
-      case "vivah":  return <VivahDivorceTab vivah_promise={data.vivah_promise} divorce_separation={data.divorce_separation} />;
-      case "khar":   return <Khar64NavamsaTab khar_64th_navamsa={data.khar_64th_navamsa} />;
-      case "hora":   return <HoraTab hora_analysis={data.hora_analysis} />;
-      
-      case "chakra": return <ChakraTab sudarshan_avg={data.sudarshan_avg} />;
-      case "bhavat": return <BhavatTab bhavat_bhavam={data.bhavat_bhavam} />;
-      case "rashis": return <RashiCycleTab life_cycle_rashis={data.life_cycle_rashis} />;
-      case "tulna":  return <TulnaTab house_comparisons={data.house_comparisons} />;
-      case "mega":   return <MegaTab mega_rules={data.mega_rules} />;
+      case "indu":
+        return <InduTab
+          indu_lagna={data.indu_lagna}
+          spouse_direction={data.spouse_direction}
+        />;
+      case "khar":
+        return <Khar64NavamsaTab
+          khar_64th_navamsa={data.khar_64th_navamsa}
+        />;
+      case "hora":
+        return <HoraTab hora_analysis={data.hora_analysis} />;
+
       default:       return null;
     }
   };
@@ -1377,7 +1367,7 @@ export default function AdvancedYogasPanel() {
             ⚡ उन्नत योग विश्लेषण
           </h3>
           <p style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", margin: "4px 0 0" }}>
-            Indu Lagna · Neech Bhang · Sudarshan Avg · Bhavat Bhavam
+            Indu Lagna · 64वाँ नवांश / खर · D2 Hora
           </p>
         </div>
         <div className="space-y-1">

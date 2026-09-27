@@ -95,6 +95,98 @@ function getCatStyle(cat="") {
 
 // ── avColor helper ───────────────────────────────────────────
 const avColor = v => v >= 6 ? "#4ADE80" : v >= 4 ? "#FCD34D" : "#FB7185";
+function getPlanetStatus(code, planetData = {}, signIndex = null) {
+  if (code === "La") return [];
+  const p = planetData?.[code] || {};
+  const flags = p.flags || {};
+  const notes = String(p.notes || "");
+  const out = [];
+
+  // Prefer explicit backend dignity when available; otherwise derive from
+  // the planet's current sign in the chart being displayed.
+  const dignity = String(p.dignity || p.Dignity || p.status || "");
+  const idx = Number.isInteger(signIndex) ? signIndex : null;
+
+  // Natural dignity map: exaltation, debilitation and own signs.
+  const EXALT = { Su:0, Mo:1, Ma:9, Me:5, Ju:3, Ve:11, Sa:6 };
+  const DEBIL  = { Su:6, Mo:7, Ma:3, Me:11, Ju:9, Ve:5, Sa:0 };
+  const OWN = {
+    Su:[4], Mo:[3], Ma:[0,7], Me:[2,5], Ju:[8,11],
+    Ve:[1,6], Sa:[9,10]
+  };
+
+  let dignityLabel = "";
+
+  // IMPORTANT: when viewing a Varga, always calculate dignity from the
+  // planet's sign in THAT Varga. Backend D1 dignity must not leak into D9/D10/etc.
+  if (idx !== null) {
+    if (EXALT[code] === idx) dignityLabel = "E";
+    else if (DEBIL[code] === idx) dignityLabel = "D";
+    else if ((OWN[code] || []).includes(idx)) dignityLabel = "O";
+  } else {
+    // Fall back to backend dignity only when the displayed sign is unavailable.
+    if (/Uchcha|Exalt|उच्च/i.test(dignity)) dignityLabel = "E";
+    else if (/Neecha|Debil|नीच/i.test(dignity)) dignityLabel = "D";
+    else if (/Swagraha|Swa|Own|स्वराशि/i.test(dignity)) dignityLabel = "O";
+    else if (/Mitra|Friend|मित्र/i.test(dignity)) dignityLabel = "F";
+    else if (/Shatru|Enemy|शत्रु/i.test(dignity)) dignityLabel = "En";
+  }
+
+  if (dignityLabel === "E") out.push({label:"E", title:"Exalted", color:"#4ADE80"});
+  else if (dignityLabel === "D") out.push({label:"D", title:"Debilitated", color:"#FB7185"});
+  else if (dignityLabel === "O") out.push({label:"O", title:"Own sign", color:"#22D3EE"});
+
+  // Natural friend/enemy sign status, based on the sign lord in the
+  // currently displayed chart. This is intentionally evaluated only when
+  // the sign is not exalted/debilitated/own.
+  if (!dignityLabel && idx !== null) {
+    const signLord = ["Ma","Ve","Me","Mo","Su","Me","Ve","Ma","Ju","Sa","Sa","Ju"][idx];
+    const REL = {
+      Su:{friend:["Mo","Ma","Ju"], enemy:["Ve","Sa"], neutral:["Me"]},
+      Mo:{friend:["Su","Me"], enemy:[], neutral:["Ma","Ju","Ve","Sa"]},
+      Ma:{friend:["Su","Mo","Ju"], enemy:["Me"], neutral:["Ve","Sa"]},
+      Me:{friend:["Su","Ve"], enemy:["Mo"], neutral:["Ma","Ju","Sa"]},
+      Ju:{friend:["Su","Mo","Ma"], enemy:["Me","Ve"], neutral:["Sa"]},
+      Ve:{friend:["Me","Sa"], enemy:["Su","Mo"], neutral:["Ma","Ju"]},
+      Sa:{friend:["Me","Ve"], enemy:["Su","Mo","Ma"], neutral:["Ju"]}
+    };
+    const rel = REL[code];
+    if (rel?.friend?.includes(signLord)) out.push({label:"F", title:"Friend sign", color:"#C084FC"});
+    else if (rel?.enemy?.includes(signLord)) out.push({label:"En", title:"Enemy sign", color:"#FB923C"});
+    else if (rel?.neutral?.includes(signLord)) out.push({label:"N", title:"Neutral sign", color:"#CBD5E1"});
+  }
+
+  const retro = p.Retrograde ?? p.retrograde ?? p.isRetrograde ?? flags.retrograde ?? p.retro;
+  if (retro === true || retro === 1 || /^(true|yes|1)$/i.test(String(retro)) || /वक्री|retrograde/i.test(notes))
+    out.push({label:"R", title:"Retrograde", color:"#818CF8"});
+
+  let combust = p.Combust ?? p.combust ?? p.isCombust ?? flags.combust ?? p.burnt;
+
+  // If backend did not provide a combust flag, derive it from longitudes when
+  // available. Thresholds are standard approximate combustion orbs by planet.
+  const getLon = obj => {
+    const candidates = [obj?.longitude, obj?.Longitude, obj?.lon, obj?.long,
+      obj?.absoluteLongitude, obj?.absolute_degree, obj?.degree, obj?.deg,
+      obj?.position?.longitude, obj?.position?.lon, obj?.position?.degree];
+    const n = candidates.find(v => Number.isFinite(Number(v)));
+    return n === undefined ? null : ((Number(n) % 360) + 360) % 360;
+  };
+  if (!combust && code !== "Su" && planetData?.Su) {
+    const sunLon = getLon(planetData.Su);
+    const plLon = getLon(p);
+    const orbs = {Mo:12, Ma:17, Me:14, Ju:11, Ve:10, Sa:15};
+    if (sunLon !== null && plLon !== null && orbs[code] !== undefined) {
+      const diff = Math.abs(sunLon - plLon);
+      const sep = Math.min(diff, 360 - diff);
+      combust = sep <= orbs[code];
+    }
+  }
+  if (combust === true || combust === 1 || /^(true|yes|1)$/i.test(String(combust)) || /अस्त|combust|burnt/i.test(notes))
+    out.push({label:"C", title:"Combust", color:"#F97316"});
+
+  return out;
+}
+
 
 // ─────────────────────────────────────────────────────────────
 // Build the same 12-house structure as the backend for any Shodashvarga.
@@ -339,17 +431,38 @@ export default function InteractiveKundli({
                         const pm   = PLANET_META[p] || {color:"#94A3B8", hi:p};
                         const px   = pos.cx - totalPW/2 + i * planetSpacing;
                         const isSel= selectedPlanet===p;
+                        const planetSignIndex = (vargaKey === "D1")
+                          ? (houseMap[n]?.sign_index ?? null)
+                          : (planets?.[p]?.vargas?.[vargaKey]?.Idx ?? null);
+                        const statuses = getPlanetStatus(p, planets, Number.isInteger(planetSignIndex) ? planetSignIndex : null);
                         return (
-                          <text key={p}
-                            x={px} y={pos.py}
-                            textAnchor="middle"
-                            fontSize="15" fontWeight="900"
-                            fill={pm.color}
-                            fontFamily="Inter, sans-serif"
-                            filter={isSel?"url(#ik-gs)":"url(#ik-gp)"}
-                            opacity={isSel?1:.95}>
-                            {p}
-                          </text>
+                          <g key={p}>
+                            <text
+                              x={px} y={pos.py}
+                              textAnchor="middle"
+                              fontSize="15" fontWeight="900"
+                              fill={pm.color}
+                              fontFamily="Inter, sans-serif"
+                              filter={isSel?"url(#ik-gs)":"url(#ik-gp)"}
+                              opacity={isSel?1:.95}>
+                              {p}
+                            </text>
+                            {statuses.length > 0 && statuses.map((st, si) => (
+                              <text
+                                key={st.label}
+                                x={px + (si - (statuses.length - 1) / 2) * 8}
+                                y={pos.py + 11}
+                                textAnchor="middle"
+                                fontSize="6.5"
+                                fontWeight="900"
+                                fill={st.color}
+                                fontFamily="Inter, sans-serif"
+                                style={{paintOrder:"stroke",stroke:"rgba(1,3,12,.95)",strokeWidth:1}}
+                              >
+                                {st.label}
+                              </text>
+                            ))}
+                          </g>
                         );
                       })}
                       {/* Lagna indicator as tiny superscript after planets */}
@@ -496,6 +609,20 @@ export default function InteractiveKundli({
           </AnimatePresence>
         </div>{/* end SVG wrapper */}
       </div>{/* end chart container */}
+
+      {/* Planet status legend — only for the main D1 chart */}
+      {vargaKey === "D1" && (
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[8px] text-slate-500">
+          <span><b className="text-green-400">E</b> Exalted</span>
+          <span><b className="text-rose-400">D</b> Debilitated</span>
+          <span><b className="text-cyan-300">O</b> Own</span>
+          <span><b className="text-purple-300">F</b> Friend</span>
+          <span><b className="text-orange-300">En</b> Enemy</span>
+          <span><b className="text-slate-300">N</b> Neutral</span>
+          <span><b className="text-indigo-300">R</b> Retrograde</span>
+          <span><b className="text-amber-300">C</b> Combust</span>
+        </div>
+      )}
 
     </div>
   );
