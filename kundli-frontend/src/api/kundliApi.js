@@ -26,8 +26,13 @@ async function fetchWithSmartRetry(endpoint, payload) {
     try {
       const res = await fetch(`${BASE_URL}${endpoint}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+        },
+        body: JSON.stringify({ ...payload, _request_ts: Date.now() }),
       });
 
       // ✅ Success
@@ -67,7 +72,7 @@ export async function fetchKundliChart(formData) {
     name: formData.name, dob: formData.dob, time: formData.time,
     city: formData.city, chart_type: formData.chartType,
     lat: formData.lat, lon: formData.lon,
-    dasha_year_type: formData.dasha_year_type ?? 360.0,
+    dasha_year_type: formData.dasha_year_type ?? 365.2425,
     age: formData.age ?? 0, // 👈 इसे जोड़ें
   });
 }
@@ -80,7 +85,7 @@ export async function fetchKundliChartFast(formData) {
     city: formData.city, chart_type: formData.chartType,
     lat: formData.lat, lon: formData.lon,
     age: formData.age ?? 0, // 👈 इसे जोड़ें
-    dasha_year_type: formData.dasha_year_type ?? 360.0,
+    dasha_year_type: formData.dasha_year_type ?? 365.2425,
   });
 }
 
@@ -89,13 +94,18 @@ export async function fetchKundliEngines(formData) {
   try {
     const res = await fetch(`${BASE_URL}/api/chart/engines`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+      },
       body: JSON.stringify({
         name: formData.name, dob: formData.dob, time: formData.time,
         city: formData.city, chart_type: formData.chartType,
         lat: formData.lat, lon: formData.lon,
         age: formData.age ?? 0, // 👈 इसे जोड़ें
-        dasha_year_type: formData.dasha_year_type ?? 360.0,
+        dasha_year_type: formData.dasha_year_type ?? 365.2425,
       }),
     });
     if (!res.ok) return { enginesData: null, _enginesReady: false };
@@ -151,7 +161,7 @@ export async function generateKPPayload(kpData) {
         lat: kpData.lat,
         lon: kpData.lon,
         // 🌟 यहाँ ग्लोबल पैरामीटर पास होगा
-        dasha_year_type: kpData.dasha_year_type ?? 360.0
+        dasha_year_type: kpData.dasha_year_type ?? 365.2425
       }),
     });
     if (!res.ok) throw new Error("Failed to generate KP payload");

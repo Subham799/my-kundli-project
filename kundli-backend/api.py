@@ -1111,7 +1111,7 @@ def calculate_sav(data):
                 sav_points[target_idx] += 1
     return sav_points
 
-def calculate_vimshottari(moon_degree, birth_date, year_length=360.0):
+def calculate_vimshottari(moon_degree, birth_date, year_length=365.2425):
     nak_idx = int(moon_degree / (360/27)); lord_idx = nak_idx % 9
     fraction_remaining = 1.0 - (moon_degree % (360/27)) / (360/27)
     fraction_elapsed = 1.0 - fraction_remaining  # <-- नया
@@ -1300,7 +1300,7 @@ def calculate_yogini_dasha(moon_degree, birth_date, reference_date=None):
     }
 
 
-def get_antardashas(md_lord_idx, md_start_date_str, year_length=360.0):
+def get_antardashas(md_lord_idx, md_start_date_str, year_length=365.2425):
     ads = []; current_date = datetime.strptime(md_start_date_str, "%d-%m-%Y")
     md_years = DASHA_YEARS[md_lord_idx]
     for i in range(9):
@@ -1312,7 +1312,7 @@ def get_antardashas(md_lord_idx, md_start_date_str, year_length=360.0):
         current_date = end_date
     return ads
 
-def get_pratyantardashas(md_lord_idx, ad_lord_idx, ad_start_date_str, year_length=360.0):
+def get_pratyantardashas(md_lord_idx, ad_lord_idx, ad_start_date_str, year_length=365.2425):
     pds = []; current_date = datetime.strptime(ad_start_date_str, "%d-%m-%Y")
     md_years = DASHA_YEARS[md_lord_idx]; ad_years = DASHA_YEARS[ad_lord_idx]
     for i in range(9):
@@ -1381,12 +1381,12 @@ def get_tara_name(from_nak_idx, to_nak_idx):
     tara_idx = (to_nak_idx - from_nak_idx) % 9
     return TARA_NAMES[tara_idx]
 
-def get_all_dashas_for_year(moon_degree, birth_date, target_year):
+def get_all_dashas_for_year(moon_degree, birth_date, target_year, year_length=365.2425):
     nak_idx = int(moon_degree/(360/27)); lord_idx = nak_idx % 9
     fraction_remaining = 1.0 - (moon_degree%(360/27))/(360/27)
     current_date = birth_date
     first_md_duration = fraction_remaining * DASHA_YEARS[lord_idx]
-    md_end = current_date + timedelta(days=first_md_duration * 360.0)
+    md_end = current_date + timedelta(days=first_md_duration * year_length)
     mahadashas = [{"planet":DASHA_LORDS[lord_idx],"idx":lord_idx,"start":current_date,"end":md_end}]
     current_date = md_end
     
@@ -1452,18 +1452,18 @@ def get_all_dashas_for_year(moon_degree, birth_date, target_year):
     return active_dashas
 
 
-def search_dasha_alignments(moon_degree, birth_date, search_criteria):
+def search_dasha_alignments(moon_degree, birth_date, search_criteria, year_length=365.2425):
     nak_idx = int(moon_degree/(360/27)); lord_idx = nak_idx % 9
     fraction_remaining = 1.0 - (moon_degree%(360/27))/(360/27)
     current_date = birth_date; matches = []
     first_md_duration = fraction_remaining * DASHA_YEARS[lord_idx]
-    md_end = current_date + timedelta(days=first_md_duration*360.0)
+    md_end = current_date + timedelta(days=first_md_duration*year_length)
     mahadashas = [{"planet":DASHA_LORDS[lord_idx],"idx":lord_idx,"start":current_date,"end":md_end}]
     current_date = md_end
     
     for i in range(1,9):
         md_idx = (lord_idx+i)%9
-        md_end = current_date + timedelta(days=DASHA_YEARS[md_idx]*360.0)
+        md_end = current_date + timedelta(days=DASHA_YEARS[md_idx]*year_length)
         mahadashas.append({"planet":DASHA_LORDS[md_idx],"idx":md_idx,"start":current_date,"end":md_end})
         current_date = md_end
         
@@ -1475,13 +1475,13 @@ def search_dasha_alignments(moon_degree, birth_date, search_criteria):
             ad_idx = (md['idx']+i)%9; ad_planet = DASHA_LORDS[ad_idx]
             ad_years = DASHA_YEARS[ad_idx]; ad_duration = (md_years*ad_years)/120.0
             if search_criteria.get('antardasha') and ad_planet != search_criteria['antardasha']:
-                ad_current += timedelta(days=ad_duration*360.0); continue
-            ad_end = ad_current + timedelta(days=ad_duration*360.0)
+                ad_current += timedelta(days=ad_duration*year_length); continue
+            ad_end = ad_current + timedelta(days=ad_duration*year_length)
             pd_current = ad_current
             
             for j in range(9):
                 pd_idx = (ad_idx+j)%9; pd_planet = DASHA_LORDS[pd_idx]
-                pd_years = DASHA_YEARS[pd_idx]; pd_duration = (md_years*ad_years*pd_years/(120.0*120.0))*360.0
+                pd_years = DASHA_YEARS[pd_idx]; pd_duration = (md_years*ad_years*pd_years/(120.0*120.0))*year_length
                 if search_criteria.get('pratyantardasha') and pd_planet != search_criteria['pratyantardasha']:
                     pd_current += timedelta(days=pd_duration); continue
                 pd_end = pd_current + timedelta(days=pd_duration)
@@ -1530,7 +1530,7 @@ def search_dasha_alignments(moon_degree, birth_date, search_criteria):
 # ██  SECTION 3 — JSON API ROUTES  (replaces render_template_string)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, lon=None, dasha_year_type=360.0, age=0):
+def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, lon=None, dasha_year_type=365.2425, age=0):
     """
     Core calculation pipeline — same as original home() POST handler,
     but returns a dict (not rendered HTML).
@@ -2322,7 +2322,7 @@ def api_chart():
     chart_type = body.get('chart_type', 'D1')
     lat        = body.get('lat')
     lon        = body.get('lon')
-    dasha_year_type = float(body.get('dasha_year_type', 360.0))
+    dasha_year_type = float(body.get('dasha_year_type', 365.2425))
     age        = int(body.get('age', 0) or 0)
 
     if not all([name, city, date_str, time_str]):
@@ -2352,7 +2352,7 @@ def api_chart_fast():
     chart_type = body.get('chart_type', 'D1')
     lat        = body.get('lat')
     lon        = body.get('lon')
-    dasha_year_type = float(body.get('dasha_year_type', 360.0))
+    dasha_year_type = float(body.get('dasha_year_type', 365.2425))
     age        = int(body.get('age', 0) or 0)
 
     if not all([name, city, date_str, time_str]):
@@ -2385,7 +2385,7 @@ def api_chart_engines():
     chart_type = body.get('chart_type', 'D1')
     lat        = body.get('lat')
     lon        = body.get('lon')
-    dasha_year_type = float(body.get('dasha_year_type', 360.0))
+    dasha_year_type = float(body.get('dasha_year_type', 365.2425))
     age        = int(body.get('age', 0) or 0)
 
     if not all([name, city, date_str, time_str]):
@@ -2679,7 +2679,8 @@ def get_dashas_for_year_route():
     year          = int(data['year'])
     birth_date    = datetime.strptime(data['birth_date'], "%Y-%m-%d")
     moon_degree   = float(data['moon_degree'])
-    dashas        = get_all_dashas_for_year(moon_degree, birth_date, year)
+    dasha_year_type = float(data.get('dasha_year_type', 365.2425))
+    dashas        = get_all_dashas_for_year(moon_degree, birth_date, year, year_length=dasha_year_type)
     return jsonify({
         'year': year, 'count': len(dashas),
         'dashas': [{'mahadasha':d['mahadasha'],'antardasha':d['antardasha'],
@@ -2693,7 +2694,8 @@ def search_dasha_alignment_route():
     birth_date    = datetime.strptime(data['birth_date'], "%Y-%m-%d")
     moon_degree   = float(data['moon_degree'])
     search_criteria = data['search_criteria']
-    matches       = search_dasha_alignments(moon_degree, birth_date, search_criteria)
+    dasha_year_type = float(data.get('dasha_year_type', 365.2425))
+    matches       = search_dasha_alignments(moon_degree, birth_date, search_criteria, year_length=dasha_year_type)
     return jsonify({
         'count': len(matches),
         'matches': [{'mahadasha':m['mahadasha'],'antardasha':m['antardasha'],
@@ -3202,14 +3204,14 @@ def generate_kp_payload():
 
                 if b_dt:
                     today  = datetime.now()
-                    dashas = calculate_vimshottari(float(moon_deg), b_dt)
+                    dashas = calculate_vimshottari(float(moon_deg), b_dt, year_length=float(data.get('dasha_year_type', 365.2425)))
                     curr_md= next((d for d in dashas if datetime.strptime(d['start'], "%d-%m-%Y") <= today <= datetime.strptime(d['end'], "%d-%m-%Y")), None)
 
                     if curr_md:
                         _rev = {"सूर्य":"Su","चंद्र":"Mo","मंगल":"Ma","बुध":"Me","गुरु":"Ju","शुक्र":"Ve","शनि":"Sa","राहु":"Ra","केतु":"Ke"}
                         timeline["Current_MD"] = {"Planet": _rev.get(curr_md["planet"], ""), "End_Date": curr_md["end"]}
 
-                        all_bds     = get_antardashas(curr_md['idx'], curr_md['start'])
+                        all_bds     = get_antardashas(curr_md['idx'], curr_md['start'], year_length=float(data.get('dasha_year_type', 365.2425)))
                         curr_bd_idx = next((i for i, bd in enumerate(all_bds) if datetime.strptime(bd['start'], "%d-%m-%Y") <= today <= datetime.strptime(bd['end'], "%d-%m-%Y")), -1)
 
                         if curr_bd_idx != -1:

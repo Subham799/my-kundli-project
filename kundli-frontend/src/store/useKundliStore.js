@@ -344,7 +344,7 @@ const useKundliStore = create((set,get) => ({
   enginesLoading:false,   // ← phase 2 loading indicator
   selectedPlanet:null, drawerOpen:false,
   activeTab:"planets", sidebarCollapsed:false, hoveredHouse:null,
-  dashaYearType:360.0,   // 🌟 360 (सावन) या 365.2425 (सौर)
+  dashaYearType:365.2425,   // 🌟 365.2425 (सौर) default; 360 (सावन) alternative
 
   setForm:(key,value)=>set((s)=>({formData:{...s.formData,[key]:value}})),
   resetForm:()=>set({formData:{name:"",dob:"",time:"",city:"",chartType:"D1",lat:null,lon:null}}),

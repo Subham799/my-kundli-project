@@ -99,8 +99,8 @@ function TaraBadge({ label, tara }) {
   );
 }
 
-// 🌟 LAZY LOADING CALCULATION ENGINES (360-Day Saavan Year)
-function generateADsLazy(mdLord, mdStartStr, mdDurDays, yearLength = 360.0) {
+// 🌟 LAZY LOADING CALCULATION ENGINES — supports 365.2425 default / 360 alternative
+function generateADsLazy(mdLord, mdStartStr, mdDurDays, yearLength = 365.2425) {
   if (!mdStartStr || !mdLord) return [];
   let [d, m, y] = mdStartStr.split('-');
   let curTimeMs = Date.UTC(y, m - 1, d);
@@ -127,7 +127,7 @@ function generateADsLazy(mdLord, mdStartStr, mdDurDays, yearLength = 360.0) {
   return ads;
 }
 
-function generatePDsLazy(adLord, adStartStr, adDurDays, mdLord, mdDurDays, yearLength = 360.0) {
+function generatePDsLazy(adLord, adStartStr, adDurDays, mdLord, mdDurDays, yearLength = 365.2425) {
   if (!adStartStr || !adLord) return [];
   let [d, m, y] = adStartStr.split('-');
   let curTimeMs = Date.UTC(y, m - 1, d);
@@ -155,9 +155,9 @@ function generatePDsLazy(adLord, adStartStr, adDurDays, mdLord, mdDurDays, yearL
 }
 
 // 🔥 FIX: Added taraMatrix parameter to correctly fetch Tara during lazy load
-function generateSDsLazy(mdLord, adLord, pdLord, pdStartStr, taraMatrix) {
+function generateSDsLazy(mdLord, adLord, pdLord, pdStartStr, taraMatrix, yearLength = 365.2425) {
   if (!pdStartStr || !mdLord || !adLord || !pdLord) return [];
-  const pdDurDays = (YEARS[mdLord] * YEARS[adLord] * YEARS[pdLord] / 14400.0) * 360.0;
+  const pdDurDays = (YEARS[mdLord] * YEARS[adLord] * YEARS[pdLord] / 14400.0) * yearLength;
   
   let [d, m, y] = pdStartStr.split('-');
   let curTimeMs = Date.UTC(y, m - 1, d);
@@ -292,7 +292,7 @@ function PRGrid({ sdLord, prData, curPR, isCurrentSD, chartMeta, sdStart, sdDurD
 }
 
 // ── Level 4: Sookshma Dasha Grid ─────────────────────────────────────────
-function SDGrid({ pdLord, sdData, curSD, curPR, isCurrentPD, chartMeta, mdLord, adLord, pdStart, pdDurDays }) {
+function SDGrid({ pdLord, sdData, curSD, curPR, isCurrentPD, chartMeta, mdLord, adLord, pdStart, pdDurDays, yearLength = 365.2425 }) {
   const list = getPDs(pdLord);
   const pdLordCode = TO_CODE[pdLord] || "Su";
   const taraMatrix = chartMeta?.taraMatrix;
@@ -300,8 +300,8 @@ function SDGrid({ pdLord, sdData, curSD, curPR, isCurrentPD, chartMeta, mdLord, 
   // ⚡ LAZY LOAD DATES: Passed taraMatrix to generateSDsLazy
   const resolvedSdData = useMemo(() => {
       if (sdData && sdData.length > 0) return sdData;
-      return generateSDsLazy(mdLord, adLord, pdLord, pdStart, taraMatrix);
-  }, [sdData, mdLord, adLord, pdLord, pdStart, taraMatrix]);
+      return generateSDsLazy(mdLord, adLord, pdLord, pdStart, taraMatrix, yearLength);
+  }, [sdData, mdLord, adLord, pdLord, pdStart, taraMatrix, yearLength]);
 
   const findSD = (lord) => resolvedSdData?.find(s => s.lord === lord || s.lord_hi === lord || s.planet === lord);
 
@@ -373,7 +373,7 @@ function PDGrid({ adLord, pdData, curPD, curSD, curPR, isCurrentAD, chartMeta, m
   const taraMatrix = chartMeta?.taraMatrix;
   
   // ⚡ LAZY LOAD DATES
-  const yearLength = chartMeta?.meta?.dashaYearType || 360.0;
+  const yearLength = chartMeta?.dashaYearType || 365.2425;
 
   const resolvedPdData = useMemo(() => {
       if (pdData && pdData.length > 0) return pdData;
@@ -1344,7 +1344,7 @@ function DashaInnerTabs({ active, onChange }) {
   );
 }
 
-export default function DashaTimeline({ dasha, chartMeta, currentYearType = 360.0, onYearTypeChange }) {
+export default function DashaTimeline({ dasha, chartMeta, currentYearType = 365.2425, onYearTypeChange }) {
   if (!dasha) return null;
   const { current, sequence, yogini } = dasha;
 

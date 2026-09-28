@@ -90,7 +90,7 @@ const VALID_SHARED_TABS = new Set([
 
 function SharedKundliPage() {
   const { token } = useParams();
-  const { setForm, fetchChart, setActiveTab, selectPlanet } = useKundliStore();
+  const { setForm, resetForm, resetChart, fetchChart, setActiveTab, selectPlanet } = useKundliStore();
   const [shareError, setShareError] = useState("");
 
   useEffect(() => {
@@ -113,25 +113,29 @@ function SharedKundliPage() {
           if (payload?.ui?.report) {
             localStorage.setItem(SHARED_REPORT_STORAGE_KEY, JSON.stringify(payload.ui.report));
             if (payload.ui.report.openReport) localStorage.setItem("kundli-shared-report-open", "1");
+            else localStorage.removeItem("kundli-shared-report-open");
           }
           localStorage.setItem("kundli-shared-ui-state", JSON.stringify(payload.ui || {}));
         } catch {}
 
-        useKundliStore.getState().resetChart();
+        // Shared links must never inherit the previous Kundli in the same browser.
+        resetChart();
+        resetForm();
 
         const fields = {
           name: birth.name,
           dob: birth.dob,
           time: birth.time,
           city: birth.city,
-          chartType: birth.chartType || "D1",
+          // D1 is the universal base chart; D10 must come from the Varga data.
+          chartType: "D1",
           lat: birth.lat ?? null,
           lon: birth.lon ?? null,
           age: birth.age || 0,
         };
         Object.entries(fields).forEach(([key, value]) => setForm(key, value));
 
-        await fetchChart(Number(birth.dashaYearType || 360.0));
+        await fetchChart(Number(birth.dashaYearType || 365.2425));
         const stateAfterFetch = useKundliStore.getState();
         if (!stateAfterFetch.chartData) {
           throw new Error(stateAfterFetch.error || "Kundli load नहीं हो पाई");
@@ -166,7 +170,18 @@ function SharedKundliPage() {
           <div className="max-w-md w-full rounded-2xl border border-rose-500/20 bg-slate-900/60 p-6 text-center">
             <div className="text-lg font-black text-rose-300 mb-2">Kundli Link नहीं खुल पाया</div>
             <div className="text-sm text-slate-400 mb-4">{shareError}</div>
-            <a href="/" className="inline-flex px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-sm font-bold">
+            <a
+              href="/"
+              onClick={() => {
+                resetChart();
+                resetForm();
+                try {
+                  ["kundli-varga-view-settings","kundli-report-dasha-selection","kundli-shared-ui-state","kundli-shared-report-open"]
+                    .forEach((key) => localStorage.removeItem(key));
+                } catch {}
+              }}
+              className="inline-flex px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-sm font-bold"
+            >
               नई Kundli बनाएं
             </a>
           </div>

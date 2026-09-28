@@ -2,7 +2,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
-import { User, Moon, Zap, Download, FileText } from "lucide-react";
+import { User, Moon, Zap, Download, FileText, RefreshCw } from "lucide-react";
 import useKundliStore from "../store/useKundliStore";
 import { TABS } from "../constants";
 import { PLANET_META } from "../constants";
@@ -1256,6 +1256,19 @@ function JaiminiDrishtiPanel({ houses = [] }) {
 // ─────────────────────────────────────────────────────────────
 const VARGA_KEYS = ["D1","D2","D3","D4","D6","D7","D9","D10","D12","D16","D20","D24","D27","D30","D40","D45","D60"];
 
+// Clear only Kundli UI/cache state. This does not touch unrelated site storage.
+function clearKundliClientState() {
+  try {
+    [
+      "kundli-varga-view-settings",
+      "kundli-report-dasha-selection",
+      "kundli-shared-ui-state",
+      "kundli-shared-report-open",
+      ...VARGA_KEYS.map((key) => `kundli-chart-annotations-${key}`),
+    ].forEach((key) => localStorage.removeItem(key));
+  } catch {}
+}
+
 function ChartAnnotationOverlay({ chartKey }) {
   const storageKey = `kundli-chart-annotations-${chartKey}`;
   const [drawing, setDrawing] = useState(false);
@@ -1667,11 +1680,12 @@ export function buildKundliShareUrl(chartData, formData = {}, uiOverrides = {}) 
     dob: formData?.dob || "",
     time: formData?.time || "",
     city: formData?.city || chartData?.meta?.city || "",
-    chartType: formData?.chartType || chartData?.meta?.chartType || "D1",
+    // Base/live Kundli is always D1; D10 is rendered from the Varga data separately.
+    chartType: "D1",
     lat: formData?.lat ?? null,
     lon: formData?.lon ?? null,
     age: formData?.age ?? 0,
-    dashaYearType: formData?.dashaYearType ?? chartData?.meta?.dashaYearType ?? 360.0,
+    dashaYearType: formData?.dashaYearType ?? chartData?.meta?.dashaYearType ?? 365.2425,
   };
 
   const ui = {
@@ -2469,10 +2483,18 @@ function RightPanel({ chartData }) {
     selectPlanet, 
     closeDrawer, 
     enginesLoading,
-    setDashaYearType
+    setDashaYearType,
+    resetForm,
+    resetChart
   } = useKundliStore();
 
   const isMobile = useIsMobile();
+
+  const handleNewKundli = () => {
+    clearKundliClientState();
+    resetChart();
+    resetForm();
+  };
 
   const handleShareKundli = async (overrides = {}) => {
     const url = buildKundliShareUrl(chartData, formData, {
@@ -2491,7 +2513,7 @@ function RightPanel({ chartData }) {
   return (
     <div className="flex flex-col min-h-0">
       {/* 1. Export options */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
         <button
           type="button"
           onClick={() => setShowPDFModal(true)}
@@ -2537,6 +2559,22 @@ function RightPanel({ chartData }) {
           <span>🔗 Share Kundli Link</span>
           {shareMsg ? <span className="text-[10px]">✓ {shareMsg}</span> : <span className="text-[10px] opacity-70">Live page</span>}
         </button>
+
+        <Link
+          to="/"
+          onClick={handleNewKundli}
+          className="w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl font-bold text-[13px] transition-all hover:scale-[1.01] active:scale-[.99] flex-shrink-0"
+          style={{
+            background: "linear-gradient(135deg,rgba(245,158,11,.10),rgba(168,85,247,.10))",
+            border: "1.5px solid rgba(245,158,11,.28)",
+            color: "#FCD34D",
+            fontFamily: "'Noto Sans Devanagari', sans-serif"
+          }}
+        >
+          <RefreshCw size={15} />
+          <span>नई Kundli</span>
+          <span className="text-[10px] opacity-70">Fresh</span>
+        </Link>
       </div>
 
       {/* 2. PDF Modal */}
@@ -2662,7 +2700,7 @@ function RightPanel({ chartData }) {
   <DashaTimeline
     dasha={chartData.dasha}
     chartMeta={chartData.meta}
-    currentYearType={chartData.meta?.dashaYearType || 360.0}
+    currentYearType={chartData.meta?.dashaYearType || 365.2425}
     onYearTypeChange={setDashaYearType}
   />
 )}
