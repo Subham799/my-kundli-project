@@ -29,8 +29,6 @@ async function fetchWithSmartRetry(endpoint, payload) {
         cache: "no-store",
         headers: {
           "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "Pragma": "no-cache",
         },
         body: JSON.stringify({ ...payload, _request_ts: Date.now() }),
       });
@@ -97,8 +95,6 @@ export async function fetchKundliEngines(formData) {
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
       },
       body: JSON.stringify({
         name: formData.name, dob: formData.dob, time: formData.time,
