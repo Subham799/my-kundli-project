@@ -1272,7 +1272,9 @@ function clearKundliClientState() {
 function ChartAnnotationOverlay({ chartKey }) {
   const storageKey = `kundli-chart-annotations-${chartKey}`;
   const [drawing, setDrawing] = useState(false);
-  const [tool, setTool] = useState("pen"); // pen | line | arrow | circle | rect
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [tool, setTool] = useState("pen"); // pen | line | arrow | circle | rect | eraser
+  const [drawColor, setDrawColor] = useState("#F59E0B");
   const [strokes, setStrokes] = useState(() => {
     try {
       const raw = JSON.parse(localStorage.getItem(storageKey) || "[]");
@@ -1282,7 +1284,6 @@ function ChartAnnotationOverlay({ chartKey }) {
   const activeStroke = useRef(null);
   const [previewPoints, setPreviewPoints] = useState([]);
 
-  // Keep annotations lightweight and isolated per chart.
   useEffect(() => {
     try { localStorage.setItem(storageKey, JSON.stringify(strokes.slice(-20))); } catch {}
   }, [storageKey, strokes]);
@@ -1298,63 +1299,46 @@ function ChartAnnotationOverlay({ chartKey }) {
 
   const normalizeShape = (points, selectedTool) => {
     if (!points?.length) return null;
-    if (selectedTool === "line") {
-      return { type: "line", start: points[0], end: points[points.length - 1] };
-    }
-    if (selectedTool === "arrow") {
-      return { type: "arrow", start: points[0], end: points[points.length - 1] };
-    }
+    if (selectedTool === "line") return { type: "line", start: points[0], end: points[points.length - 1] };
+    if (selectedTool === "arrow") return { type: "arrow", start: points[0], end: points[points.length - 1] };
     if (selectedTool === "rect") {
       const xs = points.map(p => p.x), ys = points.map(p => p.y);
       const x = Math.min(...xs), y = Math.min(...ys);
       return { type: "rect", x, y, w: Math.max(0.5, Math.max(...xs) - x), h: Math.max(0.5, Math.max(...ys) - y) };
     }
     if (selectedTool === "circle") {
-      const first = points[0], last = points[points.length - 1];
       const xs = points.map(p => p.x), ys = points.map(p => p.y);
       const minX = Math.min(...xs), maxX = Math.max(...xs);
       const minY = Math.min(...ys), maxY = Math.max(...ys);
       const w = maxX - minX, h = maxY - minY;
       if (w < 2 || h < 2) return { type: "path", points };
-      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-      const r = (w + h) / 4;
-      // If the user draws a reasonably closed circle, clean it automatically.
-      const closure = Math.hypot(last.x - first.x, last.y - first.y);
-      const deviations = points.map(p => Math.abs(Math.hypot(p.x - cx, p.y - cy) - r));
-      const avgDeviation = deviations.reduce((a, v) => a + v, 0) / deviations.length;
-      if (closure <= 18 && Math.abs(w - h) / Math.max(w, h) < 0.30 && avgDeviation < r * 0.25) {
-        return { type: "circle", cx, cy, r };
-      }
-      return { type: "circle", cx, cy, r };
+      return { type: "circle", cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, r: (w + h) / 4 };
     }
     return { type: "path", points: points.slice(-160) };
   };
 
   const start = (e) => {
-    if (!drawing) return;
+    if (!drawing || tool === "eraser") return;
     e.preventDefault();
     e.currentTarget.setPointerCapture?.(e.pointerId);
     const first = pointFromEvent(e, e.currentTarget);
-     activeStroke.current = [first];
-     setPreviewPoints([first]);
+    activeStroke.current = [first];
+    setPreviewPoints([first]);
   };
 
   const move = (e) => {
-    if (!drawing || !activeStroke.current) return;
+    if (!drawing || tool === "eraser" || !activeStroke.current) return;
     e.preventDefault();
     const pts = activeStroke.current;
-    // Shape tools only need start/end; keeping one extra point avoids a large React update loop.
     if (tool !== "pen") {
       const next = pointFromEvent(e, e.currentTarget);
       activeStroke.current = [pts[0], next];
-      // Live preview for straight line / arrow / circle / rectangle.
       setPreviewPoints([pts[0], next]);
       return;
     }
     if (pts.length >= 160) return;
     const next = [...pts, pointFromEvent(e, e.currentTarget)];
     activeStroke.current = next;
-    // Keep the in-progress freehand stroke visible while drawing.
     setPreviewPoints(next);
   };
 
@@ -1363,10 +1347,13 @@ function ChartAnnotationOverlay({ chartKey }) {
     const pts = activeStroke.current;
     activeStroke.current = null;
     setPreviewPoints([]);
-    if (!drawing || !pts?.length) return;
+    if (!drawing || tool === "eraser" || !pts?.length) return;
     const shape = normalizeShape(pts, tool);
     if (!shape) return;
-    setStrokes(prev => [...prev.slice(-19), shape]);
+    setStrokes(prev => [
+      ...prev.slice(-19),
+      { ...shape, id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, color: drawColor }
+    ]);
   };
 
   const clear = () => {
@@ -1376,58 +1363,251 @@ function ChartAnnotationOverlay({ chartKey }) {
   };
 
   const undo = () => setStrokes(prev => prev.slice(0, -1));
+  const eraseShape = (id) => setStrokes(prev => prev.filter((shape, i) => (shape.id ?? i) !== id));
 
-  const renderShape = (shape, i) => {
+  const renderShape = (shape, i, isPreview = false) => {
     if (!shape) return null;
-    const common = { key: i, fill: "none", stroke: "currentColor", strokeWidth: "0.65", className: "text-amber-300" };
+    const markerId = isPreview ? `kundli-arrowhead-preview-${chartKey}` : `kundli-arrowhead-${chartKey}-${shape.id ?? i}`;
+    const isEraser = !isPreview && tool === "eraser" && drawing;
+    const common = {
+      key: shape.id ?? i,
+      fill: "none",
+      stroke: shape.color || "#F59E0B",
+      strokeWidth: "0.65",
+      style: { pointerEvents: isEraser ? "stroke" : "none", cursor: isEraser ? "pointer" : undefined },
+      onPointerDown: isEraser ? (e) => { e.stopPropagation(); eraseShape(shape.id ?? i); } : undefined,
+    };
     if (shape.type === "circle") return <circle {...common} cx={shape.cx} cy={shape.cy} r={shape.r} />;
     if (shape.type === "rect") return <rect {...common} x={shape.x} y={shape.y} width={shape.w} height={shape.h} />;
     if (shape.type === "line") return <line {...common} x1={shape.start.x} y1={shape.start.y} x2={shape.end.x} y2={shape.end.y} strokeLinecap="round" />;
-     if (shape.type === "arrow") return <line {...common} x1={shape.start.x} y1={shape.start.y} x2={shape.end.x} y2={shape.end.y} strokeLinecap="round" markerEnd="url(#kundli-arrowhead)" />;
+    if (shape.type === "arrow") return <line {...common} x1={shape.start.x} y1={shape.start.y} x2={shape.end.x} y2={shape.end.y} strokeLinecap="round" markerEnd={`url(#${markerId})`} />;
     return <polyline {...common} points={(shape.points || []).map(p => `${p.x},${p.y}`).join(" ")} strokeLinecap="round" strokeLinejoin="round" />;
+  };
+
+  const tools = [
+    ["pen", "Free"], ["line", "Line"], ["arrow", "Arrow"], ["circle", "Circle"], ["rect", "Rect"], ["eraser", "Eraser"],
+  ];
+  const colors = ["#F59E0B","#EF4444","#22D3EE","#4ADE80","#A78BFA","#F472B6","#FFFFFF"];
+
+  const selectTool = (id) => {
+    setTool(id);
+    setDrawing(true);
+    setToolsOpen(false);
   };
 
   return (
     <>
-      <div className="absolute left-2 top-9 z-50 flex flex-wrap items-center gap-1 max-w-[90%]">
-        <button type="button" onClick={() => setDrawing(v => !v)}
-          className={`px-2 py-1 rounded-md text-[9px] font-bold border backdrop-blur ${drawing ? "bg-amber-500/20 text-amber-200 border-amber-400/50" : "bg-slate-950/90 text-slate-300 border-slate-700"}`}>
-          {drawing ? "Pen On" : "Draw"}
+      <div className="absolute left-2 top-9 z-50 flex flex-wrap items-start gap-1 max-w-[94%]">
+        <button
+          type="button"
+          onClick={() => setToolsOpen(v => !v)}
+          className="md:hidden px-2.5 py-1 rounded-md text-[9px] font-bold border bg-slate-950/95 text-slate-300 border-slate-700 backdrop-blur"
+        >
+          Drawing Tools {toolsOpen ? "▴" : "▾"}
         </button>
-        {[
-          ["pen", "Free"], ["line", "Line"], ["arrow", "Arrow"], ["circle", "Circle"], ["rect", "Rect"]
-        ].map(([id, label]) => (
-          <button key={id} type="button" onClick={() => { setTool(id); setDrawing(true); }}
-            className={`px-2 py-1 rounded-md text-[9px] font-bold border ${tool === id && drawing ? "bg-cyan-500/15 text-cyan-200 border-cyan-400/40" : "bg-slate-950/90 text-slate-400 border-slate-700"}`}>
-            {label}
+
+        <div className={`${toolsOpen ? "flex" : "hidden"} md:flex flex-wrap items-center gap-1 w-full md:w-auto p-1 md:p-0 rounded-lg md:rounded-none bg-slate-950/85 md:bg-transparent border border-slate-700/60 md:border-0 backdrop-blur md:backdrop-blur-none`}>
+          <button type="button" onClick={() => setDrawing(v => !v)}
+            className={`px-2 py-1 rounded-md text-[9px] font-bold border backdrop-blur ${drawing ? "bg-amber-500/20 text-amber-200 border-amber-400/50" : "bg-slate-950/90 text-slate-300 border-slate-700"}`}>
+            {drawing ? "Pen On" : "Draw"}
           </button>
-        ))}
-        {strokes.length > 0 && <button type="button" onClick={undo}
-          className="px-2 py-1 rounded-md text-[9px] font-bold border bg-slate-950/90 text-slate-400 border-slate-700">Undo</button>}
-        {strokes.length > 0 && <button type="button" onClick={clear}
-          className="px-2 py-1 rounded-md text-[9px] font-bold border bg-slate-950/90 text-slate-400 border-slate-700">Clear</button>}
+          {tools.map(([id, label]) => (
+            <button key={id} type="button" onClick={() => selectTool(id)}
+              className={`px-2 py-1 rounded-md text-[9px] font-bold border ${tool === id && drawing ? "bg-cyan-500/15 text-cyan-200 border-cyan-400/40" : "bg-slate-950/90 text-slate-400 border-slate-700"}`}>
+              {label}
+            </button>
+          ))}
+
+          <div className="flex items-center gap-1 px-1.5 py-1 rounded-md border border-slate-700 bg-slate-950/90" title="Drawing properties / colour">
+            <span className="text-[8px] text-slate-500 mr-0.5">Property</span>
+            {colors.map(c => (
+              <button key={c} type="button" aria-label={`Colour ${c}`} onClick={() => { setDrawColor(c); if (tool === "eraser") setTool("pen"); setDrawing(true); }}
+                className="w-3.5 h-3.5 rounded-full border"
+                style={{ background: c, borderColor: drawColor === c ? "white" : "rgba(255,255,255,.25)", boxShadow: drawColor === c ? "0 0 0 1px rgba(245,158,11,.8)" : "none" }} />
+            ))}
+          </div>
+
+          {strokes.length > 0 && <button type="button" onClick={undo}
+            className="px-2 py-1 rounded-md text-[9px] font-bold border bg-slate-950/90 text-slate-400 border-slate-700">Undo</button>}
+          {strokes.length > 0 && <button type="button" onClick={clear}
+            className="px-2 py-1 rounded-md text-[9px] font-bold border bg-slate-950/90 text-slate-400 border-slate-700">Clear</button>}
+        </div>
       </div>
 
       {(drawing || strokes.length > 0) && (
         <svg className={`absolute inset-0 w-full h-full ${drawing ? "z-40 cursor-crosshair" : "z-20 pointer-events-none"}`}
           viewBox="0 0 100 100" preserveAspectRatio="none" style={drawing ? { touchAction: "none" } : undefined}
-           onDoubleClick={(e) => e.preventDefault()}
+          onDoubleClick={(e) => e.preventDefault()}
           onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
           <defs>
-            <marker id="kundli-arrowhead" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L5,2.5 L0,5 z" fill="currentColor" className="text-amber-300" />
-            </marker>
+            {(strokes || []).filter(shape => shape?.type === "arrow").map((shape, i) => (
+              <marker key={`arrowhead-${shape.id ?? i}`} id={`kundli-arrowhead-${chartKey}-${shape.id ?? i}`}
+                markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L5,2.5 L0,5 z" fill={shape.color || "#F59E0B"} />
+              </marker>
+            ))}
+            {previewPoints.length > 0 && tool === "arrow" && (
+              <marker id={`kundli-arrowhead-preview-${chartKey}`} markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L5,2.5 L0,5 z" fill={drawColor || "#F59E0B"} />
+              </marker>
+            )}
           </defs>
-          {strokes.map(renderShape)}
-          {drawing && previewPoints.length > 0 && renderShape(normalizeShape(previewPoints, tool), "active")}
+          {strokes.map((shape, i) => renderShape(shape, i))}
+          {drawing && tool !== "eraser" && previewPoints.length > 0 && renderShape({ ...normalizeShape(previewPoints, tool), color: drawColor }, "active", true)}
         </svg>
       )}
     </>
   );
 }
 
+function downloadVargaChart(cardEl, chartKey) {
+  if (!cardEl) return;
+  const svgEls = Array.from(cardEl.querySelectorAll("svg"));
+  const mainSvg = svgEls.find(el => el.getAttribute("viewBox") === "0 0 440 440");
+  const overlaySvg = svgEls.find(el => el.getAttribute("viewBox") === "0 0 100 100");
+  if (!mainSvg) return;
+
+  const W = 1000, H = 1080;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#020713";
+  ctx.fillRect(0, 0, W, H);
+
+  const drawSvg = (svg, x, y, w, h) => new Promise(resolve => {
+    const clone = svg.cloneNode(true);
+    clone.setAttribute("width", String(w));
+    clone.setAttribute("height", String(h));
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    const xml = new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => { ctx.drawImage(img, x, y, w, h); URL.revokeObjectURL(url); resolve(); };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    img.src = url;
+  });
+
+  (async () => {
+    ctx.textAlign = "center";
+    ctx.font = "900 28px Inter, Arial, sans-serif";
+    ctx.fillStyle = "#FCD34D";
+    ctx.fillText(chartKey, W / 2, 42);
+
+    const chartX = 20, chartY = 58, chartW = 960, chartH = 960;
+    await drawSvg(mainSvg, chartX, chartY, chartW, chartH);
+    if (overlaySvg) await drawSvg(overlaySvg, chartX, chartY, chartW, chartH);
+
+    ctx.font = "700 20px Inter, Arial, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,.65)";
+    ctx.fillText("www.kundalimaker.com", W / 2, 1055);
+
+    const a = document.createElement("a");
+    a.download = `KundaliMaker-${chartKey}.png`;
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+  })();
+}
+
+
+async function downloadVargaView(gridEl, visibleCharts, columns) {
+  if (!gridEl || !visibleCharts?.length) return;
+
+  const cards = visibleCharts.map(key => gridEl.querySelector(`[data-varga-card="${key}"]`)).filter(Boolean);
+  if (!cards.length) return;
+
+  // Compose the currently visible chart grid into one PNG, including annotations.
+  const CARD_W = 760;
+  const CARD_H = 830;
+  const GAP = 18;
+  const COLS = Math.max(1, Number(columns) || 1);
+  const ROWS = Math.ceil(cards.length / COLS);
+  const PAD = 18;
+  const HEADER_H = 48;
+  const FOOTER_H = 34;
+  const W = PAD * 2 + Math.min(COLS, cards.length) * CARD_W + Math.max(0, Math.min(COLS, cards.length) - 1) * GAP;
+  const H = PAD * 2 + ROWS * CARD_H + Math.max(0, ROWS - 1) * GAP;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  ctx.fillStyle = '#020713';
+  ctx.fillRect(0, 0, W, H);
+
+  const drawSvg = (svg, x, y, w, h) => new Promise(resolve => {
+    if (!svg) return resolve();
+    const clone = svg.cloneNode(true);
+    clone.setAttribute('width', String(w));
+    clone.setAttribute('height', String(h));
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const xml = new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, x, y, w, h);
+      URL.revokeObjectURL(url);
+      resolve();
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    img.src = url;
+  });
+
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
+    const key = visibleCharts[i];
+    const col = i % COLS;
+    const row = Math.floor(i / COLS);
+    const x = PAD + col * (CARD_W + GAP);
+    const y = PAD + row * (CARD_H + GAP);
+
+    ctx.fillStyle = '#07101f';
+    ctx.strokeStyle = 'rgba(100,116,139,.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, CARD_W, CARD_H, 18);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.font = '900 20px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#FCD34D';
+    ctx.fillText(key, x + 18, y + 30);
+    if (key === 'D1') {
+      ctx.font = '600 11px Inter, Arial, sans-serif';
+      ctx.fillStyle = 'rgba(148,163,184,.65)';
+      ctx.fillText('Birth Chart', x + 54, y + 29);
+    }
+
+    const svgEls = Array.from(card.querySelectorAll('svg'));
+    const mainSvg = svgEls.find(el => el.getAttribute('viewBox') === '0 0 440 440');
+    const overlaySvg = svgEls.find(el => el.getAttribute('viewBox') === '0 0 100 100');
+    const chartX = x + 20;
+    const chartY = y + HEADER_H;
+    const chartW = CARD_W - 40;
+    const chartH = CARD_H - HEADER_H - FOOTER_H - 10;
+
+    await drawSvg(mainSvg, chartX, chartY, chartW, chartH);
+    if (overlaySvg) await drawSvg(overlaySvg, chartX, chartY, chartW, chartH);
+
+    ctx.textAlign = 'center';
+    ctx.font = '700 12px Inter, Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.62)';
+    ctx.fillText('www.kundalimaker.com', x + CARD_W / 2, y + CARD_H - 12);
+  }
+
+  const a = document.createElement('a');
+  a.download = `KundaliMaker-Charts-View.png`;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
 function VargaGrid({ chartData }) {
   const { selectedPlanet, hoverHouse } = useKundliStore();
+  const chartsGridRef = useRef(null);
   const SETTINGS_KEY = "kundli-varga-view-settings";
   const readSettings = () => {
     try {
@@ -1489,6 +1669,11 @@ function VargaGrid({ chartData }) {
               className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${viewCount === "all" ? "bg-amber-500/15 text-amber-300 border-amber-500/40" : "text-slate-400 border-slate-700/60 hover:text-slate-200"}`}>
               All
             </button>
+            <button type="button" onClick={() => downloadVargaView(chartsGridRef.current, visibleCharts, columns)}
+              className="px-2.5 py-1 rounded-lg text-[10px] font-bold border text-slate-300 border-slate-700/60 hover:text-amber-300 hover:border-amber-500/40"
+              title="Download the current selected Charts grid as one PNG">
+              Download View
+            </button>
             <button type="button" onClick={resetChartWorkspace}
               className="px-2.5 py-1 rounded-lg text-[10px] font-bold border text-slate-400 border-slate-700/60 hover:text-amber-300 hover:border-amber-500/40">
               Reset
@@ -1514,14 +1699,14 @@ function VargaGrid({ chartData }) {
         </div>
       </div>
 
-      <div
+      <div ref={chartsGridRef}
         className={`grid gap-3 ${visibleCharts.length === 1 ? "place-items-center" : ""}`}
         style={{
           gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
         }}
       >
         {visibleCharts.map((key) => (
-          <div key={key} className={`relative min-w-0 w-full rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2.5 ${visibleCharts.length === 1 ? "max-w-[560px]" : ""}`}>
+          <div key={key} data-varga-card={key} className={`relative min-w-0 w-full rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2.5 ${visibleCharts.length === 1 ? "max-w-[560px]" : ""}`}>
             <ChartAnnotationOverlay chartKey={key} />
             <div className="relative z-30 flex items-center justify-between gap-2 px-1 pb-2 pt-0.5">
               <div className="flex items-center gap-2">
@@ -1534,6 +1719,11 @@ function VargaGrid({ chartData }) {
                   className="bg-slate-950 border border-slate-700 rounded-md text-[9px] text-slate-300 px-1 py-0.5">
                   {Array.from({length:12}, (_,i) => i+1).map(n => <option key={n} value={n}>H{n}</option>)}
                 </select>
+                <button type="button" onClick={e => downloadVargaChart(e.currentTarget.closest("[data-varga-card]"), key)}
+                  className="px-2 py-0.5 rounded-md text-[9px] font-bold border bg-slate-950 text-slate-300 border-slate-700 hover:text-amber-300 hover:border-amber-500/40"
+                  title={`Download ${key} as PNG`}>
+                  Download
+                </button>
               </div>
             </div>
             <InteractiveKundli

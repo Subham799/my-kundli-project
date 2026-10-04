@@ -116,29 +116,23 @@ function getPlanetStatus(code, planetData = {}, signIndex = null) {
   };
 
   let dignityLabel = "";
-
-  // IMPORTANT: when viewing a Varga, always calculate dignity from the
-  // planet's sign in THAT Varga. Backend D1 dignity must not leak into D9/D10/etc.
-  if (idx !== null) {
-    if (EXALT[code] === idx) dignityLabel = "E";
-    else if (DEBIL[code] === idx) dignityLabel = "D";
-    else if ((OWN[code] || []).includes(idx)) dignityLabel = "O";
-  } else {
-    // Fall back to backend dignity only when the displayed sign is unavailable.
-    if (/Uchcha|Exalt|उच्च/i.test(dignity)) dignityLabel = "E";
-    else if (/Neecha|Debil|नीच/i.test(dignity)) dignityLabel = "D";
-    else if (/Swagraha|Swa|Own|स्वराशि/i.test(dignity)) dignityLabel = "O";
-    else if (/Mitra|Friend|मित्र/i.test(dignity)) dignityLabel = "F";
-    else if (/Shatru|Enemy|शत्रु/i.test(dignity)) dignityLabel = "En";
-  }
+  if (/Uchcha|Exalt|उच्च/i.test(dignity)) dignityLabel = "E";
+  else if (/Neecha|Debil|नीच/i.test(dignity)) dignityLabel = "D";
+  else if (/Swagraha|Swa|Own|स्वराशि/i.test(dignity)) dignityLabel = "O";
+  else if (/Mitra|Friend|मित्र/i.test(dignity)) dignityLabel = "F";
+  else if (/Shatru|Enemy|शत्रु/i.test(dignity)) dignityLabel = "En";
+  else if (idx !== null && EXALT[code] === idx) dignityLabel = "E";
+  else if (idx !== null && DEBIL[code] === idx) dignityLabel = "D";
+  else if (idx !== null && (OWN[code] || []).includes(idx)) dignityLabel = "O";
 
   if (dignityLabel === "E") out.push({label:"E", title:"Exalted", color:"#4ADE80"});
   else if (dignityLabel === "D") out.push({label:"D", title:"Debilitated", color:"#FB7185"});
   else if (dignityLabel === "O") out.push({label:"O", title:"Own sign", color:"#22D3EE"});
+  else if (dignityLabel === "F") out.push({label:"F", title:"Friend sign", color:"#C084FC"});
+  else if (dignityLabel === "En") out.push({label:"En", title:"Enemy sign", color:"#FB923C"});
 
-  // Natural friend/enemy sign status, based on the sign lord in the
-  // currently displayed chart. This is intentionally evaluated only when
-  // the sign is not exalted/debilitated/own.
+  // Natural friend/enemy sign status if not already classified by backend.
+  // Sign-lord relationship is used for friend/enemy classification.
   if (!dignityLabel && idx !== null) {
     const signLord = ["Ma","Ve","Me","Mo","Su","Me","Ve","Ma","Ju","Sa","Sa","Ju"][idx];
     const REL = {
@@ -153,7 +147,6 @@ function getPlanetStatus(code, planetData = {}, signIndex = null) {
     const rel = REL[code];
     if (rel?.friend?.includes(signLord)) out.push({label:"F", title:"Friend sign", color:"#C084FC"});
     else if (rel?.enemy?.includes(signLord)) out.push({label:"En", title:"Enemy sign", color:"#FB923C"});
-    else if (rel?.neutral?.includes(signLord)) out.push({label:"N", title:"Neutral sign", color:"#CBD5E1"});
   }
 
   const retro = p.Retrograde ?? p.retrograde ?? p.isRetrograde ?? flags.retrograde ?? p.retro;
@@ -323,10 +316,14 @@ export default function InteractiveKundli({
               const isH = hovered===n, isC = clicked===n;
               const isHi= selectedPlanet&&(hd.planets||[]).includes(selectedPlanet);
               const sm  = selectedPlanet ? PLANET_META[selectedPlanet] : null;
+              const ri  = hd.sign_index !== undefined ? hd.sign_index : n - 1;
+              // Each house border follows the color of that house's sign lord.
+              // This makes the house, rashi, and rashi-lord visually belong together.
+              const houseLordColor = PLANET_META[RASHI_LORD_CODE[ri]]?.color || cs.stroke || "#94A3B8";
               return (
                 <polygon key={hn} points={pts}
                   fill={isC?"rgba(245,158,11,.14)":isH?"rgba(34,211,238,.1)":isHi?`${sm?.color}12`:cs.fill}
-                  stroke={isC?"#F59E0B":isH?"#22D3EE":isHi?(sm?.color||cs.stroke):cs.stroke}
+                  stroke={isC?"#F59E0B":isH?"#22D3EE":isHi?(sm?.color||houseLordColor):houseLordColor}
                   strokeWidth={isC||isH||isHi?1.8:.5}
                   style={{cursor:"pointer",transition:"fill .13s"}}
                   onMouseEnter={e=>onEnter(n,e)} onMouseLeave={onLeave}
@@ -382,8 +379,12 @@ export default function InteractiveKundli({
                 : 0;
               const totalPW   = (grahas.length - 1) * planetSpacing;
 
-              const rashiColor = isC?"#FDE68A":isH?"#67E8F9":"rgba(245,158,11,.85)";
-              const nameColor  = isC||isH ? "#FFFFFF" : "rgba(255,255,255,.92)";
+              // हर राशि/हाउस का नंबर, राशि नाम और राशि-स्वामी उसी स्वामी ग्रह के रंग में रहें।
+              // इससे जिस ग्रह का स्वामित्व है, उसका रंग पूरे house header को एक ही visual identity देता है।
+              const houseLordColor = lordColor || "#94A3B8";
+              const rashiColor = isC ? "#FFFFFF" : isH ? "#FFFFFF" : houseLordColor;
+              const nameColor  = isC || isH ? "#FFFFFF" : houseLordColor;
+              const lordNameColor = houseLordColor;
 
               return (
                 <g key={hn} style={{pointerEvents:"none"}}>
@@ -407,8 +408,8 @@ export default function InteractiveKundli({
                   {/* Lord in brackets — colored with lord's planet color */}
                   <text x={pos.cx} y={pos.ly}
                     textAnchor="middle" fontSize="9.5" fontWeight="600"
-                    fill={lordColor} fontFamily="Inter, sans-serif"
-                    opacity=".78">
+                    fill={lordNameColor} fontFamily="Inter, sans-serif"
+                    opacity=".92">
                     ({lordAbbr})
                   </text>
 
@@ -542,12 +543,12 @@ export default function InteractiveKundli({
                           border:"1px solid rgba(245,158,11,.28)"}}>
                         House {hd.actualHouse || active}
                       </span>
-                      <span className="text-sm font-bold text-white"
-                        style={{fontFamily:"Inter, sans-serif"}}>
+                      <span className="text-sm font-bold"
+                        style={{fontFamily:"Inter, sans-serif", color: PLANET_META[RASHI_LORD_CODE[ri]]?.color || "#FFFFFF"}}>
                         {hd.sign||RASHI[ri]}
                       </span>
-                      <span className="text-[9px] text-slate-500 ml-auto"
-                        style={{fontFamily:"Inter, sans-serif"}}>
+                      <span className="text-[9px] ml-auto"
+                        style={{fontFamily:"Inter, sans-serif", color: PLANET_META[RASHI_LORD_CODE[ri]]?.color || "#94A3B8"}}>
                         Lord: {lord}
                       </span>
                     </div>
@@ -610,17 +611,24 @@ export default function InteractiveKundli({
         </div>{/* end SVG wrapper */}
       </div>{/* end chart container */}
 
-      {/* Planet status legend — only for the main D1 chart */}
+      {/* Planet status legend — only on the main D1 chart */}
       {vargaKey === "D1" && (
-        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[8px] text-slate-500">
-          <span><b className="text-green-400">E</b> Exalted</span>
-          <span><b className="text-rose-400">D</b> Debilitated</span>
-          <span><b className="text-cyan-300">O</b> Own</span>
-          <span><b className="text-purple-300">F</b> Friend</span>
-          <span><b className="text-orange-300">En</b> Enemy</span>
-          <span><b className="text-slate-300">N</b> Neutral</span>
-          <span><b className="text-indigo-300">R</b> Retrograde</span>
-          <span><b className="text-amber-300">C</b> Combust</span>
+        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5 text-[8px]"
+          style={{fontFamily:"Inter, sans-serif"}}>
+          {[
+            ["E","Exalted","#4ADE80"],
+            ["D","Debilitated","#FB7185"],
+            ["O","Own sign","#22D3EE"],
+            ["F","Friend sign","#C084FC"],
+            ["En","Enemy sign","#FB923C"],
+            ["R","Retrograde","#FBBF24"],
+            ["C","Combust","#F97316"],
+          ].map(([code,label,color]) => (
+            <span key={code} title={label} className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5"
+              style={{color,background:`${color}10`,border:`1px solid ${color}22`}}>
+              <b>{code}</b><span style={{opacity:.55}}>{label}</span>
+            </span>
+          ))}
         </div>
       )}
 
