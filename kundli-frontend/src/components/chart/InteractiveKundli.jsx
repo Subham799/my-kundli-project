@@ -184,9 +184,24 @@ function getPlanetStatus(code, planetData = {}, signIndex = null) {
 // ─────────────────────────────────────────────────────────────
 // Build the same 12-house structure as the backend for any Shodashvarga.
 // Existing D1 callers can keep passing `houses`; Varga callers pass `vargaKey` + chartData.
-function buildVargaHouses(vargaKey, planets = {}, lagnaVargas = {}) {
+function buildVargaHouses(vargaKey, planets = {}, lagnaVargas = {}, d1Houses = [], progressedLagna = null) {
   if (!vargaKey || !Object.keys(planets || {}).length) return [];
-  const lagna = lagnaVargas?.[vargaKey]?.Idx;
+
+  // RTN / Beeja Kundali: keep the D1 Lagna and D1 sign sequence, but place
+  // each planet according to the sign it occupies in D9 (Navamsha).
+  const isRTN = vargaKey === "RTN";
+  const isProgressed = /_PL$/.test(vargaKey);
+  const baseVargaKey = isProgressed ? vargaKey.replace(/_PL$/, "") : vargaKey;
+  let lagna = isRTN ? lagnaVargas?.D1?.Idx : lagnaVargas?.[baseVargaKey]?.Idx;
+  // Progressed charts keep all natal planet sign placements fixed and only
+  // replace the Lagna/house framework with the selected Yogini PL sign.
+  if (isProgressed && Number.isInteger(progressedLagna?.current_sign_idx)) {
+    lagna = progressedLagna.current_sign_idx;
+  }
+  if (typeof lagna !== "number") {
+    const d1LagnaHouse = (d1Houses || []).find(h => h?.num === 1);
+    if (isRTN && typeof d1LagnaHouse?.sign_index === "number") lagna = d1LagnaHouse.sign_index;
+  }
   if (typeof lagna !== "number") return [];
 
   const names = ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
@@ -204,7 +219,9 @@ function buildVargaHouses(vargaKey, planets = {}, lagnaVargas = {}) {
   });
 
   names.forEach(code => {
-    const idx = planets?.[code]?.vargas?.[vargaKey]?.Idx;
+    const idx = isRTN
+      ? planets?.[code]?.vargas?.D9?.Idx
+      : planets?.[code]?.vargas?.[baseVargaKey]?.Idx;
     if (typeof idx !== "number") return;
     const houseNum = ((idx - lagna + 12) % 12) + 1;
     houses[houseNum - 1].planets.push(code);
@@ -220,6 +237,7 @@ export default function InteractiveKundli({
   vargaKey = "D1",
   planets = {},
   lagnaVargas = {},
+  progressedLagna = null,
   showHeader = true,
   rotation = 1,
 }) {
@@ -227,9 +245,11 @@ export default function InteractiveKundli({
   const [clicked, setCli] = useState(null);
   const svgRef            = useRef(null);
   const [tipXY, setTipXY] = useState({x:0,y:0});
+  const isProgressedChart = /_PL$/.test(vargaKey);
+  const baseVargaKey = isProgressedChart ? vargaKey.replace(/_PL$/, "") : vargaKey;
 
   const resolvedHouses = (vargaKey && vargaKey !== "D1")
-    ? buildVargaHouses(vargaKey, planets, lagnaVargas)
+    ? buildVargaHouses(vargaKey, planets, lagnaVargas, houses, progressedLagna)
     : (houses || []);
   // Visual rotation: rotation=4 means source House 4 is displayed in the House 1 position.
   const safeRotation = Math.min(12, Math.max(1, Number(rotation) || 1));
@@ -258,7 +278,7 @@ export default function InteractiveKundli({
       {showHeader && (
         <div className="flex items-center justify-between mb-2 px-1">
           <span className="text-[9px] tracking-[0.35em] uppercase text-amber-500/60"
-            style={{fontFamily:"'Cinzel',serif"}}>{vargaKey === "D1" ? "D1 · Birth Chart" : vargaKey}</span>
+            style={{fontFamily:"'Cinzel',serif"}}>{vargaKey === "D1" ? "D1 · Birth Chart" : isProgressedChart ? `${baseVargaKey} · Progressed Lagna` : vargaKey}</span>
           <span className="text-[9px] text-slate-600">Hover = tooltip · Click = lock</span>
         </div>
       )}
@@ -432,9 +452,9 @@ export default function InteractiveKundli({
                         const pm   = PLANET_META[p] || {color:"#94A3B8", hi:p};
                         const px   = pos.cx - totalPW/2 + i * planetSpacing;
                         const isSel= selectedPlanet===p;
-                        const planetSignIndex = (vargaKey === "D1")
+                        const planetSignIndex = (baseVargaKey === "D1")
                           ? (houseMap[n]?.sign_index ?? null)
-                          : (planets?.[p]?.vargas?.[vargaKey]?.Idx ?? null);
+                          : (planets?.[p]?.vargas?.[baseVargaKey]?.Idx ?? null);
                         const statuses = getPlanetStatus(p, planets, Number.isInteger(planetSignIndex) ? planetSignIndex : null);
                         return (
                           <g key={p}>
@@ -612,7 +632,7 @@ export default function InteractiveKundli({
       </div>{/* end chart container */}
 
       {/* Planet status legend — only on the main D1 chart */}
-      {vargaKey === "D1" && (
+      {baseVargaKey === "D1" && (
         <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5 text-[8px]"
           style={{fontFamily:"Inter, sans-serif"}}>
           {[

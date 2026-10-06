@@ -137,9 +137,37 @@ def calculate_bhrigu_bindu(moon_deg, rahu_deg):
 #    Argala planet का quarter + Virodh planet का quarter == 5 होने पर
 #    ही अर्गला पूरी तरह कट जाती है)
 # =====================================================================
+def get_argala_degree(planet_code, astro_data=None):
+    """
+    Argala के लिए राशि-अंश निकालता है।
+    राहु/केतु के लिए reverse counting लागू होती है: effective degree = 30 - raw degree.
+    0° boundary को reverse counting में 30° माना जाता है ताकि वह चतुर्थ चरण में आए।
+    """
+    if not astro_data:
+        return None
+    pdata = astro_data.get(planet_code, {}) or {}
+    raw = pdata.get("SignDegree")
+    if raw is None:
+        raw = pdata.get("sign_degree", pdata.get("degree", pdata.get("Degree")))
+    if raw is None:
+        return None
+    try:
+        raw = float(raw) % 30.0
+    except (TypeError, ValueError):
+        return None
+    if planet_code in ("Ra", "Ke"):
+        reversed_degree = 30.0 - raw
+        return 30.0 if reversed_degree == 0.0 else reversed_degree
+    return raw
+
+
 def get_quarter(sign_degree):
-    """ किसी राशि में ग्रह की डिग्री (0-30) से पाद/क्वार्टर (1-4) निकालना """
+    """किसी ग्रह की effective राशि-अंश (0-30°) से 1-4 चरण निकालना।"""
     if sign_degree is None:
+        return None
+    try:
+        sign_degree = float(sign_degree) % 30.0
+    except (TypeError, ValueError):
         return None
     if sign_degree < 7.5:
         return 1
@@ -147,11 +175,30 @@ def get_quarter(sign_degree):
         return 2
     elif sign_degree < 22.5:
         return 3
-    else:
-        return 4
+    return 4
+
+
+def _argala_degree_payload(planet_code, astro_data=None):
+    """UI/API के लिए raw/effective degree और quarter का छोटा payload."""
+    pdata = (astro_data or {}).get(planet_code, {}) or {}
+    raw = pdata.get("SignDegree")
+    if raw is None:
+        raw = pdata.get("sign_degree", pdata.get("degree", pdata.get("Degree")))
+    try:
+        raw = float(raw) % 30.0 if raw is not None else None
+    except (TypeError, ValueError):
+        raw = None
+    effective = get_argala_degree(planet_code, astro_data)
+    return {
+        "raw_degree": raw,
+        "effective_degree": effective,
+        "quarter": get_quarter(effective),
+        "reverse_counting": planet_code in ("Ra", "Ke"),
+    }
 
 
 def calculate_argala_and_virodh(planet_house_map, astro_data=None):
+    # 2nd→12th, 4th→10th, 11th→3rd, 5th→9th.
     argala_pairs = {2: 12, 4: 10, 11: 3, 5: 9}
     argala_data = {}
 
@@ -169,19 +216,48 @@ def calculate_argala_and_virodh(planet_house_map, astro_data=None):
 
         house_influences = []
         for giver in givers:
-            entry = {"planet": giver, "type": "Argala", "cancelled": False, "cancelled_by": None}
+            deg = _argala_degree_payload(giver, astro_data) if astro_data else {}
+            entry = {
+                "planet": giver,
+                "type": "Argala",
+                "cancelled": False,
+                "cancelled_by": None,
+                "argala_degree": deg.get("effective_degree"),
+                "argala_raw_degree": deg.get("raw_degree"),
+                "argala_quarter": deg.get("quarter"),
+                "counter_quarter_rule": "1↔4 / 2↔3",
+                "obstruction_matches": [],
+            }
             if astro_data:
-                giver_q = get_quarter(astro_data.get(giver, {}).get("SignDegree"))
+                giver_q = deg.get("quarter")
                 for canceller in cancellers:
-                    canceller_q = get_quarter(astro_data.get(canceller, {}).get("SignDegree"))
-                    if giver_q is not None and canceller_q is not None and (giver_q + canceller_q) == 5:
+                    cdeg = _argala_degree_payload(canceller, astro_data)
+                    canceller_q = cdeg.get("quarter")
+                    blocked = (
+                        giver_q is not None and
+                        canceller_q is not None and
+                        (giver_q + canceller_q) == 5
+                    )
+                    entry["obstruction_matches"].append({
+                        "planet": canceller,
+                        **cdeg,
+                        "blocked": blocked,
+                    })
+                    if blocked and not entry["cancelled"]:
                         entry["cancelled"] = True
                         entry["cancelled_by"] = canceller
-                        break
             house_influences.append(entry)
 
         for canceller in cancellers:
-            house_influences.append({"planet": canceller, "type": "Virodh Argala"})
+            deg = _argala_degree_payload(canceller, astro_data) if astro_data else {}
+            house_influences.append({
+                "planet": canceller,
+                "type": "Virodh Argala",
+                "raw_degree": deg.get("raw_degree"),
+                "effective_degree": deg.get("effective_degree"),
+                "quarter": deg.get("quarter"),
+                "reverse_counting": deg.get("reverse_counting", False),
+            })
 
         argala_data[house] = house_influences
 
@@ -288,92 +364,353 @@ def get_nakshatra_sign_split(nakshatra_idx):
     }
 
 
+
+def _build_yogini_pl_parts(udu_idx, dasha_start_date, dasha_end_date):
+    """Build exact Udu-nakshatra pada/sign parts inside one Yogini MD."""
+    udu_names = [
+        "अश्विनी", "भरणी", "कृत्तिका", "रोहिणी", "मृगशिरा", "आर्द्रा",
+        "पुनर्वसु", "पुष्य", "अश्लेषा", "मघा", "पूर्वा फाल्गुनी", "उत्तरा फाल्गुनी",
+        "हस्त", "चित्रा", "स्वाति", "विशाखा", "अनुराधा", "ज्येष्ठा", "मूल",
+        "पूर्वाषाढ़ा", "उत्तराषाढ़ा", "श्रवण", "धनिष्ठा", "शतभिषा",
+        "पूर्वा भाद्रपद", "उत्तर भाद्रपद", "रेवती",
+    ]
+    if udu_idx is None or not 0 <= int(udu_idx) < 27:
+        return []
+    udu_idx = int(udu_idx)
+    start_deg = udu_idx * NAKSHATRA_SPAN_DEG
+    pada_span = NAKSHATRA_SPAN_DEG / 4.0
+    total_seconds = max((dasha_end_date - dasha_start_date).total_seconds(), 1.0)
+
+    padas = []
+    for p in range(4):
+        a = start_deg + p * pada_span
+        b = a + pada_span
+        mid = (a + b) / 2.0
+        sign_idx = int(mid // 30) % 12
+        padas.append({"pada": p + 1, "sign_idx": sign_idx})
+
+    groups = []
+    for item in padas:
+        if not groups or groups[-1]["sign_idx"] != item["sign_idx"]:
+            groups.append({"sign_idx": item["sign_idx"], "padas": [item["pada"]]})
+        else:
+            groups[-1]["padas"].append(item["pada"])
+
+    parts = []
+    cursor = dasha_start_date
+    for i, g in enumerate(groups):
+        duration = total_seconds * (len(g["padas"]) / 4.0)
+        end = dasha_end_date if i == len(groups) - 1 else cursor + timedelta(seconds=duration)
+        padas_label = ", ".join(str(x) for x in g["padas"])
+        parts.append({
+            "part": i + 1,
+            "sign_idx": g["sign_idx"],
+            "sign": RASHI_NAMES_HI[g["sign_idx"]],
+            "padas": g["padas"],
+            "padas_label": f"Pada {padas_label}",
+            "start_date": cursor.strftime("%d-%m-%Y"),
+            "end_date": end.strftime("%d-%m-%Y"),
+            "duration_days": round((end - cursor).total_seconds() / 86400.0, 4),
+        })
+        cursor = end
+
+    return parts
+
+
+def _planet_house_and_lordships(astro_data, planet_code, asc_idx):
+    """Return natal/progressed house and house-lordships for a planet."""
+    if not planet_code or planet_code not in astro_data:
+        return {"house": None, "lordships": []}
+    sign_idx = astro_data[planet_code].get("Vargas", {}).get("D1", {}).get("Idx")
+    if sign_idx is None or asc_idx is None:
+        return {"house": None, "lordships": []}
+    house = (sign_idx - asc_idx + 12) % 12 + 1
+    lordships = []
+    for owned_sign in range(12):
+        if SIGN_LORDS[owned_sign] == planet_code:
+            lordships.append((owned_sign - asc_idx + 12) % 12 + 1)
+    return {"house": house, "lordships": lordships, "sign_idx": sign_idx}
+
+
+def build_yogini_progressed_options(astro_data, yogini_dashas, current_yogini_md=None):
+    """Create the complete UI-ready Yogini Progressed Lagna selector payload."""
+    if not yogini_dashas:
+        return {"cycles": [], "md_options": [], "current_key": None}
+
+    planet_names = {
+        "Su": "सूर्य (Sun)", "Mo": "चंद्र (Moon)", "Ma": "मंगल (Mars)",
+        "Me": "बुध (Mercury)", "Ju": "गुरु (Jupiter)", "Ve": "शुक्र (Venus)",
+        "Sa": "शनि (Saturn)", "Ra": "राहु (Rahu)", "Ke": "केतु (Ketu)",
+    }
+    asc_d1 = astro_data.get("La", {}).get("Vargas", {}).get("D1", {}).get("Idx")
+    rows = []
+
+    for i, md in enumerate(yogini_dashas):
+        try:
+            start_dt = datetime.strptime(md["start"], "%d-%m-%Y")
+            end_dt = datetime.strptime(md["end"], "%d-%m-%Y")
+        except (KeyError, TypeError, ValueError):
+            continue
+        cycle = (i // 8) + 1
+        # Re-run the same canonical progressed-Lagna calculation at MD midpoint;
+        # the returned Udu identity is deterministic and the part list is exact.
+        mid_dt = start_dt + (end_dt - start_dt) / 2
+        pl = calculate_progressed_lagna(md, as_of_date=mid_dt)
+        if not pl:
+            continue
+        udu_idx = pl.get("progression_nakshatra_idx")
+        parts = _build_yogini_pl_parts(udu_idx, start_dt, end_dt)
+        udu_code = pl.get("progression_star_lord")
+        udu_full = planet_names.get(udu_code, udu_code)
+
+        part_rows = []
+        for part in parts:
+            pl_asc = part["sign_idx"]
+            primary = _planet_house_and_lordships(astro_data, udu_code, asc_d1)
+            progressed = _planet_house_and_lordships(astro_data, udu_code, pl_asc)
+            # House lordship is a sign relationship, independent of where the
+            # planet itself sits; use the progressed ascendant for that view.
+            progressed_lord = _sign_lord(pl_asc)
+            part_rows.append({
+                **part,
+                "progressed_lagna_lord": progressed_lord,
+                "udu_house_natal": primary.get("house"),
+                "udu_lordships_natal": primary.get("lordships", []),
+                "udu_house_progressed": progressed.get("house"),
+                "udu_lordships_progressed": progressed.get("lordships", []),
+            })
+
+        current_part = next((x for x in part_rows if start_dt <= mid_dt <= end_dt), part_rows[0] if part_rows else None)
+        current_part_number = current_part.get("part") if current_part else None
+        next_part = (part_rows[current_part_number] if current_part_number is not None and current_part_number < len(part_rows) else None)
+        key = f"c{cycle}-md{i}"
+        row = {
+            "key": key,
+            "cycle": cycle,
+            "md_index": i,
+            "current_yogini_dasha": md.get("name"),
+            "yogini": md.get("name"),
+            "yogini_planet": md.get("planet"),
+            "dasha_total_years": md.get("duration_years"),
+            "duration_years": md.get("duration_years"),
+            "current_nakshatra": pl.get("progression_nakshatra"),
+            "nakshatra_padas": current_part.get("padas_label") if current_part else "",
+            "progression_nakshatra_idx": udu_idx,
+            "udu_dasha_lord": udu_code,
+            "udu_dasha_lord_name": udu_full,
+            "progressed_lagna_sign": current_part.get("sign") if current_part else None,
+            "progressed_lagna_sign_idx": current_part.get("sign_idx") if current_part else None,
+            "progressed_lagna_lord": current_part.get("progressed_lagna_lord") if current_part else None,
+            "start_date": md.get("start"),
+            "end_date": md.get("end"),
+            "effective_start_date": current_part.get("start_date") if current_part else md.get("start"),
+            "effective_end_date": current_part.get("end_date") if current_part else md.get("end"),
+            "has_mid_dasha_pl_change": len(part_rows) > 1,
+            "next_pl_sign": next_part.get("sign") if next_part else None,
+            "next_pl_start_date": next_part.get("start_date") if next_part else None,
+            "current_part": current_part_number,
+            "parts": part_rows,
+            "yogini_cycle_basis": "VP Goel 24 Nakshatra table",
+            "progression_basis": "Vimshottari/Udu 27 Nakshatra",
+            "revati_to_rohini_rule": "Yogini cycle only",
+        }
+        rows.append(row)
+
+    current_key = None
+    if current_yogini_md:
+        for row in rows:
+            if (row.get("yogini") == current_yogini_md.get("name") and
+                row.get("start_date") == current_yogini_md.get("start") and
+                row.get("end_date") == current_yogini_md.get("end")):
+                current_key = row["key"]
+                break
+
+    cycles = []
+    for c in (1, 2, 3):
+        cycle_rows = [r for r in rows if r["cycle"] == c]
+        if cycle_rows:
+            cycles.append({
+                "cycle": c,
+                "label": f"Cycle {c}",
+                "age_range": f"{(c-1)*36}–{c*36} वर्ष",
+                "mds": cycle_rows,
+            })
+
+    return {"cycles": cycles, "md_options": rows, "current_key": current_key}
+
 def calculate_progressed_lagna(current_yogini_md, as_of_date=None):
     """
-    V.P. Goel की 'योगिनी दशा प्रोग्रेस्ड लग्न' विधि — अब यही एकमात्र (sole)
-    प्रोग्रेस्ड लग्न प्रणाली है। पुराना गणितीय/भृगु (lagna + age×30) तरीका
-    पूरी तरह हटा दिया गया है।
+    V.P. Goel Yogini Progressed Lagna.
 
-    चल रही योगिनी महादशा का नक्षत्र जिस राशि में पड़ता है वही प्रोग्रेस्ड लग्न है।
-    अगर नक्षत्र दो राशियों में बंटा है (कृत्तिका, मृगशिरा, पुनर्वसु, उत्तरा फाल्गुनी,
-    चित्रा, विशाखा, उत्तराषाढ़ा, धनिष्ठा, पूर्वा भाद्रपद), तो दशा की अवधि उसी
-    अनुपात में बंटती है — यानी दशा के पहले हिस्से में लग्न पहली राशि, बाद के
-    हिस्से में दूसरी राशि।
+    IMPORTANT SEPARATION OF RULES:
+      1) Yogini MD sequencing uses the existing 24-entry VP Goel table.
+         The special Revati -> Rohini jump belongs ONLY to that Yogini cycle.
+      2) Progressed-Lagna zodiac placement uses the corresponding REAL
+         Vimshottari/Udu nakshatra (27-nakshatra sequence), never a synthetic
+         24-table sign. Natal planets remain fixed in their D1 signs.
+      3) If the Udu nakshatra crosses a rashi boundary, the Yogini MD is split
+         proportionally between the two signs. This handles the classical
+         two-/three-pada transition cases automatically.
 
-    Params:
-      current_yogini_md — calculate_yogini_dasha() से मिला current MD dict
-                           (nakshatra, nakshatra_idx, star_lord, table_position,
-                           start, end, duration_years रखता है) — single source
-                           of truth, यहाँ कोई अलग गणना नहीं होती।
-      as_of_date         — किस तारीख पर प्रोग्रेस्ड लग्न चाहिए (default: आज)
+    The 24-table rows that are clubbed are resolved to their primary Udu
+    nakshatra for progressed-Lagna purposes:
+      Purva Bhadrapada/Ashwini -> Purva Bhadrapada
+      Uttara Bhadrapada/Bharani -> Uttara Bhadrapada
+      Revati/Krittika -> Revati
+    Rohini and Mrigashira then remain normal Udu nakshatras in their own right.
     """
     if not current_yogini_md:
-        return None
-
-    nakshatra_idx = current_yogini_md.get("nakshatra_idx")
-    if nakshatra_idx is None:
         return None
 
     if as_of_date is None:
         as_of_date = datetime.now()
 
-    dasha_start_date = datetime.strptime(current_yogini_md["start"], "%d-%m-%Y")
-    dasha_end_date   = datetime.strptime(current_yogini_md["end"], "%d-%m-%Y")
-    dasha_duration_years = current_yogini_md.get("duration_years", 0)
+    # Standard 27-nakshatra Vimshottari/Udu sequence.
+    udu_nakshatras = [
+        "अश्विनी", "भरणी", "कृत्तिका", "रोहिणी", "मृगशिरा", "आर्द्रा",
+        "पुनर्वसु", "पुष्य", "अश्लेषा", "मघा", "पूर्वा फाल्गुनी", "उत्तरा फाल्गुनी",
+        "हस्त", "चित्रा", "स्वाति", "विशाखा", "अनुराधा", "ज्येष्ठा", "मूल",
+        "पूर्वाषाढ़ा", "उत्तराषाढ़ा", "श्रवण", "धनिष्ठा", "शतभिषा",
+        "पूर्वा भाद्रपद", "उत्तर भाद्रपद", "रेवती",
+    ]
+    udu_lords = ["Ke", "Ve", "Su", "Mo", "Ma", "Ra", "Ju", "Sa", "Me"]
 
-    total_days   = max((dasha_end_date - dasha_start_date).days, 1)
-    elapsed_days = min(max((as_of_date - dasha_start_date).days, 0), total_days)
-    progress_percent  = round((elapsed_days / total_days) * 100, 1)
-    remaining_percent = round(100 - progress_percent, 1)
-
-    base = {
-        "method":          "VP Goel Yogini",
-        "nakshatra":       current_yogini_md.get("nakshatra"),
-        "nakshatra_idx":   nakshatra_idx,
-        "star_lord":       current_yogini_md.get("star_lord"),
-        "table_position":  current_yogini_md.get("table_position"),
-        "start_date":      current_yogini_md.get("start"),
-        "end_date":        current_yogini_md.get("end"),
-        "duration_years":  dasha_duration_years,
-        "progress_percent":  progress_percent,
-        "remaining_percent": remaining_percent,
+    # VP Goel 24-table position -> REAL 27-nakshatra index used for
+    # progressed-Lagna calculation. This does NOT alter the Yogini cycle.
+    # 0..18 are one-to-one; 19..21 are the three clubbed primary stars;
+    # 22=Rohini and 23=Mrigashira.
+    table_pos_to_udu_idx = {
+        0: 5,   # Ardra
+        1: 6,   # Punarvasu
+        2: 7,   # Pushya
+        3: 8,   # Ashlesha
+        4: 9,   # Magha
+        5: 10,  # Purva Phalguni
+        6: 11,  # Uttara Phalguni
+        7: 12,  # Hasta
+        8: 13,  # Chitra
+        9: 14,  # Swati
+        10: 15, # Vishakha
+        11: 16, # Anuradha
+        12: 17, # Jyeshtha
+        13: 18, # Mula
+        14: 19, # Purva Ashadha
+        15: 20, # Uttara Ashadha
+        16: 21, # Shravana
+        17: 22, # Dhanishtha
+        18: 23, # Shatabhisha
+        19: 24, # Purva Bhadrapada (primary of club)
+        20: 25, # Uttara Bhadrapada (primary of club)
+        21: 26, # Revati (primary of club)
+        22: 3,  # Rohini — after Revati only for Yogini-cycle matching
+        23: 4,  # Mrigashira
     }
 
-    split_info = get_nakshatra_sign_split(nakshatra_idx)
+    table_position = current_yogini_md.get("table_position")
+    if table_position is None:
+        # Backward-compatible fallback: infer from the textual Yogini row.
+        name = str(current_yogini_md.get("nakshatra") or "")
+        fallback = {
+            "आर्द्रा": 0, "पुनर्वसु": 1, "पुष्य": 2, "अश्लेषा": 3,
+            "मघा": 4, "पूर्वा फाल्गुनी": 5, "उत्तरा फाल्गुनी": 6,
+            "हस्त": 7, "चित्रा": 8, "स्वाति": 9, "विशाखा": 10,
+            "अनुराधा": 11, "ज्येष्ठा": 12, "मूल": 13,
+            "पूर्वाषाढ़ा": 14, "उत्तराषाढ़ा": 15, "श्रवण": 16,
+            "धनिष्ठा": 17, "शतभिषा": 18, "पूर्वा भाद्र": 19,
+            "उत्तर भाद्र": 20, "रेवती": 21, "रोहिणी": 22, "मृगशिरा": 23,
+        }
+        table_position = next((v for k, v in fallback.items() if k in name), None)
 
+    try:
+        table_position = int(table_position) % 24
+    except (TypeError, ValueError):
+        return None
+
+    udu_idx = table_pos_to_udu_idx.get(table_position)
+    if udu_idx is None:
+        return None
+
+    progression_nakshatra = udu_nakshatras[udu_idx]
+    progression_star_lord = udu_lords[udu_idx % 9]
+
+    # Dasha dates remain the Yogini MD dates. Only the sign progression is
+    # recalculated from the REAL Udu nakshatra.
+    try:
+        dasha_start_date = datetime.strptime(current_yogini_md["start"], "%d-%m-%Y")
+        dasha_end_date = datetime.strptime(current_yogini_md["end"], "%d-%m-%Y")
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    dasha_duration_years = current_yogini_md.get("duration_years", 0)
+    total_days = max((dasha_end_date - dasha_start_date).total_seconds() / 86400.0, 1.0)
+    elapsed_days = min(max((as_of_date - dasha_start_date).total_seconds() / 86400.0, 0.0), total_days)
+    progress_percent = round((elapsed_days / total_days) * 100, 1)
+    remaining_percent = round(100 - progress_percent, 1)
+
+    # Universal Udu nakshatra -> zodiac sign split.
+    split_info = get_nakshatra_sign_split(udu_idx)
     if not split_info["split"]:
         sign_idx = split_info["sign_idx"]
         sign_name = RASHI_NAMES_HI[sign_idx]
-        base.update({
-            "current_sign":    sign_name,
-            "transition_date": None,
-            "split": {
-                "is_split":     False,
-                "first_sign":   None,
-                "second_sign":  None,
-                "current_sign": sign_name,
-            },
-        })
-        return base
+        split = {
+            "is_split": False,
+            "first_sign": None,
+            "second_sign": None,
+            "current_sign": sign_name,
+            "first_sign_idx": None,
+            "second_sign_idx": None,
+        }
+        transition_date = None
+        current_sign_idx = sign_idx
+    else:
+        first_days = total_days * split_info["first_proportion"]
+        transition_dt = dasha_start_date + timedelta(days=first_days)
+        current_sign_idx = (
+            split_info["first_sign_idx"]
+            if as_of_date < transition_dt
+            else split_info["second_sign_idx"]
+        )
+        transition_date = transition_dt.strftime("%d-%m-%Y")
+        split = {
+            "is_split": True,
+            "first_sign": RASHI_NAMES_HI[split_info["first_sign_idx"]],
+            "second_sign": RASHI_NAMES_HI[split_info["second_sign_idx"]],
+            "current_sign": RASHI_NAMES_HI[current_sign_idx],
+            "first_sign_idx": split_info["first_sign_idx"],
+            "second_sign_idx": split_info["second_sign_idx"],
+            "first_proportion": round(split_info["first_proportion"] * 100, 4),
+            "second_proportion": round(split_info["second_proportion"] * 100, 4),
+        }
 
-    first_days = total_days * split_info["first_proportion"]
-    transition_date = dasha_start_date + timedelta(days=first_days)
-    current_sign_idx = (
-        split_info["first_sign_idx"] if as_of_date < transition_date else split_info["second_sign_idx"]
-    )
-    current_sign_name = RASHI_NAMES_HI[current_sign_idx]
-
-    base.update({
-        "current_sign":    current_sign_name,
-        "transition_date": transition_date.strftime("%d-%m-%Y"),
-        "split": {
-            "is_split":     True,
-            "first_sign":   RASHI_NAMES_HI[split_info["first_sign_idx"]],
-            "second_sign":  RASHI_NAMES_HI[split_info["second_sign_idx"]],
-            "current_sign": current_sign_name,
-        },
-    })
-    return base
+    return {
+        "method": "VP Goel Yogini",
+        # Yogini-cycle identity — deliberately preserved separately.
+        "yogini_nakshatra": current_yogini_md.get("nakshatra"),
+        "yogini_table_position": table_position,
+        "yogini_md": current_yogini_md.get("name"),
+        "yogini_md_planet": current_yogini_md.get("planet"),
+        # Actual Vimshottari/Udu progression identity.
+        "progression_nakshatra": progression_nakshatra,
+        "progression_nakshatra_idx": udu_idx,
+        "progression_star_lord": progression_star_lord,
+        "current_sign": RASHI_NAMES_HI[current_sign_idx],
+        "current_sign_idx": current_sign_idx,
+        "nakshatra": progression_nakshatra,
+        "nakshatra_idx": udu_idx,
+        "star_lord": progression_star_lord,
+        "table_position": table_position,
+        "start_date": current_yogini_md.get("start"),
+        "end_date": current_yogini_md.get("end"),
+        "duration_years": dasha_duration_years,
+        "progress_percent": progress_percent,
+        "remaining_percent": remaining_percent,
+        "transition_date": transition_date,
+        "split": split,
+        "natal_planets_fixed": True,
+        "progression_basis": "Vimshottari/Udu 27 Nakshatra",
+        "yogini_cycle_basis": "VP Goel 24 Nakshatra table",
+        "revati_to_rohini_rule": "Yogini cycle only",
+    }
 
 
 # =====================================================================
@@ -857,6 +1194,79 @@ def _get_aspected_signs(planet_code, sign_idx):
 
 
 # =====================================================================
+# 15A. D1–D3–D9 Tri-Varga Jaimini Rashi Drishti Yoga
+#      एक ही ग्रह यदि D1, D3 और D9 में समान house-number को
+#      Jaimini Rashi Drishti से देखता है तो यह त्रि-वर्ग alignment है।
+# =====================================================================
+JAIMINI_MOVABLE_SIGNS = {0, 3, 6, 9}
+JAIMINI_FIXED_SIGNS = {1, 4, 7, 10}
+JAIMINI_DUAL_SIGNS = {2, 5, 8, 11}
+
+
+def _jaimini_rashi_aspects(from_sign, to_sign):
+    if from_sign is None or to_sign is None or from_sign == to_sign:
+        return False
+    adjacent = ((to_sign - from_sign + 12) % 12 == 1) or ((from_sign - to_sign + 12) % 12 == 1)
+    if from_sign in JAIMINI_MOVABLE_SIGNS:
+        return to_sign in JAIMINI_FIXED_SIGNS and not adjacent
+    if from_sign in JAIMINI_FIXED_SIGNS:
+        return to_sign in JAIMINI_MOVABLE_SIGNS and not adjacent
+    if from_sign in JAIMINI_DUAL_SIGNS:
+        return to_sign in JAIMINI_DUAL_SIGNS
+    return False
+
+
+def calculate_tri_varga_drishti_yoga(astro_data):
+    planets = ["Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa", "Ra", "Ke"]
+    vargas = ("D1", "D3", "D9")
+
+    def sign_of(code, varga):
+        return astro_data.get(code, {}).get("Vargas", {}).get(varga, {}).get("Idx")
+
+    lagnas = {
+        v: astro_data.get("La", {}).get("Vargas", {}).get(v, {}).get("Idx")
+        for v in vargas
+    }
+    if any(v is None for v in lagnas.values()):
+        return {
+            "present": False,
+            "Tri_Varga_Drishti_Yoga": False,
+            "reason": "D1/D3/D9 में से किसी वर्ग का लग्न डेटा उपलब्ध नहीं है",
+            "matches": [],
+        }
+
+    matches = []
+    for planet in planets:
+        p_signs = {v: sign_of(planet, v) for v in vargas}
+        if any(v is None for v in p_signs.values()):
+            continue
+        for house in range(1, 13):
+            target_signs = {
+                v: (lagnas[v] + house - 1) % 12
+                for v in vargas
+            }
+            hits = {
+                v: _jaimini_rashi_aspects(p_signs[v], target_signs[v])
+                for v in vargas
+            }
+            if all(hits.values()):
+                matches.append({
+                    "planet": planet,
+                    "house": house,
+                    "D1": {"planet_sign": p_signs["D1"], "target_sign": target_signs["D1"]},
+                    "D3": {"planet_sign": p_signs["D3"], "target_sign": target_signs["D3"]},
+                    "D9": {"planet_sign": p_signs["D9"], "target_sign": target_signs["D9"]},
+                })
+
+    return {
+        "present": bool(matches),
+        "Tri_Varga_Drishti_Yoga": bool(matches),
+        "matches": matches,
+        "rule": "एक ही ग्रह का D1, D3 और D9 में समान house-number पर Jaimini Rashi Drishti",
+    }
+
+
+# =====================================================================
 # 15B. संन्यास योग व धर्म परिवर्तन (Sanyas Yoga & Change of Religion)
 # =====================================================================
 def check_sanyas_yoga(astro_data):
@@ -1319,7 +1729,7 @@ def analyze_deep_forensics(astro_data, chara_karakas, planet_house_map=None):
 # =====================================================================
 def run_advanced_predictions(
     astro_data, lagna_degree, planet_house_map, birth_time_dt, sunrise_time_str, age=0,
-    current_yogini_md=None
+    current_yogini_md=None, yogini_dashas=None
 ):
     """
     सारे modules (dono documents + latest fixes) एक साथ, एक ही कॉल में।
@@ -1364,6 +1774,7 @@ def run_advanced_predictions(
 
         # 🌟 Progressed Lagna — अब सिर्फ VP Goel Yogini विधि (गणितीय lagna+age×30 हटा दिया गया)
         "progressed_lagna": calculate_progressed_lagna(current_yogini_md) if current_yogini_md else None,
+        "yogini_progressed_options": build_yogini_progressed_options(astro_data, yogini_dashas or [], current_yogini_md),
         "age_used": age,
         "d10_deities": d10_deities,
         "d10_dashamesh_deity": dashamesh_deity,
@@ -1383,6 +1794,7 @@ def run_advanced_predictions(
         "d9_sexual_patterns": analyze_d9_sexual_patterns(astro_data),
         "foreign_settlement": analyze_foreign_settlement(astro_data, chara_karakas),
         "jaimini_trinity": analyze_jaimini_trinity(astro_data, chara_karakas),
+        "tri_varga_drishti_yoga": calculate_tri_varga_drishti_yoga(astro_data),
         "ishta_devta": get_ishta_devta(astro_data),
 
         # 🔥 Deep Forensics module (includes dhurta yoga + viparita argala flag)

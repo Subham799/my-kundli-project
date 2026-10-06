@@ -13,6 +13,7 @@ Output: kp_btr result dict
 """
 
 from typing import Dict, Any, Optional
+from datetime import datetime, timedelta
 
 # ══════════════════════════════════════════════════════
 # CONSTANTS
@@ -390,20 +391,35 @@ def _get_d24_idx_from_degree(degree: float) -> int:
     return d24
 
 
-def _check_both_methods(lagna_deg: float, astro_static: dict) -> dict:
+def _check_both_methods(lagna_deg: float, astro_static: dict, candidate_astro: Optional[dict] = None) -> dict:
     """
     Ek specific lagna degree par CIL + D24 dono check karo.
     astro_static = original astro dict (planets move nahi karte ±30 min mein)
     """
     # Temporary astro with new lagna degree
     import copy
-    astro_temp = copy.deepcopy(astro_static)
+    # If the API supplied a chart recalculated for the exact candidate minute,
+    # use it. Otherwise preserve the existing fast lagna-only approximation.
+    astro_temp = copy.deepcopy(candidate_astro if candidate_astro is not None else astro_static)
     astro_temp["La"]["Degree"]      = lagna_deg
     astro_temp["La"]["SignDegree"]  = lagna_deg % 30
 
-    # D24 update
+    # D24 update is derived from the candidate Lagna degree.
     d24_idx = _get_d24_idx_from_degree(lagna_deg)
-    astro_temp["La"]["Vargas"]["D24"] = {"Idx": d24_idx, "Name": RASHI_NAMES[d24_idx]}
+    astro_temp["La"].setdefault("Vargas", {})["D24"] = {"Idx": d24_idx, "Name": RASHI_NAMES[d24_idx]}
+
+    # Lightweight candidate snapshots intentionally contain only degrees.
+    # Materialize the D24 index lazily so the D24 checker never needs a full
+    # calculate_astrology() result.
+    for _p in ("Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa"):
+        if _p in astro_temp:
+            _pd = astro_temp[_p]
+            _deg = float(_pd.get("Degree", 0.0))
+            _pd.setdefault("SignDegree", _deg % 30.0)
+            _pd.setdefault("Vargas", {})["D24"] = {
+                "Idx": _get_d24_idx_from_degree(_deg),
+                "Name": RASHI_NAMES[_get_d24_idx_from_degree(_deg)],
+            }
 
     cil = compute_cil(astro_temp)
     d24 = compute_d24_matrukaraka(astro_temp)
@@ -420,17 +436,20 @@ def _check_both_methods(lagna_deg: float, astro_static: dict) -> dict:
     }
 
 
-def auto_rectify(astro: dict, search_range_minutes: int = 30) -> dict:
+def auto_rectify(astro: dict, search_range_minutes: int = 30, birth_datetime: Optional[datetime] = None, candidate_charts: Optional[Dict[int, dict]] = None) -> dict:
     """
-    AUTO-RECTIFICATION:
-    Base lagna se ±search_range_minutes mein har 1 minute check karo.
-    Jab CIL + D24 dono pass ho — wahi time return karo.
+    SMART AUTO-RECTIFICATION:
+    ±search_range_minutes ke har minute ko lightweight candidate data se evaluate karo.
+    Full kundli engine ko repeat na karo. Passing windows ko rank karke original
+    birth time ke against ek stable absolute recommendation do.
 
     Returns:
     - rectified_offset: kitne minutes adjust kiye (+ aage, - peeche)
     - rectified_lagna: sahi lagna degree
     - all_results: har minute ka result
     - best_match: sabse best time
+    - all_results: every minute with actual candidate clock time and condition status
+    - pass_windows: contiguous ranges for BOTH/CIL-only/D24-only/FAIL
     """
     base_lagna = astro["La"]["Degree"]
 
@@ -441,9 +460,21 @@ def auto_rectify(astro: dict, search_range_minutes: int = 30) -> dict:
 
     # ±30 minutes, har 1 minute par check
     for offset in range(-search_range_minutes, search_range_minutes + 1):
-        new_lagna = _get_lagna_degree_at_offset(base_lagna, offset)
-        result    = _check_both_methods(new_lagna, astro)
+        candidate_dt = (birth_datetime + timedelta(minutes=offset)) if birth_datetime is not None else None
+        candidate_astro = candidate_charts.get(offset) if candidate_charts else None
+        if candidate_astro is not None:
+            new_lagna = candidate_astro["La"]["Degree"]
+        else:
+            new_lagna = _get_lagna_degree_at_offset(base_lagna, offset)
+        result    = _check_both_methods(new_lagna, astro, candidate_astro=candidate_astro)
         result["offset_minutes"] = offset
+        result["candidate_time"] = candidate_dt.strftime("%H:%M") if candidate_dt else None
+        result["candidate_time_12h"] = candidate_dt.strftime("%I:%M %p") if candidate_dt else None
+        result["candidate_datetime"] = candidate_dt.isoformat(timespec="minutes") if candidate_dt else None
+        if candidate_astro is not None:
+            result["calculation_mode"] = "exact"
+        else:
+            result["calculation_mode"] = "lagna_estimate"
 
         # Time string
         all_results.append(result)
@@ -455,26 +486,88 @@ def auto_rectify(astro: dict, search_range_minutes: int = 30) -> dict:
         elif result["d24_pass"]:
             d24_only_times.append(result)
 
-    # Best match dhundo
+    # All both_pass windows
+    # Categorize every minute. This is intentionally exhaustive so the UI can
+    # show the user every candidate instead of forcing manual +/- time checks.
+    def _category(r):
+        if r["both_pass"]:
+            return "both_pass"
+        if r["cil_pass"]:
+            return "cil_only"
+        if r["d24_pass"]:
+            return "d24_only"
+        return "fail"
+
+    def _group_ranges(rows):
+        if not rows:
+            return []
+        rows = sorted(rows, key=lambda x: x["offset_minutes"])
+        groups = []
+        start = prev = rows[0]
+        for row in rows[1:]:
+            if row["offset_minutes"] == prev["offset_minutes"] + 1:
+                prev = row
+            else:
+                groups.append({"start_offset": start["offset_minutes"], "end_offset": prev["offset_minutes"],
+                               "start_time": start.get("candidate_time_12h"), "end_time": prev.get("candidate_time_12h"),
+                               "count": prev["offset_minutes"] - start["offset_minutes"] + 1})
+                start = prev = row
+        groups.append({"start_offset": start["offset_minutes"], "end_offset": prev["offset_minutes"],
+                       "start_time": start.get("candidate_time_12h"), "end_time": prev.get("candidate_time_12h"),
+                       "count": prev["offset_minutes"] - start["offset_minutes"] + 1})
+        return groups
+
+    categorized = {"both_pass": [], "cil_only": [], "d24_only": [], "fail": []}
+    for row in all_results:
+        categorized[_category(row)].append(row)
+
+    condition_windows = {
+        key: _group_ranges(rows) for key, rows in categorized.items()
+    }
+
+    def _pick_stable(rows):
+        if not rows:
+            return None
+
+        # Never replace the supplied birth time when it itself passes.
+        original = next((r for r in rows if r["offset_minutes"] == 0), None)
+        if original is not None:
+            return original
+
+        groups = condition_windows["both_pass"] if rows is both_pass_times else (
+            condition_windows["cil_only"] if rows is cil_only_times else condition_windows["d24_only"]
+        )
+        if not groups:
+            return None
+
+        # Otherwise choose the nearest matching window; width is only a tie-breaker.
+        ranked = sorted(groups, key=lambda g: (
+            min(abs(g["start_offset"]), abs(g["end_offset"])),
+            -g["count"],
+        ))
+        g = ranked[0]
+        inside = [r for r in rows if g["start_offset"] <= r["offset_minutes"] <= g["end_offset"]]
+        return min(inside, key=lambda r: abs(r["offset_minutes"]))
+
+    original_result = next((r for r in all_results if r["offset_minutes"] == 0), None)
+
     if both_pass_times:
-        # Sabse pehla both_pass jo base ke sabse paas ho
-        best = min(both_pass_times, key=lambda x: abs(x["offset_minutes"]))
-        verdict = "✅✅ CIL + D24 दोनों PASS"
+        best = _pick_stable(both_pass_times)
+        verdict = "✅✅ CIL + D24 दोनों PASS — एक स्थिर समय-खिड़की मिली"
         confidence = 100
     elif cil_only_times:
-        best = min(cil_only_times, key=lambda x: abs(x["offset_minutes"]))
-        verdict = "✅ CIL PASS (D24 pending)"
+        best = _pick_stable(cil_only_times)
+        verdict = "✅ CIL PASS (D24 pending) — सबसे स्थिर उपलब्ध विंडो"
         confidence = 60
     elif d24_only_times:
-        best = min(d24_only_times, key=lambda x: abs(x["offset_minutes"]))
-        verdict = "✅ D24 PASS (CIL pending)"
+        best = _pick_stable(d24_only_times)
+        verdict = "✅ D24 PASS (CIL pending) — सबसे स्थिर उपलब्ध विंडो"
         confidence = 60
     else:
         best = {"offset_minutes": 0, "lagna_deg": base_lagna, "cil_pass": False, "d24_pass": False}
-        verdict = "❌ ±30 min mein koi match nahi mila"
+        verdict = "❌ ±30 min में कोई match नहीं मिला"
         confidence = 0
 
-    # All both_pass windows
     both_windows = [
         {
             "offset": r["offset_minutes"],
@@ -495,6 +588,37 @@ def auto_rectify(astro: dict, search_range_minutes: int = 30) -> dict:
         "verdict":             verdict,
         "confidence":          confidence,
         "both_pass_windows":   both_windows,
+        "correct_times": [
+            {
+                "offset_minutes": r["offset_minutes"],
+                "candidate_time": r.get("candidate_time"),
+                "candidate_time_12h": r.get("candidate_time_12h"),
+                "lagna_deg": r.get("lagna_deg"),
+                "cil_pass": True,
+                "d24_pass": True,
+                "both_pass": True,
+            }
+            for r in both_pass_times
+        ],
+        "original_time_result": original_result,
+        "original_time_pass": bool(original_result and original_result.get("both_pass")),
+        "all_pass_times": [
+            {
+                "offset_minutes": r["offset_minutes"],
+                "candidate_time": r.get("candidate_time"),
+                "candidate_time_12h": r.get("candidate_time_12h"),
+                "cil_pass": r.get("cil_pass", False),
+                "d24_pass": r.get("d24_pass", False),
+                "both_pass": r.get("both_pass", False),
+                "status": _category(r),
+            }
+            for r in all_results if r.get("cil_pass") or r.get("d24_pass")
+        ],
+        "all_results":          all_results,
+        "condition_windows":    condition_windows,
+        "total_checked":        len(all_results),
+        "calculation_mode":     "smart_lightweight" if candidate_charts else "lagna_estimate",
+        "recommendation_mode":  "stable_window_then_nearest",
         "total_both_pass":     len(both_pass_times),
         "total_cil_only":      len(cil_only_times),
         "total_d24_only":      len(d24_only_times),
@@ -506,7 +630,7 @@ def auto_rectify(astro: dict, search_range_minutes: int = 30) -> dict:
 # UPDATED MAIN FUNCTION — auto-rectification included
 # ══════════════════════════════════════════════════════
 
-def compute_kp_btr_full(astro: dict) -> dict:
+def compute_kp_btr_full(astro: dict, birth_datetime: Optional[datetime] = None, candidate_charts: Optional[Dict[int, dict]] = None) -> dict:
     """
     Complete KP BTR:
     1. Current time par CIL + D24 check
@@ -517,7 +641,7 @@ def compute_kp_btr_full(astro: dict) -> dict:
     current = compute_kp_btr(astro)
 
     # Step 2: Auto-rectification
-    rectification = auto_rectify(astro, search_range_minutes=30)
+    rectification = auto_rectify(astro, search_range_minutes=30, birth_datetime=birth_datetime, candidate_charts=candidate_charts)
 
     # Step 3: Final verdict
     current_pass = current.get("overall_score", 0) == 100
@@ -525,14 +649,23 @@ def compute_kp_btr_full(astro: dict) -> dict:
     if current_pass:
         final_verdict = "✅ दिया गया समय बिल्कुल सही है"
         time_adjustment = "0 मिनट — कोई बदलाव नहीं"
+    elif rectification.get("original_time_pass"):
+        final_verdict = "✅ दिया गया समय बिल्कुल सही है"
+        time_adjustment = "0 मिनट — कोई बदलाव नहीं"
     else:
         offset = rectification["best_offset_minutes"]
-        if offset > 0:
-            time_adjustment = f"➡️ {offset} मिनट आगे करें"
+        if birth_datetime is not None:
+            recommended_dt = birth_datetime + timedelta(minutes=offset)
+            time_adjustment = (
+                f"निर्धारित समय: {recommended_dt.strftime('%I:%M %p')} "
+                f"({offset:+d} min from original)"
+            )
+        elif offset > 0:
+            time_adjustment = f"निर्धारित समय: +{offset} मिनट"
         elif offset < 0:
-            time_adjustment = f"⬅️ {abs(offset)} मिनट पीछे करें"
+            time_adjustment = f"निर्धारित समय: {offset} मिनट"
         else:
-            time_adjustment = "0 मिनट (base time best)"
+            time_adjustment = "निर्धारित समय: मूल समय"
         final_verdict = rectification["verdict"]
 
     return {

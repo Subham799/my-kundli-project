@@ -342,6 +342,7 @@ const useKundliStore = create((set,get) => ({
   formData:{name:"",dob:"",time:"",city:"",chartType:"D1",lat:null,lon:null},
   chartData:null, loading:false, error:null,
   enginesLoading:false,   // ← phase 2 loading indicator
+  chartRequestSeq:0,       // protects against stale background engine responses
   selectedPlanet:null, drawerOpen:false,
   activeTab:"planets", sidebarCollapsed:false, hoveredHouse:null,
   dashaYearType:365.2425,   // 🌟 365.2425 (सौर) default; 360 (सावन) alternative
@@ -355,40 +356,74 @@ const useKundliStore = create((set,get) => ({
       set({ error: "Please fill all required fields." });
       return;
     }
+
     const dyt = yearTypeOverride ?? dashaYearType;
-    set({ loading: true, error: null, enginesLoading: false, dashaYearType: dyt });
-    
+    const requestId = (get().chartRequestSeq || 0) + 1;
+
+    set({
+      loading: true,
+      error: null,
+      enginesLoading: false,
+      dashaYearType: dyt,
+      chartRequestSeq: requestId,
+    });
+
     const payload = { ...formData, age: formData.age || 0, dasha_year_type: dyt };
-    
+
     try {
-      // ── Phase 1: Fast chart ──────
+      // Phase 1: only visible Kundli. User ko isi response par dashboard mil jata hai.
       const data = await fetchKundliChartFast(payload);
+
       if (!data.masterConclusion?.riskTable) {
         data.masterConclusion = computeMasterConclusion(data);
       }
-      set({ chartData: data, loading: false, sidebarCollapsed: true, activeTab: "planets", enginesLoading: true });
 
-      // ── Phase 2: Heavy engines ────
-      try {
-        const engResult = await fetchKundliEngines(payload);
-        set((s) => {
-          const newChartData = s.chartData ? { 
-            ...s.chartData, 
-            enginesData: engResult.enginesData || null, 
-            _enginesReady: !!engResult.enginesData 
-          } : s.chartData;
-          
-          if (newChartData) {
-            newChartData.masterConclusion = computeMasterConclusion(newChartData);
+      set({
+        chartData: data,
+        loading: false,
+        sidebarCollapsed: true,
+        activeTab: "planets",
+        enginesLoading: true,
+      });
+
+      // Phase 2: background. fetchChart() ko heavy engines ka wait nahi karna.
+      void fetchKundliEngines(payload)
+        .then((engResult) => {
+          // Nayi Kundli aa chuki ho to purani processing ka result ignore.
+          if (get().chartRequestSeq !== requestId) return;
+
+          set((s) => {
+            const newChartData = s.chartData ? {
+              ...s.chartData,
+              enginesData: engResult.enginesData || null,
+              _enginesReady: !!engResult.enginesData
+            } : s.chartData;
+
+            if (newChartData) {
+              newChartData.masterConclusion = computeMasterConclusion(newChartData);
+            }
+
+            return {
+              chartData: newChartData,
+              enginesLoading: false
+            };
+          });
+        })
+        .catch((err) => {
+          if (get().chartRequestSeq === requestId) {
+            console.error("Background engines failed:", err);
+            set({ enginesLoading: false });
           }
-          return { chartData: newChartData, enginesLoading: false };
         });
-      } catch (err) {
-        console.error("Engines failed:", err);
-        set({ enginesLoading: false });
-      }
+
+      // Important: function yahin complete. User ko heavy engines ka wait nahi.
+      return data;
     } catch (err) {
-      set({ error: err.message || "Failed to fetch chart.", loading: false, enginesLoading: false });
+      set({
+        error: err.message || "Failed to fetch chart.",
+        loading: false,
+        enginesLoading: false
+      });
     }
   },
 

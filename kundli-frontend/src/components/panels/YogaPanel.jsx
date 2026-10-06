@@ -14,14 +14,20 @@ import { HI, C, PH } from "../shared/designTokens";
 // YOGA CATEGORIES (engine data keys → display meta)
 // ─────────────────────────────────────────────────────────────
 const YOGA_CATEGORIES = {
-  raja_yogas:               { label: "राज योग",        icon: "👑", color: "#F59E0B" },
-  dhana_yogas:              { label: "धन योग",         icon: "💰", color: "#34D399" },
-  pancha_mahapurusha_yogas: { label: "पंच महापुरुष",  icon: "⭐", color: "#22D3EE" },
-  chandra_yogas:            { label: "चंद्र योग",      icon: "🌙", color: "#A5B4FC" },
-  neecha_bhanga_raja_yoga:  { label: "नीचभंग राजयोग", icon: "🔄", color: "#FB923C" },
-  viparita_raja_yogas:      { label: "विपरीत राजयोग", icon: "🔀", color: "#C084FC" },
-  arishta_yogas:            { label: "अरिष्ट योग",     icon: "⚠️", color: "#FB7185" },
-  special_yogas:            { label: "विशेष योग",       icon: "✨", color: "#67E8F9" },
+  raja_yogas:               { label: "राज योग",            icon: "👑", color: "#F59E0B" },
+  dhana_yogas:              { label: "धन योग",             icon: "💰", color: "#34D399" },
+  pancha_mahapurusha_yogas: { label: "पंच महापुरुष",      icon: "⭐", color: "#22D3EE" },
+  chandra_yogas:            { label: "चंद्र योग",          icon: "🌙", color: "#A5B4FC" },
+  surya_yogas:              { label: "सूर्य योग",          icon: "☀️", color: "#FBBF24" },
+  saraswati_yogas:          { label: "सरस्वती योग",       icon: "📚", color: "#34D399" },
+  maha_yogas:               { label: "महा योग",            icon: "👑", color: "#A78BFA" },
+  neecha_bhanga_raja_yoga:  { label: "नीचभंग राजयोग",    icon: "🔄", color: "#FB923C" },
+  viparita_raja_yogas:      { label: "विपरीत राजयोग",    icon: "🔀", color: "#C084FC" },
+  dainya_khala_yogas:       { label: "दैन्य एवं खल योग", icon: "⚖️", color: "#FB923C" },
+  arishta_yogas:            { label: "अरिष्ट योग",        icon: "⚠️", color: "#FB7185" },
+  additional_yogas:         { label: "विशेष / अतिरिक्त योग", icon: "✨", color: "#22D3EE" },
+  special_yogas:            { label: "अन्य विशेष योग",    icon: "🌟", color: "#67E8F9" },
+  maraka_analysis:          { label: "मारक विश्लेषण",     icon: "⚠️", color: "#FB7185" },
 };
 
 const STRENGTH_STYLE = {
@@ -305,11 +311,68 @@ function RajyogaBlock({ chartPlanets }) {
 // ─────────────────────────────────────────────────────────────
 // MAIN EXPORT
 // ─────────────────────────────────────────────────────────────
+
+function YogaChecklist({ checklist = [] }) {
+  if (!Array.isArray(checklist) || checklist.length === 0) return null;
+
+  const formed = checklist.filter((x) => x?.is_forming);
+  const notFormed = checklist.filter((x) => !x?.is_forming);
+
+  return (
+    <div className="space-y-4 mb-5">
+      <div className="rounded-2xl border border-cyan-400/20 bg-slate-900/40 p-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div>
+            <div className="text-sm font-semibold text-white">
+              सभी मुख्य योग — शास्त्रीय चेकलिस्ट
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              ✓ = योग बन रहा है • ✗ = योग नहीं बन रहा
+            </div>
+          </div>
+          <div className="text-xs text-slate-400 whitespace-nowrap">
+            ✓ {formed.length} / ✗ {notFormed.length}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {checklist.map((item, index) => (
+            <div
+              key={`${item.name_en || item.name}-${index}`}
+              className={`flex items-center gap-2 rounded-xl px-3 py-2 border ${
+                item.is_forming
+                  ? "border-emerald-400/20 bg-emerald-400/5"
+                  : "border-slate-700/50 bg-slate-800/30"
+              }`}
+            >
+              <span
+                className={`font-bold text-base ${
+                  item.is_forming ? "text-emerald-400" : "text-slate-500"
+                }`}
+              >
+                {item.status || (item.is_forming ? "✓" : "✗")}
+              </span>
+              <span
+                className={`text-xs ${
+                  item.is_forming ? "text-slate-200" : "text-slate-500"
+                }`}
+              >
+                {item.name || item.name_en}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function YogaPanel({ data, chartData }) {
   const hasEngine = data && !data.error;
   const pl        = chartData?.planets || {};
   const lagna     = chartData?.lagna ?? 0;
   const summary   = data?.summary || {};
+  const yogaChecklist = data?.yoga_checklist || data?.yogaChecklist || [];
 
   if (!hasEngine && !Object.keys(pl).length) {
     return <EmptyState icon="🔮"
@@ -336,25 +399,14 @@ export default function YogaPanel({ data, chartData }) {
       )}
 
       {/* Engine-driven categories */}
+      <YogaChecklist checklist={yogaChecklist} />
+
       {hasEngine && Object.keys(YOGA_CATEGORIES).map((k) => (
         <CategoryBlock key={k} catKey={k} yogas={data[k]} />
       ))}
 
-      {/* Frontend-computed: Pancha Mahapurush */}
-      {Object.keys(pl).length > 0 && (
-        <CollapsibleSection variant="panel" icon="🦢" title="पंच महापुरुष योग"
-          color={C.cyan} defaultOpen={true}>
-          <MahapurushBlock chartPlanets={pl} />
-        </CollapsibleSection>
-      )}
-
-      {/* Frontend-computed: Rajyoga */}
-      {Object.keys(pl).length > 0 && (
-        <CollapsibleSection variant="panel" icon="👑" title="राजयोग विश्लेषण"
-          color={C.amber} defaultOpen={true}>
-          <RajyogaBlock chartPlanets={pl} lagna={lagna} />
-        </CollapsibleSection>
-      )}
+      {/* All Yoga results are rendered from the backend yoga engine.
+          This avoids duplicate Mahapurush/Rajyoga/Gajakesari/Budhaditya cards. */}
     </div>
   );
 }

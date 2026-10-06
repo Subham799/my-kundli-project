@@ -1254,7 +1254,8 @@ function JaiminiDrishtiPanel({ houses = [] }) {
 // SHODASHVARGA GRID — one chart surface, toggled by the "Charts" tab
 // D1 is included here so the universal chart is not rendered a second time.
 // ─────────────────────────────────────────────────────────────
-const VARGA_KEYS = ["D1","D2","D3","D4","D6","D7","D9","D10","D12","D16","D20","D24","D27","D30","D40","D45","D60"];
+const VARGA_KEYS = ["D1","D2","D3","D4","D6","D7","D9","D10","D12","D16","D20","D24","D27","D30","D40","D45","D60","RTN","YOGINI_PL",
+  "D1_PL","D2_PL","D3_PL","D4_PL","D6_PL","D7_PL","D9_PL","D10_PL","D12_PL","D16_PL","D20_PL","D24_PL","D27_PL","D30_PL","D40_PL","D45_PL","D60_PL"];
 
 // Clear only Kundli UI/cache state. This does not touch unrelated site storage.
 function clearKundliClientState() {
@@ -1576,10 +1577,10 @@ async function downloadVargaView(gridEl, visibleCharts, columns) {
     ctx.font = '900 20px Inter, Arial, sans-serif';
     ctx.fillStyle = '#FCD34D';
     ctx.fillText(key, x + 18, y + 30);
-    if (key === 'D1') {
+    if (key === 'D1' || key === 'RTN' || key === 'YOGINI_PL') {
       ctx.font = '600 11px Inter, Arial, sans-serif';
       ctx.fillStyle = 'rgba(148,163,184,.65)';
-      ctx.fillText('Birth Chart', x + 54, y + 29);
+      ctx.fillText(key === 'D1' ? 'Birth Chart' : key === 'RTN' ? 'Rashi Tulya Navamsha' : 'VP Goel · Udu Progressed Lagna', x + 54, y + 29);
     }
 
     const svgEls = Array.from(card.querySelectorAll('svg'));
@@ -1605,49 +1606,299 @@ async function downloadVargaView(gridEl, visibleCharts, columns) {
   a.click();
 }
 
+
+function YoginiProgressedContext({ chartData, selectedKey, onSelectKey, selectedPart, onSelectPart }) {
+  const data = chartData?.enginesData?.advanced_astrology?.yogini_progressed_options;
+  const cycles = data?.cycles || [];
+  const rows = data?.md_options || [];
+  const selected = rows.find((r) => r.key === selectedKey)
+    || rows.find((r) => r.key === data?.current_key)
+    || rows[0];
+
+  const [cycle, setCycle] = useState(selected?.cycle || 1);
+  const [showDetails, setShowDetails] = useState(false);
+
+  useEffect(() => {
+    if (selected?.cycle) setCycle(selected.cycle);
+  }, [selected?.cycle]);
+
+  if (!rows.length) return null;
+
+  const cycleRows = rows.filter((r) => r.cycle === Number(cycle));
+  const activeMd = selected && selected.cycle === Number(cycle) ? selected : cycleRows[0];
+  const activeParts = activeMd?.parts || [];
+  const activePart = activeParts.find((p) => p.part === Number(selectedPart)) || activeParts[0];
+
+  const signEn = [
+    "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+    "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
+  ];
+  const lordFull = {
+    Ma: "Mars (मंगल)", Ve: "Venus (शुक्र)", Me: "Mercury (बुध)",
+    Mo: "Moon (चंद्र)", Su: "Sun (सूर्य)", Ju: "Jupiter (गुरु)",
+    Sa: "Saturn (शनि)", Ra: "Rahu (राहु)", Ke: "Ketu (केतु)"
+  };
+
+  const selectedLord = activeMd?.udu_dasha_lord;
+  const natalHouse = activePart?.udu_house_natal;
+  const progressedHouse = activePart?.udu_house_progressed;
+  const progressedLord = activePart?.progressed_lagna_lord;
+
+  return (
+    <div className="mb-3 rounded-2xl border border-amber-500/20 bg-slate-950/70 p-3 shadow-[0_0_35px_rgba(245,158,11,.05)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div>
+          <div className="text-[13px] font-black text-amber-300">Yogini Progressed Lagna</div>
+          <div className="text-[9px] text-slate-500">Yogini Dasha के समय-काल के अनुसार Progressed Lagna का अलग period चुनें</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowDetails((v) => !v)}
+          className="text-[10px] border border-slate-700 rounded-lg px-3 py-1.5 text-amber-300"
+        >
+          {showDetails ? "फलित विवरण छिपाएँ" : "फलित विवरण देखें"}
+        </button>
+      </div>
+
+      <div className="text-[9px] text-slate-500 mb-2">
+        Natal planets fixed · केवल Lagna / house framework बदलेगा
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {cycles.map((c) => (
+          <button
+            type="button"
+            key={c.cycle}
+            onClick={() => {
+              setCycle(c.cycle);
+              const first = rows.find((r) => r.cycle === c.cycle);
+              if (first) {
+                onSelectKey(first.key);
+                onSelectPart(first.parts?.[0]?.part || 1);
+              }
+            }}
+            className={`rounded-lg px-3 py-1.5 text-[10px] border ${Number(cycle) === c.cycle ? "border-amber-400 text-amber-300 bg-amber-500/10" : "border-slate-700 text-slate-400"}`}
+          >
+            {c.label} · {c.age_range}
+          </button>
+        ))}
+      </div>
+
+      <div className="text-[9px] uppercase tracking-wider text-slate-600 mb-1">Yogini Dasha Period</div>
+      <div className="space-y-1.5 mb-3 max-h-[310px] overflow-y-auto pr-1">
+        {cycleRows.map((md) => {
+          const active = md.key === activeMd?.key;
+          return (
+            <div
+              key={md.key}
+              className={`rounded-xl border ${active ? "border-amber-500/50 bg-amber-500/5" : "border-slate-800 bg-slate-900/30"}`}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectKey(md.key);
+                  onSelectPart(md.current_part || 1);
+                }}
+                className="w-full flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-bold text-slate-100">{md.yogini}</span>
+                  <span className="text-[10px] text-cyan-300">★ {md.current_nakshatra}</span>
+                  <span className="text-[9px] text-slate-500">{md.duration_years} वर्ष · Udu: {md.udu_dasha_lord_name || md.udu_dasha_lord}</span>
+                </div>
+                <div className="text-[10px] text-slate-300 tabular-nums">
+                  {md.start_date} → {md.end_date} {active ? "▾" : "▸"}
+                </div>
+              </button>
+
+              {active ? (
+                <div className="px-3 pb-2 pt-1 border-t border-slate-800/70 space-y-1">
+                  <div className="text-[9px] uppercase tracking-wider text-slate-600">Progressed Lagna Period</div>
+                  {activeParts.map((part) => (
+                    <button
+                      type="button"
+                      key={part.part}
+                      onClick={() => onSelectPart(part.part)}
+                      className={`w-full flex flex-wrap justify-between items-center text-left rounded-lg border px-2.5 py-2 gap-2 ${activePart?.part === part.part ? "border-cyan-500/60 bg-cyan-500/10 text-cyan-200" : "border-slate-800 text-slate-400"}`}
+                    >
+                      <span className="text-[10px] font-bold">
+                        {activePart?.part === part.part ? "● " : "○ "}{part.sign} · {part.padas_label}
+                      </span>
+                      <span className="text-[10px] tabular-nums">{part.start_date} → {part.end_date}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      {showDetails ? (
+        <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/55 p-2.5">
+              <div className="text-[8px] uppercase tracking-wider text-slate-500">Running Yogini MD & Nakshatra</div>
+              <div className="text-[11px] font-bold text-slate-100 mt-1">{activeMd?.yogini} ({activeMd?.duration_years} वर्ष)</div>
+              <div className="text-[9px] text-cyan-300 mt-0.5">{activeMd?.current_nakshatra} · {activePart?.padas_label}</div>
+            </div>
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-2.5">
+              <div className="text-[8px] uppercase tracking-wider text-slate-500">Progressed Lagna</div>
+              <div className="text-[12px] font-black text-amber-300 mt-1">
+                {activePart ? `${activePart.sign} (${activePart.sign_idx + 1})` : "—"}
+              </div>
+              <div className="text-[9px] text-slate-400 mt-0.5">
+                {activePart ? signEn[activePart.sign_idx] : ""} · Lagna Lord: {lordFull[progressedLord] || progressedLord || "—"}
+              </div>
+            </div>
+            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-2.5">
+              <div className="text-[8px] uppercase tracking-wider text-slate-500">मुख्य फलदाता · Udu Lord</div>
+              <div className="text-[11px] font-black text-cyan-300 mt-1">{activeMd?.udu_dasha_lord_name || lordFull[selectedLord] || selectedLord || "—"}</div>
+              <div className="text-[8px] text-slate-500 mt-0.5">Yogini नाम नहीं, progression Nakshatra का Vimshottari स्वामी मुख्य driver है</div>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900/55 p-2.5">
+              <div className="text-[8px] uppercase tracking-wider text-slate-500">Effective Date Range</div>
+              <div className="text-[11px] font-bold text-slate-100 mt-1">{activePart?.start_date} → {activePart?.end_date}</div>
+              <div className="text-[9px] text-slate-500 mt-0.5">MD: {activeMd?.start_date} → {activeMd?.end_date}</div>
+            </div>
+          </div>
+
+          <div className="mt-2.5 grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div className="rounded-xl border border-slate-800/80 bg-slate-900/35 p-2.5">
+              <div className="text-[8px] text-slate-500">Natal Chart में Udu Lord</div>
+              <div className="text-[10px] text-slate-200 mt-1">{lordFull[selectedLord] || selectedLord || "—"} · House {natalHouse ?? "—"}</div>
+              <div className="text-[8px] text-slate-600 mt-0.5">Natal house lordship: {(activePart?.udu_lordships_natal || []).map((x) => `H${x}`).join(", ") || "—"}</div>
+            </div>
+            <div className="rounded-xl border border-slate-800/80 bg-slate-900/35 p-2.5">
+              <div className="text-[8px] text-slate-500">Progressed Chart में Udu Lord</div>
+              <div className="text-[10px] text-slate-200 mt-1">House {progressedHouse ?? "—"} · {lordFull[selectedLord] || selectedLord || "—"}</div>
+              <div className="text-[8px] text-slate-600 mt-0.5">Progressed lordships: {(activePart?.udu_lordships_progressed || []).map((x) => `H${x}`).join(", ") || "—"}</div>
+            </div>
+            <div className="rounded-xl border border-slate-800/80 bg-slate-900/35 p-2.5">
+              <div className="text-[8px] text-slate-500">PL Transition</div>
+              <div className="text-[10px] text-slate-200 mt-1">
+                {activeMd?.has_mid_dasha_pl_change ? `हाँ · ${activeMd.parts.length} parts` : "नहीं · एक ही राशि"}
+              </div>
+              <div className="text-[8px] text-slate-600 mt-0.5">
+                {activeMd?.has_mid_dasha_pl_change
+                  ? activeMd.parts.map((p) => `${p.sign} · ${p.padas_label}`).join(" → ")
+                  : "MD के पूरे समय यही Progressed Lagna रहेगा"}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function VargaGrid({ chartData }) {
   const { selectedPlanet, hoverHouse } = useKundliStore();
   const chartsGridRef = useRef(null);
   const SETTINGS_KEY = "kundli-varga-view-settings";
+  const NORMAL_KEYS = ["D1","D2","D3","D4","D6","D7","D9","D10","D12","D16","D20","D24","D27","D30","D40","D45","D60","RTN"];
+  const PROGRESSED_BASE_KEYS = ["D1","D2","D3","D4","D6","D7","D9","D10","D12","D16","D20","D24","D27","D30","D40","D45","D60"];
+
   const readSettings = () => {
+    const fallback = {
+      mode: "normal",
+      viewCount: "4",
+      normalSelectedCharts: ["D1"],
+      progressedSelectedCharts: ["D1_PL"],
+      rotation: Object.fromEntries(VARGA_KEYS.map(k => [k, 1])),
+    };
     try {
       const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
-      return saved || { viewCount: "4", selectedCharts: ["D1"], rotation: Object.fromEntries(VARGA_KEYS.map(k => [k, 1])) };
+      if (!saved) return fallback;
+      const oldSelected = Array.isArray(saved.selectedCharts) ? saved.selectedCharts : ["D1"];
+      const migratedNormal = oldSelected.filter(k => NORMAL_KEYS.includes(k));
+      const migratedProgressed = oldSelected
+        .filter(k => k.endsWith("_PL") && PROGRESSED_BASE_KEYS.includes(k.replace(/_PL$/, "")));
+      return {
+        ...fallback,
+        ...saved,
+        mode: saved.mode === "progressed" ? "progressed" : "normal",
+        viewCount: saved.viewCount || "4",
+        normalSelectedCharts: Array.isArray(saved.normalSelectedCharts) ? saved.normalSelectedCharts : (migratedNormal.length ? migratedNormal : ["D1"]),
+        progressedSelectedCharts: Array.isArray(saved.progressedSelectedCharts) ? saved.progressedSelectedCharts : (migratedProgressed.length ? migratedProgressed : ["D1_PL"]),
+        rotation: { ...fallback.rotation, ...(saved.rotation || {}) },
+      };
     } catch {
-      return { viewCount: "4", selectedCharts: ["D1"], rotation: Object.fromEntries(VARGA_KEYS.map(k => [k, 1])) };
+      return fallback;
     }
   };
-  // Persist chart selection/row count/rotation so switching tabs does not reset the user's workspace.
-  const [viewCount, setViewCount] = useState(() => readSettings().viewCount);
-  const [selectedCharts, setSelectedCharts] = useState(() => readSettings().selectedCharts);
-  const [rotation, setRotation] = useState(() => readSettings().rotation);
+
+  const initial = readSettings();
+  const [mode, setMode] = useState(initial.mode);
+  const [viewCount, setViewCount] = useState(initial.viewCount);
+  const [normalSelectedCharts, setNormalSelectedCharts] = useState(initial.normalSelectedCharts);
+  const [progressedSelectedCharts, setProgressedSelectedCharts] = useState(initial.progressedSelectedCharts);
+  const [rotation, setRotation] = useState(initial.rotation);
+
+  const progressedOptions = chartData?.enginesData?.advanced_astrology?.yogini_progressed_options || {};
+  const initialPLRow = (progressedOptions.md_options || []).find(r => r.key === progressedOptions.current_key) || (progressedOptions.md_options || [])[0] || null;
+  const [selectedPLKey, setSelectedPLKey] = useState(initialPLRow?.key || null);
+  const [selectedPLPart, setSelectedPLPart] = useState(initialPLRow?.current_part || 1);
 
   useEffect(() => {
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ viewCount, selectedCharts, rotation })); } catch {}
-  }, [viewCount, selectedCharts, rotation]);
+    if (progressedOptions.current_key && !progressedOptions.md_options?.some(r => r.key === selectedPLKey)) {
+      const currentRow = progressedOptions.md_options?.find(r => r.key === progressedOptions.current_key);
+      setSelectedPLKey(progressedOptions.current_key);
+      setSelectedPLPart(currentRow?.current_part || 1);
+    }
+  }, [progressedOptions.current_key, progressedOptions.md_options?.length]);
 
-  const toggleChart = (key) => {
-    setSelectedCharts(prev =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    );
-  };
+  const selectedPLRow = (progressedOptions.md_options || []).find(r => r.key === selectedPLKey) || (progressedOptions.md_options || [])[0] || null;
+  const selectedPLPartData = selectedPLRow?.parts?.find(p => p.part === Number(selectedPLPart)) || selectedPLRow?.parts?.[0] || null;
+  const selectedProgressedLagna = selectedPLPartData ? {
+    current_sign_idx: selectedPLPartData.sign_idx,
+    current_sign: selectedPLPartData.sign,
+    progression_nakshatra: selectedPLRow.current_nakshatra,
+    progression_star_lord: selectedPLRow.udu_dasha_lord,
+    start_date: selectedPLPartData.start_date,
+    end_date: selectedPLPartData.end_date,
+  } : (chartData.enginesData?.advanced_astrology?.progressed_lagna || null);
 
-  const visibleCharts = selectedCharts.filter(k => VARGA_KEYS.includes(k));
+  useEffect(() => {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+        mode, viewCount, normalSelectedCharts, progressedSelectedCharts, rotation,
+      }));
+    } catch {}
+  }, [mode, viewCount, normalSelectedCharts, progressedSelectedCharts, rotation]);
+
+  const activeSelection = mode === "progressed" ? progressedSelectedCharts : normalSelectedCharts;
+  const visibleCharts = activeSelection.filter(k => VARGA_KEYS.includes(k));
   const columns = viewCount === "all"
     ? Math.min(4, Math.max(1, visibleCharts.length))
     : Math.min(Number(viewCount), Math.max(1, visibleCharts.length));
 
-  const setChartRotation = (key, value) => {
-    setRotation(prev => ({ ...prev, [key]: value }));
+  const toggleChart = (key) => {
+    if (mode === "progressed") {
+      setProgressedSelectedCharts(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+    } else {
+      setNormalSelectedCharts(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+    }
   };
 
+  const setChartRotation = (key, value) => setRotation(prev => ({ ...prev, [key]: value }));
+
   const resetChartWorkspace = () => {
-    const defaults = { viewCount: "4", selectedCharts: ["D1"], rotation: Object.fromEntries(VARGA_KEYS.map(k => [k, 1])) };
-    setViewCount(defaults.viewCount);
-    setSelectedCharts(defaults.selectedCharts);
-    setRotation(defaults.rotation);
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(defaults)); } catch {}
+    setMode("normal");
+    setViewCount("4");
+    setNormalSelectedCharts(["D1"]);
+    setProgressedSelectedCharts(["D1_PL"]);
+    setRotation(Object.fromEntries(VARGA_KEYS.map(k => [k, 1])));
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+        mode: "normal", viewCount: "4", normalSelectedCharts: ["D1"], progressedSelectedCharts: ["D1_PL"],
+        rotation: Object.fromEntries(VARGA_KEYS.map(k => [k, 1])),
+      }));
+    } catch {}
   };
+
+  const displayName = key => key.endsWith("_PL") ? key.replace(/_PL$/, "") : key;
+  const chartLabel = key => key === "RTN" ? "RTN" : displayName(key);
 
   return (
     <div className="w-full pb-6">
@@ -1681,63 +1932,101 @@ function VargaGrid({ chartData }) {
           </div>
         </div>
 
+        <div className="flex rounded-xl border border-slate-700/50 bg-slate-950/50 p-1 mb-3 max-w-xl">
+          <button type="button" onClick={() => setMode("normal")}
+            className={`flex-1 rounded-lg px-3 py-2 text-[10px] font-black border ${mode === "normal" ? "bg-amber-500/15 text-amber-300 border-amber-500/30" : "text-slate-400 border-transparent"}`}>
+            Normal D-Charts
+          </button>
+          <button type="button" onClick={() => setMode("progressed")}
+            className={`flex-1 rounded-lg px-3 py-2 text-[10px] font-black border ${mode === "progressed" ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/30" : "text-slate-400 border-transparent"}`}>
+            Yogini Progressed Lagna
+          </button>
+        </div>
+
         <div className="flex flex-wrap gap-1.5">
-          {VARGA_KEYS.map(key => {
-            const active = selectedCharts.includes(key);
+          {(mode === "normal" ? NORMAL_KEYS : PROGRESSED_BASE_KEYS.map(k => `${k}_PL`)).map(key => {
+            const active = activeSelection.includes(key);
             return (
               <button key={key} type="button" onClick={() => toggleChart(key)}
-                title={active ? `Remove ${key}` : `Add ${key}`}
+                title={active ? `Remove ${chartLabel(key)}` : `Add ${chartLabel(key)}`}
                 aria-pressed={active}
                 className={`px-2 py-1 rounded-md text-[9px] font-bold border transition ${active ? "bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-red-500/10 hover:text-red-300 hover:border-red-500/30" : "text-slate-300 border-slate-700 hover:text-amber-300 hover:border-amber-500/40"}`}>
-                {key}{active ? " ✓" : " +"}
+                {chartLabel(key)}{active ? " ✓" : " +"}
               </button>
             );
           })}
         </div>
         <div className="mt-2 text-[9px] text-slate-600">
-          {visibleCharts.length} charts selected · {columns} chart{columns === 1 ? "" : "s"} per row · D1 is included in this same grid
+          {visibleCharts.length} charts selected · {columns} chart{columns === 1 ? "" : "s"} per row
+          {mode === "normal" && activeSelection.includes("D1") && <span className="ml-2 text-slate-500">D1 is included in this same grid</span>}
+          {mode === "normal" && activeSelection.includes("RTN") && <span className="ml-2 text-slate-500">RTN = D1 Lagna + D9 planet signs</span>}
+          {mode === "progressed" && <span className="ml-2 text-slate-500">Natal planets fixed · selected Yogini PL changes Lagna / house framework</span>}
         </div>
       </div>
 
+      {mode === "progressed" && <YoginiProgressedContext
+        chartData={chartData}
+        selectedKey={selectedPLKey}
+        onSelectKey={(key) => { setSelectedPLKey(key); setSelectedPLPart(1); }}
+        selectedPart={selectedPLPart}
+        onSelectPart={setSelectedPLPart}
+      />}
+
       <div ref={chartsGridRef}
         className={`grid gap-3 ${visibleCharts.length === 1 ? "place-items-center" : ""}`}
-        style={{
-          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-        }}
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
       >
-        {visibleCharts.map((key) => (
-          <div key={key} data-varga-card={key} className={`relative min-w-0 w-full rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2.5 ${visibleCharts.length === 1 ? "max-w-[560px]" : ""}`}>
-            <ChartAnnotationOverlay chartKey={key} />
-            <div className="relative z-30 flex items-center justify-between gap-2 px-1 pb-2 pt-0.5">
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] font-black tracking-wide text-amber-300">{key}</span>
-                {key === "D1" && <span className="text-[8px] text-slate-600">Birth Chart</span>}
+        {visibleCharts.map((key) => {
+          const isProgressed = mode === "progressed";
+          const baseKey = isProgressed ? key.replace(/_PL$/, "") : key;
+          const renderKey = isProgressed ? `${baseKey}_PL` : baseKey;
+          const cardKey = renderKey;
+          return (
+            <div key={cardKey} data-varga-card={cardKey} className={`relative min-w-0 w-full rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2.5 ${visibleCharts.length === 1 ? "max-w-[560px]" : ""}`}>
+              <ChartAnnotationOverlay chartKey={cardKey} />
+              <div className="relative z-30 flex items-center justify-between gap-2 px-1 pb-2 pt-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-black tracking-wide text-amber-300">{baseKey}</span>
+                  {baseKey === "D1" && <span className="text-[8px] text-slate-600">{isProgressed ? "Progressed Lagna" : "Birth Chart"}</span>}
+                  {baseKey === "RTN" && <span className="text-[8px] text-slate-600">Rashi Tulya Navamsha</span>}
+                  {isProgressed && <span className="text-[8px] text-cyan-700">VP Goel · Yogini PL</span>}
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[8px] text-slate-600">Rotate</span>
+                  <select value={rotation[cardKey] || 1} onChange={e => setChartRotation(cardKey, Number(e.target.value))}
+                    className="bg-slate-950 border border-slate-700 rounded-md text-[9px] text-slate-300 px-1 py-0.5">
+                    {Array.from({length:12}, (_,i) => i+1).map(n => <option key={n} value={n}>H{n}</option>)}
+                  </select>
+                  <button type="button" onClick={e => downloadVargaChart(e.currentTarget.closest("[data-varga-card]"), cardKey)}
+                    className="px-2 py-0.5 rounded-md text-[9px] font-bold border bg-slate-950 text-slate-300 border-slate-700 hover:text-amber-300 hover:border-amber-500/40"
+                    title={`Download ${baseKey} as PNG`}>
+                    Download
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                <span className="text-[8px] text-slate-600">Rotate</span>
-                <select value={rotation[key] || 1} onChange={e => setChartRotation(key, Number(e.target.value))}
-                  className="bg-slate-950 border border-slate-700 rounded-md text-[9px] text-slate-300 px-1 py-0.5">
-                  {Array.from({length:12}, (_,i) => i+1).map(n => <option key={n} value={n}>H{n}</option>)}
-                </select>
-                <button type="button" onClick={e => downloadVargaChart(e.currentTarget.closest("[data-varga-card]"), key)}
-                  className="px-2 py-0.5 rounded-md text-[9px] font-bold border bg-slate-950 text-slate-300 border-slate-700 hover:text-amber-300 hover:border-amber-500/40"
-                  title={`Download ${key} as PNG`}>
-                  Download
-                </button>
-              </div>
+              {isProgressed && !selectedProgressedLagna ? (
+                <div className="min-h-[280px] flex items-center justify-center rounded-xl border border-slate-800/60 bg-slate-950/40 text-center px-5">
+                  <div>
+                    <div className="text-xs font-bold text-amber-300">Yogini Progressed Lagna तैयार हो रहा है</div>
+                    <div className="text-[9px] text-slate-500 mt-1.5">Kundli पहले दिख रही है; Yogini/Progressed-Lagna engine पूरा होने के बाद chart यहाँ दिखाई देगा।</div>
+                  </div>
+                </div>
+              ) : (
+                <InteractiveKundli
+                  houses={!isProgressed && (baseKey === "D1" || baseKey === "RTN") ? (chartData.houses || []) : []}
+                  planets={chartData.planets || {}}
+                  lagnaVargas={chartData.meta?.lagnaVargas || {}}
+                  vargaKey={renderKey}
+                  progressedLagna={isProgressed ? selectedProgressedLagna : null}
+                  rotation={rotation[cardKey] || 1}
+                  selectedPlanet={selectedPlanet}
+                  onHouseHover={hoverHouse}
+                  showHeader={false}
+                />
+              )}
             </div>
-            <InteractiveKundli
-              houses={key === "D1" ? chartData.houses : []}
-              planets={chartData.planets || {}}
-              lagnaVargas={chartData.meta?.lagnaVargas || {}}
-              vargaKey={key}
-              rotation={rotation[key] || 1}
-              selectedPlanet={selectedPlanet}
-              onHouseHover={hoverHouse}
-              showHeader={false}
-            />
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

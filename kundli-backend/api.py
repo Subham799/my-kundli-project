@@ -212,6 +212,23 @@ YOGINI_NAK_SEQUENCE = [
     ("मृगशिरा",             "Ma",  2,  0),   # संकटा
 ]
 
+
+# VP Goel 24-table position -> actual 27-nakshatra Vimshottari/Udu index.
+# Used ONLY for Progressed Lagna metadata; it does not change the Yogini cycle.
+YOGINI_TABLE_TO_UDU_IDX = {
+    0: 5, 1: 6, 2: 7, 3: 8, 4: 9, 5: 10, 6: 11, 7: 12, 8: 13,
+    9: 14, 10: 15, 11: 16, 12: 17, 13: 18, 14: 19, 15: 20,
+    16: 21, 17: 22, 18: 23, 19: 24, 20: 25, 21: 26, 22: 3, 23: 4,
+}
+YOGINI_UDU_NAKSHATRAS = [
+    "अश्विनी", "भरणी", "कृत्तिका", "रोहिणी", "मृगशिरा", "आर्द्रा",
+    "पुनर्वसु", "पुष्य", "अश्लेषा", "मघा", "पूर्वा फाल्गुनी", "उत्तरा फाल्गुनी",
+    "हस्त", "चित्रा", "स्वाति", "विशाखा", "अनुराधा", "ज्येष्ठा", "मूल",
+    "पूर्वाषाढ़ा", "उत्तराषाढ़ा", "श्रवण", "धनिष्ठा", "शतभिषा",
+    "पूर्वा भाद्रपद", "उत्तर भाद्रपद", "रेवती",
+]
+YOGINI_UDU_LORDS = ["Ke", "Ve", "Su", "Mo", "Ma", "Ra", "Ju", "Sa", "Me"]
+
 AV_RULES = {
     "Su": {"Su":[1,2,4,7,8,9,10,11],"Mo":[3,6,10,11],"Ma":[1,2,4,7,8,9,10,11],"Me":[3,5,6,9,10,11,12],"Ju":[5,6,9,11],"Ve":[6,7,12],"Sa":[1,2,4,7,8,9,10,11],"La":[3,4,6,10,11,12]},
     "Mo": {"Su":[3,6,7,8,10,11],"Mo":[1,3,6,7,10,11],"Ma":[2,3,5,6,9,10,11],"Me":[1,3,4,5,7,8,10,11],"Ju":[1,4,7,8,10,11,12],"Ve":[3,4,5,7,9,10,11],"Sa":[3,5,6,11],"La":[3,6,10,11]},
@@ -1272,11 +1289,14 @@ def calculate_yogini_dasha(moon_degree, birth_date, reference_date=None):
                     "end":            md_end.strftime("%d-%m-%Y"),
                     "duration_years": md["duration"],
                     "idx":            md_idx,
-                    "nakshatra":      nak_name,      # VP Goyal table नक्षत्र
+                    "nakshatra":      nak_name,      # VP Goyal 24-table cycle label
                     "nakshatra_idx":  ALL_NAK_NAMES_27.index(nak_name) if nak_name in ALL_NAK_NAMES_27 else None,
-                    "star_lord":      star_lord,     # नक्षत्र स्वामी
-                    "prog_lagna":     prog_lagna,    # प्रोग्रेस्ड लग्न (राशि)
+                    "star_lord":      star_lord,     # Udu/Vimshottari lord of the primary progression star
+                    "prog_lagna":     prog_lagna,    # VP Goyal table sign (cycle metadata only)
                     "table_position": nak_table_pos - 1,   # VP Goyal 24-entry table में position
+                    "progression_nakshatra_idx": YOGINI_TABLE_TO_UDU_IDX.get((nak_table_pos - 1) % 24),
+                    "progression_nakshatra": YOGINI_UDU_NAKSHATRAS[YOGINI_TABLE_TO_UDU_IDX.get((nak_table_pos - 1) % 24)] if YOGINI_TABLE_TO_UDU_IDX.get((nak_table_pos - 1) % 24) is not None else None,
+                    "progression_star_lord": YOGINI_UDU_LORDS[YOGINI_TABLE_TO_UDU_IDX.get((nak_table_pos - 1) % 24) % 9] if YOGINI_TABLE_TO_UDU_IDX.get((nak_table_pos - 1) % 24) is not None else None,
                     "antardashas":    antardashas,
                 })
 
@@ -1530,7 +1550,7 @@ def search_dasha_alignments(moon_degree, birth_date, search_criteria, year_lengt
 # ██  SECTION 3 — JSON API ROUTES  (replaces render_template_string)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, lon=None, dasha_year_type=365.2425, age=0):
+def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, lon=None, dasha_year_type=365.2425, age=0, include_heavy=True):
     """
     Core calculation pipeline — same as original home() POST handler,
     but returns a dict (not rendered HTML).
@@ -1590,23 +1610,23 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
     # ── Shodhana placeholder — computed after engines_data below ──
     shodhana_data = {}
 
-    # ── Sudarshan Chakra ──────────────────────────────────────────
-    try:
-        sudarshan_data = get_sudarshan_data(astro, sav_points)
-    except Exception as _se:
-        print(f"[Sudarshan Engine] Error: {_se}")
-        sudarshan_data = {}
+    # ── Deferred extras ──────────────────────────────────────────
+    sudarshan_data = {}
+    yearly_data = {}
+    if include_heavy:
+        try:
+            sudarshan_data = get_sudarshan_data(astro, sav_points)
+        except Exception as _se:
+            print(f"[Sudarshan Engine] Error: {_se}")
+            sudarshan_data = {}
 
-    # ── Yearly Prediction (Sudarshan-based) ─────────────────────
-    try:
-        _age = int((request.get_json(silent=True) or {}).get("age", 0) or 0)
-        if _age > 0 and sudarshan_data:
-            yearly_data = get_yearly_prediction(_age, sudarshan_data, houses)
-        else:
+        try:
+            _age = int((request.get_json(silent=True) or {}).get("age", 0) or 0)
+            if _age > 0 and sudarshan_data:
+                yearly_data = get_yearly_prediction(_age, sudarshan_data, houses)
+        except Exception as _ye:
+            print(f"[Yearly Engine] Error: {_ye}")
             yearly_data = {}
-    except Exception as _ye:
-        print(f"[Yearly Engine] Error: {_ye}")
-        yearly_data = {}
 
     # ── Active dasha ──────────────────────────────────────────────
     current_md = dashas[0]
@@ -1708,70 +1728,76 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
         "planets":astro, "dashas":dashas, "sav":sav_points, "houses":houses
     }
 
-    # ── Nadi AI ────────────────────────────────────────────────────
-    nadi_ai_output = {}; house_diagnostic = []
-    try:
-        dignity_engine    = DignityEngine()
-        dasha_engine      = DashaEngine(dashas)
-        nakshatra_engine  = NakshatraEngine(dignity_engine)
-        modules           = [CareerModule(astro, dt)]
-        aggregator        = NadiAggregator(
-            astro_data=master_astro_data["planets"], dob_obj=dt, modules=modules,
-            dignity_engine=dignity_engine, dasha_engine=dasha_engine, nakshatra_engine=nakshatra_engine
-        )
-        nadi_ai_output = aggregator.run()
-        hde = HouseDiagnosticEngine(master_astro_data, dasha_engine, gochar_engine=None)
-        house_diagnostic = hde.generate_full_report()["houses_diagnostic"]
-    except Exception as e:
-        print("Nadi AI Error:", e)
-
+    # ── Deferred Nadi / heavy analysis ────────────────────────────
+    nadi_ai_output = {}
+    house_diagnostic = []
     nadi_events = []
-    try:
-        nadi_events = nadi_master.run_master_analysis(astro, date_str)
-    except Exception as e:
-        print("Classic Nadi Error:", e)
-
-    # ── Nadi Jyotish Engine (full_nadi_analysis) ───────────────────
     nadi_jyotish_output = {}
-    try:
-        if _NADI_JYOTISH_AVAILABLE:
-            # Convert astro data → nadi engine format
-            # astro keys: Su, Mo, Ma, Me, Ju, Ve, Sa, Ra, Ke
-            # nadi engine expects: SUN, MOON, MARS, MERCURY, JUPITER, VENUS, SATURN, RAHU, KETU
-            _CODE_MAP = {
-                "Su": "SUN", "Mo": "MOON", "Ma": "MARS",
-                "Me": "MERCURY", "Ju": "JUPITER", "Ve": "VENUS",
-                "Sa": "SATURN", "Ra": "RAHU", "Ke": "KETU"
-            }
-            _planets_for_nadi = {}
-            for short, full in _CODE_MAP.items():
-                if short in astro:
-                    p = astro[short]
-                    # sign: Vargas.D1.Idx is 0-based, nadi engine needs 1-12
-                    sign_1based = (p["Vargas"]["D1"]["Idx"] % 12) + 1
-                    _planets_for_nadi[full] = {
-                        "sign":      sign_1based,
-                        "degree":    round(p.get("SignDegree", p["Degree"] % 30), 2),
-                        "retrograde": bool(p.get("Retrograde", False)),
-                        "combust":   bool(p.get("Combust", False)),
-                    }
-            # lagna_rashi is 0-based in api.py, nadi engine needs 1-12
-            _lagna_for_nadi = (lagna_rashi % 12) + 1
-            # gender from request
-            _gender = (request.get_json(silent=True) or {}).get("gender", "MALE").upper()
-            _birth_year = dt.year
-            _current_year = datetime.now().year
 
-            nadi_jyotish_output = run_nadi_jyotish(
-                planets_data = _planets_for_nadi,
-                lagna        = _lagna_for_nadi,
-                gender       = _gender,
-                birth_year   = _birth_year,
-                current_year = _current_year,
-            )
-    except Exception as e:
-        print("Nadi Jyotish Engine Error:", e)
-        nadi_jyotish_output = {"error": str(e)}
+    if include_heavy:
+            nadi_ai_output = {}; house_diagnostic = []
+            try:
+                dignity_engine    = DignityEngine()
+                dasha_engine      = DashaEngine(dashas)
+                nakshatra_engine  = NakshatraEngine(dignity_engine)
+                modules           = [CareerModule(astro, dt)]
+                aggregator        = NadiAggregator(
+                    astro_data=master_astro_data["planets"], dob_obj=dt, modules=modules,
+                    dignity_engine=dignity_engine, dasha_engine=dasha_engine, nakshatra_engine=nakshatra_engine
+                )
+                nadi_ai_output = aggregator.run()
+                hde = HouseDiagnosticEngine(master_astro_data, dasha_engine, gochar_engine=None)
+                house_diagnostic = hde.generate_full_report()["houses_diagnostic"]
+            except Exception as e:
+                print("Nadi AI Error:", e)
+
+            nadi_events = []
+            try:
+                nadi_events = nadi_master.run_master_analysis(astro, date_str)
+            except Exception as e:
+                print("Classic Nadi Error:", e)
+
+            # ── Nadi Jyotish Engine (full_nadi_analysis) ───────────────────
+            nadi_jyotish_output = {}
+            try:
+                if _NADI_JYOTISH_AVAILABLE:
+                    # Convert astro data → nadi engine format
+                    # astro keys: Su, Mo, Ma, Me, Ju, Ve, Sa, Ra, Ke
+                    # nadi engine expects: SUN, MOON, MARS, MERCURY, JUPITER, VENUS, SATURN, RAHU, KETU
+                    _CODE_MAP = {
+                        "Su": "SUN", "Mo": "MOON", "Ma": "MARS",
+                        "Me": "MERCURY", "Ju": "JUPITER", "Ve": "VENUS",
+                        "Sa": "SATURN", "Ra": "RAHU", "Ke": "KETU"
+                    }
+                    _planets_for_nadi = {}
+                    for short, full in _CODE_MAP.items():
+                        if short in astro:
+                            p = astro[short]
+                            # sign: Vargas.D1.Idx is 0-based, nadi engine needs 1-12
+                            sign_1based = (p["Vargas"]["D1"]["Idx"] % 12) + 1
+                            _planets_for_nadi[full] = {
+                                "sign":      sign_1based,
+                                "degree":    round(p.get("SignDegree", p["Degree"] % 30), 2),
+                                "retrograde": bool(p.get("Retrograde", False)),
+                                "combust":   bool(p.get("Combust", False)),
+                            }
+                    # lagna_rashi is 0-based in api.py, nadi engine needs 1-12
+                    _lagna_for_nadi = (lagna_rashi % 12) + 1
+                    # gender from request
+                    _gender = (request.get_json(silent=True) or {}).get("gender", "MALE").upper()
+                    _birth_year = dt.year
+                    _current_year = datetime.now().year
+
+                    nadi_jyotish_output = run_nadi_jyotish(
+                        planets_data = _planets_for_nadi,
+                        lagna        = _lagna_for_nadi,
+                        gender       = _gender,
+                        birth_year   = _birth_year,
+                        current_year = _current_year,
+                    )
+            except Exception as e:
+                print("Nadi Jyotish Engine Error:", e)
+                nadi_jyotish_output = {"error": str(e)}
 
     # ── Assemble houses list for React (sign_index + planet list) ──
     houses_list = []
@@ -2050,60 +2076,65 @@ def _build_chart_response(name, city, date_str, time_str, chart_type, lat=None, 
                     "display":     asp.get("display", ""),
                 })
 
-    # ── All 7 Engines (Yoga, Sutras, Saturn, Navatara, AV, Vedic, Sutras) ──
+    # ── Phase-2 heavy engines ──────────────────────────────────
     engines_data = {}
-    try:
-        from engines_bridge import run_all_engines
-        _pc_rev = {"सूर्य":"Su","चंद्र":"Mo","मंगल":"Ma","बुध":"Me",
-                   "गुरु":"Ju","शुक्र":"Ve","शनि":"Sa","राहु":"Ra","केतु":"Ke"}
-        _current_dasha_code = _pc_rev.get(current_md["planet"], "")
-        engines_data = run_all_engines(
-            astro              = astro,
-            lagna_rashi        = lagna_rashi,
-            planet_house_map   = planet_house_map,
-            sav_points         = sav_points,
-            current_dasha      = _current_dasha_code,
-            jyotish_evaluation = jyotish_evaluation,
-            dob                = dt,
-            moon_degree        = astro["Mo"]["Degree"],
-        )
-    except Exception as _e:
-        engines_data = {"error": str(_e)}
-
-    # ── Shodhana Engine — सही call (astro + AV_RULES) ──────────────────────
-    # NOTE: run_shodhana खुद compute_bav() करता है — बाहर से BAV नहीं चाहिए
-    try:
-        shodhana_data = run_shodhana(astro, AV_RULES)
-        print("[Shodhana] OK — keys:", list(shodhana_data.keys()))
-    except Exception as _sho_e:
-        print(f"[Shodhana Engine Error] {_sho_e}")
-        shodhana_data = {}
-
-    # ── KP Significators Engine ─────────────────────────────────────────────
+    shodhana_data = {}
     kp_sig_data = {}
-    try:
-        from kp_significators import compute_kp_significators
-        kp_sig_data = compute_kp_significators(astro)
-        print("[KP Significators] ✅ OK")
-    except Exception as _kps_e:
-        print(f"[KP Significators] Error: {_kps_e}")
-        kp_sig_data = {}
+    if include_heavy:
+            engines_data = {}
+            try:
+                from engines_bridge import run_all_engines
+                _pc_rev = {"सूर्य":"Su","चंद्र":"Mo","मंगल":"Ma","बुध":"Me",
+                           "गुरु":"Ju","शुक्र":"Ve","शनि":"Sa","राहु":"Ra","केतु":"Ke"}
+                _current_dasha_code = _pc_rev.get(current_md["planet"], "")
+                engines_data = run_all_engines(
+                    astro              = astro,
+                    lagna_rashi        = lagna_rashi,
+                    planet_house_map   = planet_house_map,
+                    sav_points         = sav_points,
+                    current_dasha      = _current_dasha_code,
+                    jyotish_evaluation = jyotish_evaluation,
+                    dob                = dt,
+                    moon_degree        = astro["Mo"]["Degree"],
+                )
+            except Exception as _e:
+                engines_data = {"error": str(_e)}
 
-    # ── Advanced Predictive Engine (Deep Forensics, D-10 Deities, D-9 Marriage, Chara Karakas, Progressed Lagna) ──
-    try:
-        master_advanced_data = run_advanced_predictions(
-            astro_data=astro,
-            lagna_degree=astro["La"]["Degree"],
-            planet_house_map=planet_house_map,
-            birth_time_dt=dt,
-            sunrise_time_str=_calc_sunrise(dt, lat, lon),
-            age=age,
-            current_yogini_md=current_yogini,
-        )
-        engines_data["advanced_astrology"] = master_advanced_data
-    except Exception as _adv_e:
-        print(f"[Advanced Predictions Error]: {_adv_e}")
-        engines_data["advanced_astrology"] = {}
+            # ── Shodhana Engine — सही call (astro + AV_RULES) ──────────────────────
+            # NOTE: run_shodhana खुद compute_bav() करता है — बाहर से BAV नहीं चाहिए
+            try:
+                shodhana_data = run_shodhana(astro, AV_RULES)
+                print("[Shodhana] OK — keys:", list(shodhana_data.keys()))
+            except Exception as _sho_e:
+                print(f"[Shodhana Engine Error] {_sho_e}")
+                shodhana_data = {}
+
+            # ── KP Significators Engine ─────────────────────────────────────────────
+            kp_sig_data = {}
+            try:
+                from kp_significators import compute_kp_significators
+                kp_sig_data = compute_kp_significators(astro)
+                print("[KP Significators] ✅ OK")
+            except Exception as _kps_e:
+                print(f"[KP Significators] Error: {_kps_e}")
+                kp_sig_data = {}
+
+            # ── Advanced Predictive Engine (Deep Forensics, D-10 Deities, D-9 Marriage, Chara Karakas, Progressed Lagna) ──
+            try:
+                master_advanced_data = run_advanced_predictions(
+                    astro_data=astro,
+                    lagna_degree=astro["La"]["Degree"],
+                    planet_house_map=planet_house_map,
+                    birth_time_dt=dt,
+                    sunrise_time_str=_calc_sunrise(dt, lat, lon),
+                    age=age,
+                    current_yogini_md=current_yogini,
+                    yogini_dashas=yogini_dashas,
+                )
+                engines_data["advanced_astrology"] = master_advanced_data
+            except Exception as _adv_e:
+                print(f"[Advanced Predictions Error]: {_adv_e}")
+                engines_data["advanced_astrology"] = {}
 
     # ── CRITICAL: enginesData में inject ────────────────────────────────────
     # Frontend chartData.enginesData.shodhana पढ़ता है
@@ -2358,7 +2389,7 @@ def api_chart_fast():
     if not all([name, city, date_str, time_str]):
         return jsonify({'error': 'Missing required fields: name, dob, time, city'}), 400
 
-    result, err = _build_chart_response(name, city, date_str, time_str, chart_type, lat=lat, lon=lon, dasha_year_type=dasha_year_type, age=age)
+    result, err = _build_chart_response(name, city, date_str, time_str, chart_type, lat=lat, lon=lon, dasha_year_type=dasha_year_type, age=age, include_heavy=False)
     if err:
         return jsonify({'error': err}), 400
 
@@ -2533,12 +2564,64 @@ def api_chart_engines():
             nadi_jyotish_output = {"error": str(_ne)}
 
                 # ── KP BTR Engine ─────────────────────────────────────────
+        # SMART BTR: never run the complete calculate_astrology() 61 times.
+        # Only lightweight Swiss-Ephemeris positions are sampled for the
+        # ±30 minute grid; the heavy chart/Varga/engine pipeline runs once.
         kp_btr_data = {}
         try:
             from kp_btr_engine import compute_kp_btr_full
-            kp_btr_data = compute_kp_btr_full(astro)
-            print(f"[KP BTR] ✅ {kp_btr_data.get('final_verdict','computed')}")
+
+            # The BTR engine only needs Lagna + Moon + the 7 visible planets
+            # for CIL/D24. Build lightweight candidate snapshots instead of
+            # rebuilding the complete kundli 61 times.
+            kp_btr_light_candidates = {}
+            _tf_btr = TimezoneFinder()
+            _tz_name_btr = _tf_btr.timezone_at(lat=float(lat), lng=float(lon)) or "UTC"
+            _tz_btr = pytz.timezone(_tz_name_btr)
+            _localized_btr = _tz_btr.localize(dt, is_dst=False)
+            _utc_btr = _localized_btr.astimezone(pytz.utc)
+
+            swe.set_sid_mode(swe.SIDM_LAHIRI)
+            _btr_planets = {
+                "Su": swe.SUN, "Mo": swe.MOON, "Ma": swe.MARS,
+                "Me": swe.MERCURY, "Ju": swe.JUPITER,
+                "Ve": swe.VENUS, "Sa": swe.SATURN,
+            }
+            for _offset in range(-30, 31):
+                _cdt = _utc_btr + timedelta(minutes=_offset)
+                _jd = swe.julday(_cdt.year, _cdt.month, _cdt.day,
+                                 _cdt.hour + _cdt.minute / 60.0 + _cdt.second / 3600.0)
+                _cusps, _ascmc = swe.houses_ex(_jd, float(lat), float(lon), b'P', swe.FLG_SIDEREAL)
+                _la = float(_ascmc[0])
+                _light = {
+                    "La": {"Degree": _la, "SignDegree": _la % 30},
+                }
+                for _code, _swe_id in _btr_planets.items():
+                    _pos = swe.calc_ut(_jd, _swe_id, swe.FLG_SIDEREAL | swe.FLG_SPEED)[0]
+                    _deg = float(_pos[0])
+                    _light[_code] = {
+                        "Degree": _deg,
+                        "SignDegree": _deg % 30,
+                    }
+                _ra = float(swe.calc_ut(_jd, swe.MEAN_NODE, swe.FLG_SIDEREAL)[0][0])
+                _light["Ra"] = {"Degree": _ra, "SignDegree": _ra % 30}
+                _light["Ke"] = {"Degree": (_ra + 180.0) % 360.0,
+                                 "SignDegree": (_ra + 180.0) % 30}
+                kp_btr_light_candidates[_offset] = _light
+
+            kp_btr_data = compute_kp_btr_full(
+                astro,
+                birth_datetime=dt,
+                candidate_charts=kp_btr_light_candidates,
+            )
+            print(
+                f"[KP BTR] ✅ {kp_btr_data.get('final_verdict','computed')} "
+                f"| checked={kp_btr_data.get('rectification',{}).get('total_checked', 0)} "
+                f"| mode={kp_btr_data.get('rectification',{}).get('calculation_mode', 'unknown')}"
+            )
         except Exception as _kp_e:
+            import traceback
+            traceback.print_exc()
             print(f"[KP BTR] Error: {_kp_e}")
             kp_btr_data = {"computed": False, "error": str(_kp_e)}
 
@@ -2574,6 +2657,7 @@ def api_chart_engines():
                 sunrise_time_str=astro.get('sunrise', "06:00"),
                 age=age,
                 current_yogini_md=_current_yogini_adv,
+                yogini_dashas=_yogini_result_adv["dashas"],
             )
             engines_data["advanced_astrology"] = master_advanced_data
         except Exception as _adv_e:

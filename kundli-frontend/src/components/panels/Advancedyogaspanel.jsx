@@ -35,9 +35,11 @@ const qColor = (level) => ({
 }[level] || C.amber);
 
 const TABS = [
+  { id: "classic", label: "🪔 मुख्य योग" },
   { id: "indu", label: "💰 इन्दु लग्न" },
   { id: "khar", label: "☠️ 64वाँ नवांश / खर" },
   { id: "hora", label: "☀️ D2 होरा" },
+  { id: "jaimini", label: "🔱 जैमिनी + नवमांश" },
 ];
 
 // [Fix ④] SutraCard{} REMOVED.
@@ -59,6 +61,526 @@ function StatBox({ label, value, color }) {
   );
 }
 
+
+// ════════ CLASSIC / ADDITIONAL YOGAS TAB ═══════════════════
+// Basis: the user-supplied rule set in the request.  The UI reports
+// rule-matches/evidence only; it does not turn them into guaranteed results.
+
+const CLASSIC_CODES = ["Su","Mo","Ma","Me","Ju","Ve","Sa"];
+const CLASSIC_NAMES = {
+  Su:"सूर्य", Mo:"चंद्र", Ma:"मंगल", Me:"बुध", Ju:"गुरु", Ve:"शुक्र", Sa:"शनि",
+  Ra:"राहु", Ke:"केतु"
+};
+const MAHA_MAP = [
+  ["Ruchaka Yoga","Ma"],
+  ["Bhadra Yoga","Me"],
+  ["Hamsa Yoga","Ju"],
+  ["Malavya Yoga","Ve"],
+  ["Shasha Yoga","Sa"],
+];
+const DUSTHANA = new Set([6,8,12]);
+const KENDRA = new Set([1,4,7,10]);
+const TRIKONA = new Set([1,5,9]);
+const BENEFIC_HOUSES = new Set([1,2,4,5,7,9,10,11]);
+
+function cSign(p){ return jnPlanetSign(p,"D1"); }
+function cHouseFromSign(sign,lagna){ return jnHouseFromSign(sign,lagna); }
+function cHouseMap(chart){
+  const lagna = jnLagnaSign(chart);
+  const map = {};
+  CLASSIC_CODES.concat(["Ra","Ke"]).forEach(code => {
+    const sign = cSign(chart?.planets?.[code]);
+    map[code] = cHouseFromSign(sign, lagna);
+  });
+  return map;
+}
+function cLordForHouse(lagna, house){
+  if(lagna === null || house == null) return null;
+  return JN_SIGN_LORDS[(lagna + house - 1) % 12] || null;
+}
+function cLordMap(lagna){
+  const out={};
+  for(let h=1; h<=12; h++) out[h]=cLordForHouse(lagna,h);
+  return out;
+}
+function cDignity(code, sign){
+  if(sign === null || sign === undefined) return "—";
+  if(JN_EXALT[code] === sign) return "उच्च";
+  if(JN_NEECHA[code] === sign) return "नीच";
+  if(JN_SIGN_LORDS[sign] === code) return "स्वराशि";
+  return "सामान्य";
+}
+function cPlanetName(code){ return CLASSIC_NAMES[code] || code; }
+function cPlanetList(codes){ return codes.filter(Boolean).map(cPlanetName).join(", ") || "—"; }
+function cSameHouse(a,b,houseMap){ return houseMap[a] != null && houseMap[a] === houseMap[b]; }
+function cParashariAspect(fromCode, toHouse, houseMap){
+  const h = houseMap[fromCode];
+  if(h == null || toHouse == null) return false;
+  const distance = ((toHouse - h + 12) % 12) + 1;
+  if(distance === 7) return true;
+  if(fromCode === "Ma" && (distance === 4 || distance === 8)) return true;
+  if(fromCode === "Ju" && (distance === 5 || distance === 9)) return true;
+  if(fromCode === "Sa" && (distance === 3 || distance === 10)) return true;
+  return false;
+}
+function cRelationship(a,b,houseMap){
+  if(!a || !b || a===b) return false;
+  if(cSameHouse(a,b,houseMap)) return true;
+  const hb = houseMap[b];
+  const ha = houseMap[a];
+  return cParashariAspect(a,hb,houseMap) || cParashariAspect(b,ha,houseMap);
+}
+function cExchange(lordA,lordB,houseMap, lordMap){
+  if(!lordA || !lordB || lordA===lordB) return false;
+  const hA = Object.keys(lordMap).find(h => lordMap[h]===lordA);
+  const hB = Object.keys(lordMap).find(h => lordMap[h]===lordB);
+  if(!hA || !hB) return false;
+  const aHouse = Number(hA), bHouse = Number(hB);
+  return houseMap[lordA] === bHouse && houseMap[lordB] === aHouse;
+}
+function cOwnerRelation(houseA,houseB,lagna,houseMap,lordMap){
+  const a=lordMap[houseA], b=lordMap[houseB];
+  return {
+    lordA:a, lordB:b,
+    relationship:cRelationship(a,b,houseMap),
+    exchange:cExchange(a,b,houseMap,lordMap),
+    hit: cRelationship(a,b,houseMap) || cExchange(a,b,houseMap,lordMap),
+  };
+}
+function cPlanetsInHouse(houseMap, house, codes=CLASSIC_CODES.concat(["Ra","Ke"])){ return codes.filter(c=>houseMap[c]===house); }
+function cHousesFromPlanet(code,houseMap){
+  const h=houseMap[code];
+  if(h==null) return [];
+  return [1,4,7,10,5,9,11,6,8,12].map(n=>({house:n,active:cParashariAspect(code, n, houseMap)})).filter(x=>x.active).map(x=>x.house);
+}
+
+function YogaResult({name, present, rule, evidence, tone=C.cyan}){
+  return <div style={{padding:"9px 10px",borderRadius:9,background:present?"rgba(34,197,94,.07)":"rgba(255,255,255,.025)",border:`1px solid ${present?C.green+"30":"rgba(255,255,255,.07)"}`}}>
+    <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
+      <div style={{...HI,fontWeight:800,fontSize:".75rem",color:present?(tone||C.green):"rgba(255,255,255,.72)"}}>{name}</div>
+      <span style={{...HI,fontSize:".62rem",fontWeight:800,color:present?C.green:"rgba(255,255,255,.35)"}}>{present?"✓ मौजूद":"○ नहीं मिला"}</span>
+    </div>
+    <div style={{...HI,fontSize:".64rem",lineHeight:1.45,color:"rgba(255,255,255,.46)",marginTop:4}}>{rule}</div>
+    {evidence && <div style={{...HI,fontSize:".66rem",lineHeight:1.45,color:present?"rgba(255,255,255,.72)":"rgba(255,255,255,.4)",marginTop:5}}>{evidence}</div>}
+  </div>;
+}
+
+function SectionTitle({children}){
+  return <div style={{...HI,fontWeight:800,fontSize:".82rem",color:C.amber,marginBottom:8}}>{children}</div>;
+}
+
+function ClassicYogasTab(){
+  const chart = useKundliStore(s => s.chartData);
+  if(!chart?.planets) return <EmptyState icon="🪔" message="योग विश्लेषण के लिए D1 डेटा उपलब्ध नहीं" />;
+
+  const planets=chart.planets||{};
+  const lagna=jnLagnaSign(chart);
+  const houseMap=cHouseMap(chart);
+  const lordMap=cLordMap(lagna);
+  const signs=Object.fromEntries(CLASSIC_CODES.concat(["Ra","Ke"]).map(code=>[code,cSign(planets[code])]));
+  const names=(codes)=>cPlanetList(codes);
+  const planetHouse=(code)=>houseMap[code];
+  const lord=(h)=>lordMap[h];
+  const relation=(a,b)=>cRelationship(a,b,houseMap);
+  const exchange=(a,b)=>cExchange(a,b,houseMap,lordMap);
+  const houseDesc=(h)=> h==null?"—":`${h}वाँ भाव`;
+
+  // User-supplied chart-specific rules.
+  const fifthPlanets=cPlanetsInHouse(houseMap,5);
+  const budhaditya=cSameHouse("Su","Me",houseMap) && planetHouse("Su")===5;
+  const technical5=fifthPlanets.includes("Ra") && fifthPlanets.includes(lord(1)) && fifthPlanets.includes(lord(9));
+  const moonAlone8=planetHouse("Mo")===8 && cPlanetsInHouse(houseMap,8).filter(c=>c!=="Mo").length===0;
+  const guruSupportsMoon = planetHouse("Ju")===8 || cParashariAspect("Ju",8,houseMap);
+  const sunRahu5 = planetHouse("Su")===5 && planetHouse("Ra")===5;
+
+  // Raj Yoga / Dhana Yoga.
+  const rajPairs=[[1,4],[1,5],[1,9],[4,5],[4,9],[7,5],[7,9],[10,5],[10,9]];
+  const rajHits=rajPairs.filter(([a,b])=>cOwnerRelation(a,b,lagna,houseMap,lordMap).hit);
+  const dhanaPairs=[[1,2],[1,5],[1,9],[1,11],[2,5],[2,9],[2,11],[5,9],[5,11],[9,11]];
+  const dhanaHits=dhanaPairs.filter(([a,b])=>cOwnerRelation(a,b,lagna,houseMap,lordMap).hit);
+  const mahaPairs=[];
+  for(let i=0;i<=11;i++) for(let j=i+1;j<=11;j++){
+    const a=i+1,b=j+1;
+    if(!BENEFIC_HOUSES.has(a)||!BENEFIC_HOUSES.has(b)) continue;
+    if(exchange(lord(a),lord(b))) mahaPairs.push([a,b]);
+  }
+
+  // Panch Mahapurusha.
+  const mahaHits=MAHA_MAP.map(([name,code])=>({name,code,present:KENDRA.has(planetHouse(code)) && [JN_SIGN_LORDS[signs[code]]===code, JN_EXALT[code]===signs[code]].some(Boolean)})).filter(x=>x.present);
+
+  // Vipreet / Dainya / Khala exchange signals.
+  const vipreetPairs=[[6,8],[6,12],[8,12]];
+  const vipreetHits=vipreetPairs.filter(([a,b])=>exchange(lord(a),lord(b)));
+  const dainyaHits=[];
+  for(const d of [6,8,12]) for(let h=1;h<=12;h++){
+    if(h===d) continue;
+    if(exchange(lord(d),lord(h))) dainyaHits.push([d,h]);
+  }
+  const khalaHits=[];
+  for(const h of [1,2,4,5,7,9,10,11]) if(exchange(lord(3),lord(h))) khalaHits.push([3,h]);
+
+  const neecha=CLASSIC_CODES.filter(code=>JN_NEECHA[code]===signs[code]);
+  const neechaSupport=neecha.filter(code=>{
+    const h=planetHouse(code);
+    if(h==null) return false;
+    // Evidence-only basic checks: exalted sign lord/support or a kendra from Lagna.
+    return KENDRA.has(h) || cParashariAspect("Ju",h,houseMap) || cSameHouse("Ju",code,houseMap);
+  });
+
+  // Chandra yogas.
+  const moonHouse=planetHouse("Mo");
+  const relativeHouse=(targetCode,baseCode)=>{
+    const a=houseMap[baseCode], b=houseMap[targetCode];
+    if(a==null||b==null) return null;
+    return ((b-a+12)%12)+1;
+  };
+  const gaja=relativeHouse("Ju","Mo") && KENDRA.has(relativeHouse("Ju","Mo"));
+  const sunaphaCodes=CLASSIC_CODES.filter(c=>c!=="Su" && relativeHouse(c,"Mo")===2);
+  const anaphaCodes=CLASSIC_CODES.filter(c=>c!=="Su" && relativeHouse(c,"Mo")===12);
+  const durudharaCodes=[...sunaphaCodes,...anaphaCodes];
+
+  // Sun yogas.
+  const vesiCodes=CLASSIC_CODES.filter(c=>c!=="Mo" && relativeHouse(c,"Su")===2);
+  const vasiCodes=CLASSIC_CODES.filter(c=>c!=="Mo" && relativeHouse(c,"Su")===12);
+  const ubhayaCodes=[...vesiCodes,...vasiCodes];
+
+  const saraswati = ["Me","Ju","Ve"].every(c=>{
+    const h=planetHouse(c); return h!=null && (KENDRA.has(h)||TRIKONA.has(h));
+  });
+
+  // Maraka candidates + strength/evidence as supplied by the user.
+  const marakaLords=[lord(2),lord(7)].filter(Boolean);
+  const marakaOccupants=[...new Set([...cPlanetsInHouse(houseMap,2),...cPlanetsInHouse(houseMap,7)])];
+  const marakaCandidates=[...new Set([...marakaLords,...marakaOccupants])];
+  const marakaRows=marakaCandidates.map(code=>({
+    code,
+    house:planetHouse(code),
+    sign:signs[code],
+    dignity:cDignity(code,signs[code]),
+    inTrikona:TRIKONA.has(planetHouse(code)),
+    inKendra:KENDRA.has(planetHouse(code)),
+    inDusthana:DUSTHANA.has(planetHouse(code)),
+    severe: cDignity(code,signs[code])==="नीच" && DUSTHANA.has(planetHouse(code)),
+  }));
+
+  return <div className="space-y-3">
+    <GlassCard className="p-3">
+      <SectionTitle>आपकी कुंडली में मौजूद अन्य विशिष्ट योग</SectionTitle>
+      <div className="space-y-2">
+        <YogaResult
+          name="बुधादित्य योग (Budhaditya Yoga)"
+          present={budhaditya}
+          rule="नियम: 5वें भाव में सूर्य और बुध की युति।"
+          evidence={budhaditya ? `सूर्य + बुध दोनों ${houseDesc(planetHouse("Su"))} में हैं; sign: ${JN_RASHI[signs.Su] || "—"}.` : `वर्तमान D1 में सूर्य ${houseDesc(planetHouse("Su"))} और बुध ${houseDesc(planetHouse("Me"))} में हैं।`}
+        />
+        <YogaResult
+          name="तकनीकी एवं शोध योग (Technical & Innovation Yoga)"
+          present={technical5}
+          rule="नियम: 5वें भाव में राहु के साथ लग्नेश और भाग्येश (9th lord) की उपस्थिति।"
+          evidence={`5वें भाव के ग्रह: ${names(fifthPlanets)}; लग्नेश: ${cPlanetName(lord(1))}; भाग्येश: ${cPlanetName(lord(9))}.`}
+        />
+        <YogaResult
+          name="केमद्रुम भंग (Kemadruma Bhanga)"
+          present={moonAlone8 && guruSupportsMoon}
+          rule="दिया गया नियम: 8वें भाव में अकेला चंद्रमा हो, लेकिन गुरु/शुभ समर्थन से चंद्रमा को बल मिले।"
+          evidence={moonAlone8 ? `चंद्रमा 8वें भाव में अकेला है; गुरु समर्थन: ${guruSupportsMoon?"हाँ":"नहीं"}.` : `चंद्रमा ${houseDesc(planetHouse("Mo"))} में है; 8वें भाव का अकेला-चंद्रमा पैटर्न नहीं मिला।`}
+        />
+        <YogaResult
+          name="अरिष्ट / 5वें भाव का हल्का बाधक प्रभाव"
+          present={sunRahu5}
+          rule="दिया गया नियम: 5वें भाव में सूर्य + राहु की युति से शिक्षा/निर्णय में overthinking या distraction का संकेत।"
+          evidence={sunRahu5 ? "सूर्य और राहु दोनों 5वें भाव में हैं।" : `सूर्य ${houseDesc(planetHouse("Su"))}, राहु ${houseDesc(planetHouse("Ra"))} में हैं।`}
+          tone={C.orange}
+        />
+      </div>
+    </GlassCard>
+
+    <GlassCard className="p-3">
+      <SectionTitle>शुभ योग एवं राजयोग</SectionTitle>
+      <div className="space-y-2">
+        <YogaResult
+          name="राजयोग"
+          present={rajHits.length>0}
+          rule="केंद्र (1,4,7,10) और त्रिकोण (1,5,9) भावेशों के संबंध, युति/दृष्टि/राशि परिवर्तन।"
+          evidence={rajHits.length ? rajHits.map(([a,b])=>`${a}वें–${b}वें भावेश`).join(", ")+" के बीच संबंध मिला।" : "दिए गए संबंध नियम के अनुसार कोई जोड़ा नहीं मिला।"}
+        />
+        <YogaResult
+          name="धन योग (Dhana Yoga)"
+          present={dhanaHits.length>0}
+          rule="1,2,5,9,11 के स्वामियों के बीच संबंध; विशेष रूप से 2/11 का 5/9 से संबंध।"
+          evidence={dhanaHits.length ? dhanaHits.map(([a,b])=>`${a}वें–${b}वें भावेश`).join(", ")+" का संबंध मिला।" : "दिए गए धन योग संबंध नियम के अनुसार कोई जोड़ा नहीं मिला।"}
+        />
+        <YogaResult
+          name="महा योग (Maha Yoga)"
+          present={mahaPairs.length>0}
+          rule="शुभ भावों 1,2,4,5,7,9,10,11 के स्वामियों का आपसी राशि परिवर्तन।"
+          evidence={mahaPairs.length ? mahaPairs.map(([a,b])=>`${a}↔${b}`).join(", ") : "कोई शुभ-भावेश exchange नहीं मिला।"}
+        />
+      </div>
+
+      <div style={{marginTop:10,display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:7}}>
+        <div style={{...HI,fontSize:".66rem",color:"rgba(255,255,255,.5)",padding:"7px 8px",background:"rgba(255,255,255,.025)",borderRadius:7}}>लग्नेश: <b style={{color:"rgba(255,255,255,.8)"}}>{cPlanetName(lord(1))}</b></div>
+        <div style={{...HI,fontSize:".66rem",color:"rgba(255,255,255,.5)",padding:"7px 8px",background:"rgba(255,255,255,.025)",borderRadius:7}}>5वेंश: <b style={{color:"rgba(255,255,255,.8)"}}>{cPlanetName(lord(5))}</b></div>
+        <div style={{...HI,fontSize:".66rem",color:"rgba(255,255,255,.5)",padding:"7px 8px",background:"rgba(255,255,255,.025)",borderRadius:7}}>9वेंश: <b style={{color:"rgba(255,255,255,.8)"}}>{cPlanetName(lord(9))}</b></div>
+        <div style={{...HI,fontSize:".66rem",color:"rgba(255,255,255,.5)",padding:"7px 8px",background:"rgba(255,255,255,.025)",borderRadius:7}}>10वेंश: <b style={{color:"rgba(255,255,255,.8)"}}>{cPlanetName(lord(10))}</b></div>
+      </div>
+    </GlassCard>
+
+    <GlassCard className="p-3">
+      <SectionTitle>प्रमुख शास्त्रीय योग</SectionTitle>
+      <div className="space-y-2">
+        {MAHA_MAP.map(([name,code])=><YogaResult key={name} name={`${name}`} present={mahaHits.some(x=>x.code===code)} rule="ग्रह अपनी स्वराशि/उच्च राशि में केंद्र (1,4,7,10) में हो।" evidence={`ग्रह: ${cPlanetName(code)} · ${houseDesc(planetHouse(code))} · ${JN_RASHI[signs[code]]||"—"} · ${cDignity(code,signs[code])}.`} />)}
+        <YogaResult name="विपरीत राजयोग (Vipreet Raj Yoga)" present={vipreetHits.length>0} rule="6th, 8th, 12th के स्वामियों का आपसी संबंध/राशि परिवर्तन।" evidence={vipreetHits.length?vipreetHits.map(([a,b])=>`${a}↔${b}`).join(", "):"कोई mutual exchange नहीं मिला।"} />
+        <YogaResult name="नीचभंग राजयोग (Neechabhanga)" present={neechaSupport.length>0} rule="पहले नीच ग्रह पहचाना जाता है; उसके बाद supplied support checks से भंग का evidence दिखाया गया है।" evidence={neecha.length?`नीच ग्रह: ${cPlanetList(neecha)}; support evidence: ${neechaSupport.length?cPlanetList(neechaSupport):"नहीं मिला"}. पूर्ण नीचभंग के सभी शास्त्रीय उप-नियम इस panel में final-claim के रूप में नहीं माने गए हैं।`:"कोई नीच ग्रह नहीं मिला।"} tone={C.orange} />
+        <YogaResult name="गजकेसरी योग" present={Boolean(gaja)} rule="चंद्रमा से गुरु 1,4,7,10 में।" evidence={gaja?`गुरु चंद्रमा से ${relativeHouse("Ju","Mo")}वें स्थान पर है।`:"गुरु चंद्रमा से केंद्र में नहीं है।"} />
+        <YogaResult name="सुनफा योग" present={sunaphaCodes.length>0} rule="चंद्रमा से 2रे भाव में ग्रह।" evidence={sunaphaCodes.length?`2रे से: ${cPlanetList(sunaphaCodes)}`:"चंद्रमा से 2रे में ग्रह नहीं।"} />
+        <YogaResult name="अनफा योग" present={anaphaCodes.length>0} rule="चंद्रमा से 12वें भाव में ग्रह।" evidence={anaphaCodes.length?`12वें से: ${cPlanetList(anaphaCodes)}`:"चंद्रमा से 12वें में ग्रह नहीं।"} />
+        <YogaResult name="दुरुधरा योग" present={sunaphaCodes.length>0 && anaphaCodes.length>0} rule="चंद्रमा से 2रे और 12वें दोनों ओर ग्रह।" evidence={durudharaCodes.length?`2रा: ${cPlanetList(sunaphaCodes)} · 12वाँ: ${cPlanetList(anaphaCodes)}`:"दोनों ओर ग्रह नहीं मिले।"} />
+        <YogaResult name="वेशि योग" present={vesiCodes.length>0} rule="सूर्य से 2रे भाव में ग्रह।" evidence={vesiCodes.length?`सूर्य से 2रे: ${cPlanetList(vesiCodes)}`:"सूर्य से 2रे में ग्रह नहीं।"} />
+        <YogaResult name="वोशि योग" present={vasiCodes.length>0} rule="सूर्य से 12वें भाव में ग्रह।" evidence={vasiCodes.length?`सूर्य से 12वें: ${cPlanetList(vasiCodes)}`:"सूर्य से 12वें में ग्रह नहीं।"} />
+        <YogaResult name="उभयचरी योग" present={vesiCodes.length>0 && vasiCodes.length>0} rule="सूर्य से 2रे और 12वें दोनों ओर ग्रह।" evidence={`2रा: ${cPlanetList(vesiCodes)} · 12वाँ: ${cPlanetList(vasiCodes)}`} />
+        <YogaResult name="सरस्वती योग" present={saraswati} rule="बुध, गुरु और शुक्र का केंद्र/त्रिकोण में स्थित होना; supplied rule-set में बलवान स्थिति अपेक्षित है।" evidence={`बुध: ${houseDesc(planetHouse("Me"))} · गुरु: ${houseDesc(planetHouse("Ju"))} · शुक्र: ${houseDesc(planetHouse("Ve"))}.`} />
+      </div>
+    </GlassCard>
+
+    <GlassCard className="p-3">
+      <SectionTitle>अशुभ योग / संघर्ष संकेत</SectionTitle>
+      <div className="space-y-2">
+        <YogaResult name="अरिष्ट योग" present={Boolean(cOwnerRelation(1,6,lagna,houseMap,lordMap).hit || cOwnerRelation(1,8,lagna,houseMap,lordMap).hit || cOwnerRelation(1,12,lagna,houseMap,lordMap).hit)} rule="लग्नेश का 6,8,12 के भावेशों से संबंध; अथवा 6/8/12 भावेशों का परस्पर संबंध।" evidence={`लग्नेश: ${cPlanetName(lord(1))}; 6/8/12 भावेश: ${cPlanetName(lord(6))}, ${cPlanetName(lord(8))}, ${cPlanetName(lord(12))}.`} tone={C.orange} />
+        <YogaResult name="दैन्य योग" present={dainyaHits.length>0} rule="6/8/12 के भावेश का किसी अन्य शुभ भावेश के साथ राशि परिवर्तन।" evidence={dainyaHits.length?dainyaHits.map(([a,b])=>`${a}↔${b}`).join(", "):"कोई ऐसा exchange नहीं मिला।"} tone={C.orange} />
+        <YogaResult name="खल योग" present={khalaHits.length>0} rule="3रे भावेश का किसी अन्य शुभ भावेश के साथ राशि परिवर्तन।" evidence={khalaHits.length?khalaHits.map(([a,b])=>`${a}↔${b}`).join(", "):"कोई ऐसा exchange नहीं मिला।"} tone={C.orange} />
+      </div>
+    </GlassCard>
+
+    <GlassCard className="p-3">
+      <SectionTitle>मारक ग्रह: भाव, बल और स्थिति</SectionTitle>
+      <div className="space-y-2">
+        <div style={{...HI,fontSize:".67rem",color:"rgba(255,255,255,.5)",lineHeight:1.5,marginBottom:6}}>उम्मीदवार: 2nd/7th lord और 2nd/7th में स्थित ग्रह। दशा/अंतर्दशा/प्रत्यंतर और गोचर के साथ पढ़ा जाएगा।</div>
+        {marakaRows.length ? marakaRows.map(x=><div key={x.code} style={{display:"grid",gridTemplateColumns:"70px 1fr auto",gap:8,alignItems:"center",padding:"7px 8px",borderRadius:7,background:x.severe?"rgba(244,63,94,.08)":"rgba(255,255,255,.025)"}}>
+          <div style={{...HI,fontWeight:800,fontSize:".7rem",color:"rgba(255,255,255,.8)"}}>{cPlanetName(x.code)}</div>
+          <div style={{...HI,fontSize:".64rem",color:"rgba(255,255,255,.5)"}}>{houseDesc(x.house)} · {JN_RASHI[x.sign]||"—"} · {x.dignity}</div>
+          <div style={{...HI,fontSize:".6rem",fontWeight:800,color:x.severe?C.rose:(x.inDusthana?C.orange:x.inTrikona?C.green:C.amber)}}>{x.severe?"नीच + त्रिक":x.inDusthana?"त्रिक":x.inTrikona?"त्रिकोण":"मिश्र"}</div>
+        </div>):<div style={{...HI,fontSize:".68rem",color:"rgba(255,255,255,.45)"}}>मारक candidates उपलब्ध नहीं।</div>}
+      </div>
+    </GlassCard>
+
+    <div style={{...HI,fontSize:".67rem",lineHeight:1.5,color:"rgba(255,255,255,.38)",padding:"7px 9px",background:"rgba(255,255,255,.025)",borderRadius:6}}>
+      नोट: इस tab में user-supplied सूत्रों के आधार पर rule-match और evidence दिखाया जाता है। यह software-side संकेत हैं; “100% फल”, “निश्चित मृत्यु”, “निश्चित गरीबी” जैसे निष्कर्ष स्वतः नहीं दिए जाते।
+    </div>
+  </div>;
+}
+
+
+
+// ════════ JAIMINI + NAVAMSHA RULES TAB ═════════════════════
+// Source-basis: user-supplied VP Goel / Predict with Navamsha rule set.
+// This panel deliberately shows evidence/flags, not guaranteed predictions.
+
+const JN_PLANETS = ["Su","Mo","Ma","Me","Ju","Ve","Sa"];
+const JN_ALL_PLANETS = ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
+const JN_NAMES = {Su:"सूर्य",Mo:"चंद्र",Ma:"मंगल",Me:"बुध",Ju:"गुरु",Ve:"शुक्र",Sa:"शनि",Ra:"राहु",Ke:"केतु"};
+const JN_RASHI = ["मेष","वृषभ","मिथुन","कर्क","सिंह","कन्या","तुला","वृश्चिक","धनु","मकर","कुंभ","मीन"];
+const JN_SIGN_LORDS = ["Ma","Ve","Me","Mo","Su","Me","Ve","Ma","Ju","Sa","Sa","Ju"];
+const JN_EXALT = {Su:0,Mo:1,Ma:9,Me:5,Ju:3,Ve:11,Sa:6};
+const JN_NEECHA = {Su:6,Mo:7,Ma:3,Me:11,Ju:9,Ve:5,Sa:0};
+const JN_BENEFICS = new Set(["Mo","Me","Ju","Ve"]);
+const JN_MOVABLE = new Set([0,3,6,9]);
+const JN_FIXED = new Set([1,4,7,10]);
+const JN_DUAL = new Set([2,5,8,11]);
+
+const jnIdx = (raw) => {
+  if (typeof raw === "number") return ((raw % 12) + 12) % 12;
+  if (raw && typeof raw.Idx === "number") return ((raw.Idx % 12) + 12) % 12;
+  return null;
+};
+const jnPlanetSign = (p, key="D1") => {
+  const d = p || {};
+  const v = d.Vargas || d.vargas || {};
+  const a = jnIdx(v[key]);
+  if (a !== null) return a;
+  const b = d.rashi_index ?? d.rashiIndex;
+  return jnIdx(b);
+};
+// Read the planet's degree robustly from all formats used by the backend/bridge.
+// Chara Karakas are determined from the sign-local degree (0°–30°),
+// descending: highest degree = AK ... lowest degree = DK.
+const jnPlanetDeg = (p) => {
+  const candidates = [
+    p?.SignDegree,
+    p?.signDegree,
+    p?.degree,
+    p?.sign_degree,
+    p?.Degree,
+    p?.fullDegree,
+    p?.full_degree,
+    p?.longitude,
+  ];
+  for (const raw of candidates) {
+    const n = Number(raw);
+    if (Number.isFinite(n)) {
+      return ((n % 30) + 30) % 30;
+    }
+  }
+  return null;
+};
+const jnHouseFromSign = (sign, lagna) => sign === null || lagna === null ? null : ((sign - lagna + 12) % 12) + 1;
+const jnSignDistance = (from, to) => ((to - from + 12) % 12) + 1;
+const jnConj = (a,b) => a !== null && b !== null && a === b;
+
+function jnRashiAspect(a,b){
+  if (a === null || b === null || a === b) return false;
+  const adjacent = ((b-a+12)%12===1) || ((a-b+12)%12===1);
+  if (JN_MOVABLE.has(a)) return JN_FIXED.has(b) && !adjacent;
+  if (JN_FIXED.has(a)) return JN_MOVABLE.has(b) && !adjacent;
+  if (JN_DUAL.has(a)) return JN_DUAL.has(b);
+  return false;
+}
+function jnConnect(a,b){ return jnConj(a,b) || jnRashiAspect(a,b); }
+function jnConnectLabel(a,b){
+  if (jnConj(a,b)) return "युति";
+  if (jnRashiAspect(a,b)) return "राशि दृष्टि";
+  return "—";
+}
+function jnDignity(code, sign){
+  if (sign === null) return "—";
+  if (JN_EXALT[code] === sign) return "उच्च";
+  if (JN_NEECHA[code] === sign) return "नीच";
+  if (JN_SIGN_LORDS[sign] === code) return "स्वराशि";
+  return "";
+}
+function jnLagnaSign(chart){
+  return jnIdx(chart?.meta?.lagnaVargas?.D1) ?? jnPlanetSign(chart?.planets?.La,"D1") ?? jnIdx(chart?.meta?.lagnaIndex);
+}
+function jnVargaLagnaSign(chart,key){
+  return jnIdx(chart?.meta?.lagnaVargas?.[key]) ?? jnPlanetSign(chart?.planets?.La,key);
+}
+function jnCard(title, children, tone=C.cyan){
+  return <div style={{background:"rgba(255,255,255,.03)",border:`1px solid ${tone}25`,borderRadius:12,padding:12}}>
+    <div style={{...HI,fontWeight:700,fontSize:".82rem",color:tone,marginBottom:8}}>{title}</div>{children}
+  </div>;
+}
+function jnPill(ok,label){
+  return <span style={{display:"inline-block",padding:"3px 7px",borderRadius:999,fontSize:".65rem",fontWeight:700,...HI,background:ok?"rgba(34,197,94,.12)":"rgba(148,163,184,.08)",color:ok?C.green:"rgba(255,255,255,.48)",border:`1px solid ${ok?"rgba(34,197,94,.25)":"rgba(148,163,184,.15)"}`}}>{ok?"✓ ":"○ "}{label}</span>;
+}
+function jnPairsRow(name, codeA, codeB, signs, extra=""){
+  const a=signs?.[codeA], b=signs?.[codeB];
+  const hit=jnConnect(a,b);
+  return <tr><td style={{padding:"6px 4px",fontWeight:700,color:"#E2E8F0"}}>{name}</td><td style={{padding:"6px 4px",color:"#94A3B8"}}>{codeA}</td><td style={{padding:"6px 4px",color:"#94A3B8"}}>{codeB}</td><td style={{padding:"6px 4px"}}>{jnPill(hit,hit?jnConnectLabel(a,b):"असंबद्ध")}</td><td style={{padding:"6px 4px",color:"#94A3B8"}}>{extra}</td></tr>;
+}
+
+function JaiminiNavamshaTab(){
+  const chart = useKundliStore(s => s.chartData);
+  if (!chart?.planets) return <EmptyState icon="🔱" message="जैमिनी डेटा उपलब्ध नहीं" />;
+
+  const planets = chart.planets || {};
+  const lagna = jnLagnaSign(chart);
+  const d9Lagna = jnVargaLagnaSign(chart,"D9");
+  const d1 = Object.fromEntries(JN_ALL_PLANETS.map(c => [c, jnPlanetSign(planets[c],"D1")]));
+  const d9 = Object.fromEntries(JN_ALL_PLANETS.map(c => [c, jnPlanetSign(planets[c],"D9")]));
+  const d3 = Object.fromEntries(JN_ALL_PLANETS.map(c => [c, jnPlanetSign(planets[c],"D3")]));
+
+  const karakaOrder = [...JN_PLANETS].sort((a,b) => {
+    const da = jnPlanetDeg(planets[a]);
+    const db = jnPlanetDeg(planets[b]);
+    if (da === null && db === null) return 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return db - da;
+  });
+  const karakaNames = ["AK","AmK","BK","MK","PK","GK","DK"];
+  const karakas = Object.fromEntries(karakaNames.map((k,i) => [k, karakaOrder[i] || null]));
+  const karakaDegreeOrder = karakaOrder.map(code => ({
+    code,
+    degree: jnPlanetDeg(planets[code]),
+  }));
+  const signs = d1;
+  const fifthLord = lagna===null ? null : JN_SIGN_LORDS[(lagna+4)%12];
+
+  const rajyogaPairs = [
+    ["AK + AmK","AK","AmK"],["AK + PK","AK","PK"],["AK + DK","AK","DK"],["AK + 5th Lord","AK","5L"],
+    ["AmK + PK","AmK","PK"],["AmK + DK","AmK","DK"],["AmK + 5th Lord","AmK","5L"],
+    ["PK + DK","PK","DK"],["PK + 5th Lord","PK","5L"],["DK + 5th Lord","DK","5L"],
+  ];
+  const getCode = k => k==="5L" ? fifthLord : karakas[k];
+  const pairResults = rajyogaPairs.map(([name,a,b])=>({name,a:getCode(a),b:getCode(b)}));
+  const moonVenus = jnConnect(signs.Mo,signs.Ve);
+  const moonAspecters = JN_ALL_PLANETS.filter(c=>c!=="Mo" && jnRashiAspect(signs[c],signs.Mo));
+  const amkSign = signs[karakas.AmK];
+  const amkSpecial = amkSign===null || !karakas.AmK ? [] : JN_ALL_PLANETS.filter(c=>JN_BENEFICS.has(c) && [2,4,5].includes(jnHouseFromSign(signs[c],amkSign)));
+  const amkAkConnect = karakas.AmK && karakas.AK ? jnConnect(signs[karakas.AmK],signs[karakas.AK]) : false;
+  const vaithanika = ["Ma","Ve","Ke"].every(c=>signs[c]!==null) && [ ["Ma","Ve"],["Ma","Ke"],["Ve","Ke"] ].every(([a,b])=>{
+    const d=jnSignDistance(signs[a],signs[b]);
+    return d===3 || d===11;
+  });
+  const vargottama = JN_ALL_PLANETS.filter(c=>d1[c]!==null && d9[c]!==null && d1[c]===d9[c]);
+  const neechToUch = JN_PLANETS.filter(c=>d1[c]!==null && d9[c]!==null && JN_NEECHA[c]===d1[c] && JN_EXALT[c]===d9[c]);
+  const rtn = JN_ALL_PLANETS.filter(c=>d9[c]!==null && lagna!==null).map(c=>({code:c,house:jnHouseFromSign(d9[c],lagna)}));
+  const rtnGood = new Set([1,4,5,7,9,10,11]);
+  const rtnTrik = new Set([6,8,12]);
+  const rtnGoodPlanets = rtn.filter(x=>rtnGood.has(x.house));
+  const rtnTrikPlanets = rtn.filter(x=>rtnTrik.has(x.house));
+  const d9Lagnesh = d9Lagna===null ? null : JN_SIGN_LORDS[d9Lagna];
+  const d9LagneshSign = d9Lagnesh ? d9[d9Lagnesh] : null;
+  const d9LagneshDignity = d9Lagnesh ? jnDignity(d9Lagnesh,d9LagneshSign) : "—";
+  const d9SecondLord = d9Lagna===null ? null : JN_SIGN_LORDS[(d9Lagna+1)%12];
+  const d9EleventhLord = d9Lagna===null ? null : JN_SIGN_LORDS[(d9Lagna+10)%12];
+  const d9DhanaConnection = d9SecondLord && d9EleventhLord && jnConnect(d9[d9SecondLord],d9[d9EleventhLord]);
+  const d9UpachayaOccupied = d9Lagna===null ? [] : JN_ALL_PLANETS.filter(c=>[3,6,10,11].includes(jnHouseFromSign(d9[c],d9Lagna)));
+
+  const trinityData = ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"].filter(c=>d1[c]!==null&&d3[c]!==null&&d9[c]!==null);
+  const trinitySameHouse = trinityData.filter(c=>jnHouseFromSign(d1[c],lagna)!==null && jnHouseFromSign(d1[c],lagna)===jnHouseFromSign(d3[c],lagna) && jnHouseFromSign(d1[c],lagna)===jnHouseFromSign(d9[c],lagna));
+
+  const derivedLagnas = {
+    BL: jnIdx(chart?.meta?.bhavaLagna ?? chart?.meta?.bhava_lagna),
+    HL: jnIdx(chart?.meta?.horaLagna ?? chart?.meta?.hora_lagna),
+    GL: jnIdx(chart?.meta?.ghatiLagna ?? chart?.meta?.ghati_lagna ?? chart?.meta?.ghatikaLagna),
+  };
+  const triplePlanets = (derivedLagnas.BL!==null&&derivedLagnas.HL!==null&&derivedLagnas.GL!==null)
+    ? JN_ALL_PLANETS.filter(c=>jnConnect(signs[c],derivedLagnas.BL)&&jnConnect(signs[c],derivedLagnas.HL)&&jnConnect(signs[c],derivedLagnas.GL)) : [];
+
+  const fmtCodes = arr => arr.length ? arr.map(c=>`${c} ${JN_NAMES[c]||""}`).join(", ") : "—";
+
+  return <div className="space-y-3">
+    <div style={{fontSize:".68rem",color:"rgba(255,255,255,.45)",lineHeight:1.6,...HI}}>
+      जैमिनी राशि दृष्टि + Chara Karaka संबंध + D1/D9/Vargottama/RTN evidence. यह panel केवल दिए गए सूत्रों के आधार पर rule flags दिखाता है।
+    </div>
+
+    {jnCard("10 जैमिनी राजयोग — AK / AmK / PK / DK / 5th Lord", <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:".68rem"}}><thead><tr style={{color:"#64748B",textAlign:"left"}}><th>योग</th><th>ग्रह A</th><th>ग्रह B</th><th>संबंध</th><th>नोट</th></tr></thead><tbody>
+      {pairResults.map((r,i)=>jnPairsRow(r.name,r.a||"—",r.b||"—",signs,"युति या Jaimini Rashi Drishti"))}
+    </tbody></table></div>)}
+
+    {jnCard("Chara Karaka mapping", <div className="space-y-2"><div style={{fontSize:".68rem",color:"#94A3B8"}}>7-karaka mapping: प्रति राशि degree के descending क्रम से — highest = AK, lowest = DK.</div><div style={{fontSize:".63rem",color:"#64748B",padding:"6px 8px",background:"rgba(255,255,255,.025)",borderRadius:8}}>Degree order: {karakaDegreeOrder.map(x => `${x.code} ${JN_NAMES[x.code] || x.code} ${x.degree===null?"—":x.degree.toFixed(2)+"°"}`).join("  →  ")}</div><div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      {karakaNames.map(k=> <div key={k} style={{background:"rgba(255,255,255,.035)",borderRadius:8,padding:8}}><div style={{color:C.cyan,fontWeight:800,fontSize:".72rem"}}>{k}</div><div style={{color:"#E2E8F0",fontWeight:700}}>{karakas[k]?`${karakas[k]} ${JN_NAMES[karakas[k]]}`:"—"}</div><div style={{color:"#64748B",fontSize:".62rem"}}>{karakas[k] && jnPlanetDeg(planets[karakas[k]])!==null ? `${jnPlanetDeg(planets[karakas[k]]).toFixed(4)}°` : "degree unavailable"}</div></div>)}
+    </div><div style={{fontSize:".63rem",color:"#64748B"}}>5th Lord: {fifthLord ? `${fifthLord} ${JN_NAMES[fifthLord]}` : "डेटा उपलब्ध नहीं"}</div></div>)}
+
+    {jnCard("विशेष जैमिनी सूत्र", <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">{jnPill(moonVenus,"Moon + Venus")} <span style={{fontSize:".64rem",color:"#94A3B8"}}>Moon aspecters: {moonAspecters.length} — {fmtCodes(moonAspecters)}</span></div>
+      <div className="flex flex-wrap gap-1.5">{jnPill(amkSpecial.length>0,"AmK 2/4/5 में शुभ ग्रह")}<span style={{fontSize:".64rem",color:"#94A3B8"}}>{fmtCodes(amkSpecial)}</span></div>
+      <div className="flex flex-wrap gap-1.5">{jnPill(amkAkConnect,"AmK का AK से Kendra/Trikona/11 संबंध")}</div>
+      <div className="flex flex-wrap gap-1.5">{jnPill(vaithanika,"Vaithanika: Mars–Venus–Ketu 3/11 संबंध")}</div>
+      <div className="flex flex-wrap gap-1.5">{jnPill(triplePlanets.length>0,"BL + HL + GL को एक ग्रह की दृष्टि")}{derivedLagnas.BL===null&&<span style={{fontSize:".63rem",color:"#64748B"}}>BL/HL/GL data उपलब्ध नहीं, इसलिए यह flag evaluate नहीं हुआ।</span>}</div>
+      <div className="flex flex-wrap gap-1.5">{jnPill(trinitySameHouse.length>0,"D1 + D3 + D9 same-house alignment") }<span style={{fontSize:".63rem",color:"#64748B"}}>Source ने target-aspect calculation की exact विधि नहीं दी; यहाँ same-house evidence दिखाया गया है।</span></div>
+    </div>)}
+
+    {jnCard("Vargottama + Navamsha", <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">{jnPill(vargottama.length>0,"Vargottama planets")}</div><div style={{fontSize:".65rem",color:"#94A3B8"}}>{fmtCodes(vargottama)}</div>
+      <div className="flex flex-wrap gap-1.5">{jnPill(lagna!==null&&d9Lagna!==null&&lagna===d9Lagna,"Vargottama Lagna")}</div><div style={{fontSize:".65rem",color:"#94A3B8"}}>{lagna!==null?JN_RASHI[lagna]:"—"} → D9 {d9Lagna!==null?JN_RASHI[d9Lagna]:"—"}</div>
+      <div className="flex flex-wrap gap-1.5">{jnPill(neechToUch.length>0,"D1 नीच → D9 उच्च")}</div><div style={{fontSize:".65rem",color:"#94A3B8"}}>{fmtCodes(neechToUch)}</div>
+    </div>)}
+
+    {jnCard("Rashi Tulya Navamsha (RTN / Beeja Kundali)", <div className="space-y-2"><div style={{fontSize:".66rem",color:"#94A3B8"}}>D9 में planet का sign लेकर D1 Lagna से house mapping।</div><div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div style={{background:"rgba(34,197,94,.06)",borderRadius:8,padding:8}}><div style={{color:C.green,fontWeight:700,fontSize:".7rem"}}>1,4,5,7,9,10,11 — शुभ alignment</div><div style={{fontSize:".65rem",color:"#94A3B8"}}>{rtnGoodPlanets.map(x=>`${x.code}: H${x.house}`).join(", ")||"—"}</div></div>
+      <div style={{background:"rgba(244,63,94,.05)",borderRadius:8,padding:8}}><div style={{color:C.rose,fontWeight:700,fontSize:".7rem"}}>6,8,12 — त्रिक alignment</div><div style={{fontSize:".65rem",color:"#94A3B8"}}>{rtnTrikPlanets.map(x=>`${x.code}: H${x.house}`).join(", ")||"—"}</div></div>
+    </div></div>)}
+
+    {jnCard("D9 Lagnesh + D9 Dhana / Upachaya", <div className="space-y-2"><div className="flex flex-wrap gap-1.5">{jnPill(["उच्च","स्वराशि"].includes(d9LagneshDignity),`D9 Lagnesh: ${d9Lagnesh||"—"} ${d9LagneshDignity||""}`)} {jnPill(d9DhanaConnection,"2L + 11L connection in D9")} {jnPill(d9UpachayaOccupied.length>0,"D9 upachaya occupied")}</div><div style={{fontSize:".63rem",color:"#64748B"}}>{d9Lagnesh ? `${d9Lagnesh} ${JN_NAMES[d9Lagnesh]} in ${d9LagneshSign!==null?JN_RASHI[d9LagneshSign]:"—"}` : "D9 Lagnesh data unavailable"}. 2L–11L connection यहाँ computable D9-dhana indicator के रूप में दिखाया गया है; source text ने इसकी exact sub-rule नहीं दी।</div></div>)}
+
+    {jnCard("Data-dependent rules", <div style={{fontSize:".66rem",lineHeight:1.7,color:"#94A3B8"}}>
+      {derivedLagnas.BL===null || derivedLagnas.HL===null || derivedLagnas.GL===null ? "BL/HL/GL source values chart payload में नहीं मिले, इसलिए त्रिविध लग्न दृष्टि को false नहीं माना गया है। " : `BL=${JN_RASHI[derivedLagnas.BL]}, HL=${JN_RASHI[derivedLagnas.HL]}, GL=${JN_RASHI[derivedLagnas.GL]}. `}
+      Argala on Lagna/AL/7th और exact D1–D3–D9 target-aspect calculation के लिए source text में आवश्यक exact computational steps नहीं दिए गए; इसलिए इन्हें unverified/partial रखा गया है, अनुमान से नहीं भरा गया।
+    </div>)}
+  </div>;
+}
 
 // ════════ TAB 1 — INDU LAGNA ═════════════════════════════
 function InduTab({ indu_lagna, spouse_direction }) {
@@ -1343,6 +1865,8 @@ export default function AdvancedYogasPanel() {
   const renderTab = () => {
     if (!engineReady) return pendingData;
     switch (activeTab) {
+      case "classic":
+        return <ClassicYogasTab />;
       case "indu":
         return <InduTab
           indu_lagna={data.indu_lagna}
@@ -1354,6 +1878,8 @@ export default function AdvancedYogasPanel() {
         />;
       case "hora":
         return <HoraTab hora_analysis={data.hora_analysis} />;
+      case "jaimini":
+        return <JaiminiNavamshaTab />;
 
       default:       return null;
     }
@@ -1367,7 +1893,7 @@ export default function AdvancedYogasPanel() {
             ⚡ उन्नत योग विश्लेषण
           </h3>
           <p style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", margin: "4px 0 0" }}>
-            Indu Lagna · 64वाँ नवांश / खर · D2 Hora
+            मुख्य योग · Indu Lagna · 64वाँ नवांश / खर · D2 Hora
           </p>
         </div>
         <div className="space-y-1">

@@ -311,19 +311,59 @@ function D24Section({ d24 }) {
 function RectificationSection({ rect, timeAdjust }) {
   if (!rect?.computed) return null;
 
-  const hasBothPass  = rect.total_both_pass > 0;
-  const windows      = rect.both_pass_windows || [];
+  const hasBothPass = rect.total_both_pass > 0;
+  const windows = rect.both_pass_windows || [];
+  const allResults = rect.all_results || [];
+  const conditionWindows = rect.condition_windows || {};
+
+  const statusFor = (row) => {
+    if (row.both_pass) return { label: "CIL + D24", color: passColor, icon: "✅" };
+    if (row.cil_pass) return { label: "केवल CIL", color: infoColor, icon: "🔗" };
+    if (row.d24_pass) return { label: "केवल D24", color: warnColor, icon: "🪐" };
+    return { label: "FAIL", color: failColor, icon: "❌" };
+  };
+
+  const renderWindowGroup = (title, key, color, icon) => {
+    const groups = conditionWindows[key] || [];
+    if (!groups.length) return null;
+    return (
+      <div style={{
+        padding: "10px 12px", borderRadius: "10px",
+        background: `${color}08`, border: `1px solid ${color}25`,
+      }}>
+        <div style={{ ...HI, fontSize: "0.72rem", color, fontWeight: 700, marginBottom: "6px" }}>
+          {icon} {title} — {groups.length} window{groups.length > 1 ? "s" : ""}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          {groups.map((g, i) => (
+            <div key={`${key}-${i}`} style={{
+              display: "flex", justifyContent: "space-between", gap: "8px",
+              fontFamily: "monospace", fontSize: "0.72rem",
+              color: "rgba(255,255,255,0.72)",
+            }}>
+              <span>
+                {g.start_time === g.end_time ? g.start_time : `${g.start_time} → ${g.end_time}`}
+              </span>
+              <span style={{ color: "rgba(255,255,255,0.38)" }}>
+                {g.count} min · {g.start_offset > 0 ? `+${g.start_offset}` : g.start_offset} to {g.end_offset > 0 ? `+${g.end_offset}` : g.end_offset}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <CollapsibleSection
       icon="⏱️"
-      title="स्वतः सुधार (Auto-Rectification)"
+      title="स्मार्ट समय शुद्धि — ±30 मिनट की पूरी जाँच"
       color={hasBothPass ? passColor : warnColor}
       defaultOpen={true}
     >
       <div className="space-y-3 pt-1">
 
-        {/* Time adjustment result */}
+        {/* Result */}
         <GlassCard className="p-4" style={{
           borderLeft: `4px solid ${hasBothPass ? passColor : warnColor}`,
           background: hasBothPass ? `${passColor}08` : `${warnColor}08`,
@@ -347,88 +387,179 @@ function RectificationSection({ rect, timeAdjust }) {
           <div style={{ marginTop: "10px" }}>
             <StrengthBar value={rect.confidence} color={hasBothPass ? passColor : warnColor} />
             <div style={{ ...HI, fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", marginTop: "4px" }}>
-              विश्वसनीयता: {rect.confidence}% · खोज: {rect.search_range}
+              विश्वसनीयता: {rect.confidence}% · {rect.total_checked || allResults.length} candidate times · {rect.calculation_mode === "smart_lightweight" ? "Smart Swiss Ephemeris scan — full engine नहीं चला" : (rect.calculation_mode === "exact" ? "Exact calculation" : "Lagna estimate")}
             </div>
           </div>
         </GlassCard>
 
-        {/* Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+        {/* Counts */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "7px" }}>
           {[
-            { label: "दोनों PASS", value: rect.total_both_pass, color: passColor },
+            { label: "दोनों", value: rect.total_both_pass, color: passColor },
             { label: "केवल CIL", value: rect.total_cil_only, color: infoColor },
             { label: "केवल D24", value: rect.total_d24_only, color: warnColor },
+            { label: "दोनों FAIL", value: Math.max(0, (rect.total_checked || allResults.length) - rect.total_both_pass - rect.total_cil_only - rect.total_d24_only), color: failColor },
           ].map(item => (
             <div key={item.label} style={{
-              padding: "10px 8px", borderRadius: "10px", textAlign: "center",
-              background: `${item.color}12`,
-              border: `1.5px solid ${item.color}35`,
+              padding: "9px 5px", borderRadius: "10px", textAlign: "center",
+              background: `${item.color}12`, border: `1.5px solid ${item.color}35`,
             }}>
-              <div style={{ fontSize: "1.4rem", fontWeight: 900, color: item.color, lineHeight: 1 }}>
+              <div style={{ fontSize: "1.25rem", fontWeight: 900, color: item.color, lineHeight: 1 }}>
                 {item.value}
               </div>
-              <div style={{ ...HI, fontSize: "0.65rem", color: "rgba(255,255,255,0.5)", marginTop: "3px" }}>
+              <div style={{ ...HI, fontSize: "0.6rem", color: "rgba(255,255,255,0.5)", marginTop: "3px" }}>
                 {item.label}
               </div>
             </div>
           ))}
         </div>
 
-        {/* Both-pass windows */}
+        {/* Contiguous time windows */}
+        {Object.keys(conditionWindows).length > 0 && (
+          <div>
+            <div style={{ ...HI, fontSize: "0.75rem", color: "rgba(255,255,255,0.45)", marginBottom: "8px" }}>
+              🧭 लगातार मिलने वाली समय-खिड़कियाँ
+            </div>
+            <div className="space-y-2">
+              {renderWindowGroup("CIL + D24 दोनों PASS", "both_pass", passColor, "✅")}
+              {renderWindowGroup("केवल CIL PASS", "cil_only", infoColor, "🔗")}
+              {renderWindowGroup("केवल D24 PASS", "d24_only", warnColor, "🪐")}
+              {renderWindowGroup("दोनों FAIL", "fail", failColor, "❌")}
+            </div>
+          </div>
+        )}
+
+        {/* ALL CORRECT TIMES — never hide valid minutes behind BEST */}
+        {(rect.correct_times?.length > 0) && (
+          <GlassCard className="p-3" style={{
+            borderLeft: `3px solid ${passColor}`,
+            background: `${passColor}08`,
+          }}>
+            <div style={{ ...HI, fontSize: "0.82rem", fontWeight: 700, color: passColor, marginBottom: "8px" }}>
+              ✅ ±30 मिनट में सभी सही समय
+            </div>
+            <div style={{ ...HI, fontSize: "0.7rem", color: "rgba(255,255,255,0.5)", marginBottom: "8px" }}>
+              हर नीचे दिया गया समय CIL + D24 दोनों में PASS है। BEST केवल recommendation है; सही समयों की पूरी सूची अलग है।
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+              {rect.correct_times.map((t) => {
+                const isOriginal = t.offset_minutes === 0;
+                const isBest = t.offset_minutes === rect.best_offset_minutes;
+                return (
+                  <div key={t.offset_minutes} style={{
+                    padding: "6px 9px", borderRadius: "8px",
+                    background: isOriginal ? `${passColor}22` : "rgba(255,255,255,0.05)",
+                    border: `1.5px solid ${isOriginal ? passColor : "rgba(255,255,255,0.1)"}`,
+                    color: passColor, fontFamily: "monospace", fontSize: "0.74rem",
+                    fontWeight: isOriginal ? 800 : 600,
+                  }}>
+                    {t.candidate_time_12h || "—"}
+                    <span style={{ marginLeft: "5px", opacity: 0.7 }}>({t.offset_minutes > 0 ? "+" : ""}{t.offset_minutes})</span>
+                    {isOriginal && <span style={{ marginLeft: "5px" }}>● मूल</span>}
+                    {isBest && !isOriginal && <span style={{ marginLeft: "5px" }}>★ BEST</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </GlassCard>
+        )}
+
+        {rect.original_time_result && (
+          <GlassCard className="p-3" style={{
+            borderLeft: `3px solid ${rect.original_time_pass ? passColor : failColor}`,
+          }}>
+            <div style={{ ...HI, fontSize: "0.78rem", fontWeight: 700,
+              color: rect.original_time_pass ? passColor : failColor }}>
+              {rect.original_time_pass
+                ? "✅ मूल दिया गया समय भी CIL + D24 दोनों PASS है — इसे avoid नहीं किया गया।"
+                : "ℹ️ मूल दिया गया समय दोनों विधियों में PASS नहीं है।"}
+            </div>
+          </GlassCard>
+        )}
+
+        {/* Existing BOTH-pass detailed list */}
         {windows.length > 0 && (
           <div>
             <div style={{ ...HI, fontSize: "0.75rem", color: "rgba(255,255,255,0.45)", marginBottom: "8px" }}>
-              ✅ सभी valid समय-खिड़कियाँ
+              ✅ दोनों विधियों से match होने वाले exact minutes
             </div>
             <div className="space-y-2">
               {windows.map((w, i) => (
                 <div key={i} style={{
                   padding: "8px 12px", borderRadius: "10px",
-                  background: w.offset === rect.best_offset_minutes
-                    ? `${passColor}18`
-                    : "rgba(255,255,255,0.04)",
-                  border: `1.5px solid ${w.offset === rect.best_offset_minutes
-                    ? passColor
-                    : "rgba(255,255,255,0.08)"}`,
+                  background: w.offset === rect.best_offset_minutes ? `${passColor}18` : "rgba(255,255,255,0.04)",
+                  border: `1.5px solid ${w.offset === rect.best_offset_minutes ? passColor : "rgba(255,255,255,0.08)"}`,
                 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                       {w.offset === rect.best_offset_minutes && (
-                        <span style={{
-                          fontSize: "0.65rem", padding: "1px 6px", borderRadius: "4px",
-                          background: `${passColor}30`, color: passColor, ...HI
-                        }}>⭐ BEST</span>
+                        <span style={{ fontSize: "0.65rem", padding: "1px 6px", borderRadius: "4px", background: `${passColor}30`, color: passColor, ...HI }}>
+                          ⭐ BEST
+                        </span>
                       )}
                       <span style={{ fontFamily: "monospace", fontSize: "0.82rem", color: passColor }}>
-                        {w.offset === 0 ? "±0 min (base)" :
-                         w.offset > 0 ? `+${w.offset} min` : `${w.offset} min`}
+                        {w.offset === 0 ? "±0 min (base)" : w.offset > 0 ? `+${w.offset} min` : `${w.offset} min`}
                       </span>
                       <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)" }}>
                         लग्न {w.lagna}°
                       </span>
                     </div>
                     <div style={{ display: "flex", gap: "4px" }}>
-                      <span style={{
-                        fontSize: "0.65rem", padding: "2px 6px", borderRadius: "4px",
-                        background: `${passColor}20`, color: passColor,
-                      }}>CIL ✅</span>
-                      <span style={{
-                        fontSize: "0.65rem", padding: "2px 6px", borderRadius: "4px",
-                        background: `${passColor}20`, color: passColor,
-                      }}>D24 ✅</span>
+                      <span style={{ fontSize: "0.65rem", padding: "2px 6px", borderRadius: "4px", background: `${passColor}20`, color: passColor }}>CIL ✅</span>
+                      <span style={{ fontSize: "0.65rem", padding: "2px 6px", borderRadius: "4px", background: `${passColor}20`, color: passColor }}>D24 ✅</span>
                     </div>
                   </div>
-                  {w.cil && (
-                    <div style={{ ...HI, fontSize: "0.72rem", color: "rgba(255,255,255,0.5)", marginTop: "4px" }}>
-                      CIL: {w.cil}
-                    </div>
-                  )}
+                  {w.cil && <div style={{ ...HI, fontSize: "0.72rem", color: "rgba(255,255,255,0.5)", marginTop: "4px" }}>CIL: {w.cil}</div>}
                 </div>
               ))}
             </div>
           </div>
         )}
 
+        {/* Every single minute */}
+        {allResults.length > 0 && (
+          <CollapsibleSection
+            icon="📋"
+            title={`हर minute की पूरी list (${allResults.length})`}
+            color={infoColor}
+            defaultOpen={false}
+          >
+            <div style={{
+              maxHeight: "520px", overflowY: "auto", paddingRight: "3px",
+              border: "1px solid rgba(255,255,255,0.07)", borderRadius: "10px",
+            }}>
+              {allResults.map((row) => {
+                const st = statusFor(row);
+                const isBest = row.offset_minutes === rect.best_offset_minutes && row.both_pass;
+                return (
+                  <div key={row.offset_minutes} style={{
+                    display: "grid", gridTemplateColumns: "82px 58px 1fr auto", gap: "7px",
+                    alignItems: "center", padding: "7px 8px",
+                    background: isBest ? `${passColor}12` : "transparent",
+                    borderBottom: "1px solid rgba(255,255,255,0.045)",
+                  }}>
+                    <span style={{ fontFamily: "monospace", fontSize: "0.72rem", color: row.offset_minutes === 0 ? passColor : "rgba(255,255,255,0.65)" }}>
+                      {row.offset_minutes === 0 ? "±0 min" : row.offset_minutes > 0 ? `+${row.offset_minutes} min` : `${row.offset_minutes} min`}
+                    </span>
+                    <span style={{ fontFamily: "monospace", fontSize: "0.68rem", color: "rgba(255,255,255,0.48)" }}>
+                      {row.candidate_time_12h || "—"}
+                    </span>
+                    <span style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.48)" }}>
+                      Lagna {Number(row.lagna_deg || 0).toFixed(2)}°
+                      {row.cil_ssl ? ` · SSL ${PH[row.cil_ssl] || row.cil_ssl}` : ""}
+                    </span>
+                    <span style={{
+                      fontSize: "0.62rem", padding: "3px 6px", borderRadius: "5px",
+                      background: `${st.color}18`, color: st.color, whiteSpace: "nowrap",
+                    }}>
+                      {st.icon} {st.label}{isBest ? " ⭐" : ""}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </CollapsibleSection>
+        )}
       </div>
     </CollapsibleSection>
   );
@@ -609,28 +740,7 @@ console.log("🔥 [DEBUG FRONTEND] Full chartData.enginesData:", chartData?.engi
       {/* Auto Rectification */}
       <RectificationSection rect={rect} timeAdj={timeAdj} />
 
-      {/* Info card */}
-      <GlassCard className="p-4" style={{ background: "rgba(167,139,250,0.04)" }}>
-        <SectionLabel color={infoColor}>📖 विधि का अर्थ</SectionLabel>
-        {[
-          ["CIL", "चंद्र नक्षत्र स्वामी ↔ लग्न SSL — सेकंड-स्तरीय सटीकता", infoColor],
-          ["D24", "4th उच्च डिग्री ग्रह = मातृकारक → D24 के 5वें भाव से संबंध", passColor],
-          ["Auto", "±30 मिनट में खोज — जहाँ दोनों pass हों वही सही समय", warnColor],
-        ].map(([label, desc, color]) => (
-          <div key={label} style={{
-            display: "flex", gap: "10px", padding: "5px 0",
-            borderBottom: "0.5px solid rgba(255,255,255,0.05)",
-          }}>
-            <span style={{
-              fontFamily: "monospace", fontSize: "0.75rem",
-              color, width: "40px", flexShrink: 0, fontWeight: 700,
-            }}>{label}</span>
-            <span style={{ ...HI, fontSize: "0.75rem", color: "rgba(255,255,255,0.55)" }}>
-              {desc}
-            </span>
-          </div>
-        ))}
-      </GlassCard>
+
 
     </div>
   );

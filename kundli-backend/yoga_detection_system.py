@@ -122,88 +122,91 @@ def is_malefic_planet(planet: str) -> bool:
 # CATEGORY 1: RAJA YOGAS (राज योग)
 # ============================================================
 
+def _planet_relationship(p1: str, p2: str, chart_data: Dict) -> bool:
+    """Central relationship test: conjunction, Parashari aspect, or exchange."""
+    positions = chart_data.get('planet_positions', {})
+    s1 = positions.get(p1, {}).get('sign_index', -1)
+    s2 = positions.get(p2, {}).get('sign_index', -1)
+    if s1 < 0 or s2 < 0:
+        return False
+    if s1 == s2:
+        return True
+    # Exchange / Parivartana.
+    if s2 in OWN_SIGNS.get(p1, []) and s1 in OWN_SIGNS.get(p2, []):
+        return True
+    # Standard Parashari graha drishti.
+    distance = (s2 - s1) % 12
+    if distance == 6:  # all planets 7th
+        return True
+    if p1 == 'Mars' and distance in (3, 7):
+        return True
+    if p1 == 'Jupiter' and distance in (4, 8):
+        return True
+    if p1 == 'Saturn' and distance in (2, 9):
+        return True
+    return False
+
+
 def detect_raja_yogas(chart_data: Dict) -> List[Dict]:
-    """Detect Raja Yogas - combinations for power and authority."""
+    """Detect canonical Kendra-Trikona Raja Yoga without duplicate aliases."""
     yogas = []
-    lagna = chart_data['lagna_sign']
-    planet_positions = chart_data['planet_positions']
     lordship = get_planet_lordship(chart_data)
-    
-    # 1. Kendra-Trikona Raja Yoga
-    # Lords of Kendra and Trikona houses together
-    for p1 in PLANETS[:7]:  # Exclude Rahu/Ketu
+
+    seen = set()
+    kendra_houses = set(KENDRAS)
+    trikona_houses = set(TRIKONAS)
+
+    for p1 in PLANETS[:7]:
         for p2 in PLANETS[:7]:
-            if p1 == p2:
+            if p1 >= p2:
                 continue
-            
-            p1_houses = lordship.get(p1, [])
-            p2_houses = lordship.get(p2, [])
-            
-            p1_kendra = any(h in KENDRAS for h in p1_houses)
-            p1_trikona = any(h in TRIKONAS for h in p1_houses)
-            p2_kendra = any(h in KENDRAS for h in p2_houses)
-            p2_trikona = any(h in TRIKONAS for h in p2_houses)
-            
-            if (p1_kendra and p2_trikona) or (p1_trikona and p2_kendra):
-                # Check if planets are conjunct or aspecting
-                p1_sign = planet_positions.get(p1, {}).get('sign_index', -1)
-                p2_sign = planet_positions.get(p2, {}).get('sign_index', -1)
-                
-                if p1_sign == p2_sign:
-                    yogas.append({
-                        'name': 'केंद्राधिपति-त्रिकोणाधिपति राज योग',
-                        'name_en': 'Kendra-Trikona Raja Yoga',
-                        'description': f'{p1} और {p2} केंद्र व त्रिकोण के स्वामी युति में',
-                        'effect': 'शक्ति, प्रतिष्ठा, सफलता',
-                        'strength': 'उच्च',
-                        'planets': [p1, p2],
-                        'is_forming': True
-                    })
-    
-    # 2. Dharma-Karmadhipati Raja Yoga
-    # Lord of 9th and 10th together
-    ninth_sign = (lagna + 8) % 12
-    tenth_sign = (lagna + 9) % 12
-    
-    for planet in PLANETS[:7]:
-        if ninth_sign in OWN_SIGNS.get(planet, []):
-            ninth_lord = planet
-        if tenth_sign in OWN_SIGNS.get(planet, []):
-            tenth_lord = planet
-    
-    try:
-        if ninth_lord and tenth_lord:
-            ninth_pos = planet_positions.get(ninth_lord, {}).get('sign_index', -1)
-            tenth_pos = planet_positions.get(tenth_lord, {}).get('sign_index', -1)
-            
-            if ninth_pos == tenth_pos:
-                yogas.append({
-                    'name': 'धर्म-कर्माधिपति राज योग',
-                    'name_en': 'Dharma-Karmadhipati Raja Yoga',
-                    'description': f'9वें ({ninth_lord}) और 10वें ({tenth_lord}) भाव के स्वामी युति में',
-                    'effect': 'उच्च पद, सम्मान, धर्म-कर्म में सफलता',
-                    'strength': 'बहुत उच्च',
-                    'planets': [ninth_lord, tenth_lord],
-                    'is_forming': True
-                })
-    except:
-        pass
-    
-    # 3. Lagna and Moon in Kendra
-    moon_sign = planet_positions.get('Moon', {}).get('sign_index', -1)
-    if moon_sign >= 0:
-        moon_house = get_house_from_lagna(moon_sign, lagna)
-        if moon_house in KENDRAS:
+            h1 = set(lordship.get(p1, []))
+            h2 = set(lordship.get(p2, []))
+            k1 = bool(h1 & kendra_houses)
+            t1 = bool(h1 & trikona_houses)
+            k2 = bool(h2 & kendra_houses)
+            t2 = bool(h2 & trikona_houses)
+            if not ((k1 and t2) or (t1 and k2)):
+                continue
+            if not _planet_relationship(p1, p2, chart_data):
+                continue
+            key = tuple(sorted((p1, p2)))
+            if key in seen:
+                continue
+            seen.add(key)
+            houses = sorted(set(lordship.get(p1, [])) | set(lordship.get(p2, [])))
+            # Canonical name is determined by 9th/10th lord relation below.
             yogas.append({
-                'name': 'लग्नेश-चंद्रमा केंद्र योग',
-                'name_en': 'Lagna-Moon Kendra Yoga',
-                'description': 'चंद्रमा लग्न से केंद्र में स्थित',
-                'effect': 'मानसिक शक्ति, लोकप्रियता',
-                'strength': 'मध्यम',
-                'planets': ['Moon'],
+                'id': 'RAJA_KENDRA_TRIKONA_' + '_'.join(key),
+                'name': 'केंद्र-त्रिकोण राज योग',
+                'name_en': 'Kendra-Trikona Raja Yoga',
+                'description': f'{p1} और {p2} के बीच केंद्र-त्रिकोण स्वामित्व का संबंध',
+                'effect': 'शक्ति, प्रतिष्ठा, पद और सफलता',
+                'strength': 'उच्च',
+                'planets': list(key),
+                'houses': houses,
                 'is_forming': True
             })
-    
+
+    # 9th + 10th lord relation is one canonical Dharma-Karmadhipati Yoga.
+    ninth_lord = next((p for p in PLANETS[:7] if 8 in lordship.get(p, [])), None)
+    tenth_lord = next((p for p in PLANETS[:7] if 9 in lordship.get(p, [])), None)
+    if ninth_lord and tenth_lord and ninth_lord != tenth_lord and _planet_relationship(ninth_lord, tenth_lord, chart_data):
+        pair = set((ninth_lord, tenth_lord))
+        # Remove the generic alias for exactly the same pair; retain one canonical record.
+        yogas = [y for y in yogas if set(y.get('planets', [])) != pair]
+        yogas.append({
+            'id': 'RAJA_DHARMA_KARMA_9_10',
+            'name': 'धर्म-कर्माधिपति राज योग',
+            'name_en': 'Dharma-Karmadhipati Raja Yoga',
+            'description': f'9वें ({ninth_lord}) और 10वें ({tenth_lord}) भावेशों का परस्पर संबंध',
+            'effect': 'उच्च पद, सम्मान, अधिकार और कर्म-भाग्य में सफलता',
+            'strength': 'बहुत उच्च',
+            'planets': [ninth_lord, tenth_lord],
+            'houses': [9, 10],
+            'is_forming': True
+        })
+
     return yogas
 
 
@@ -279,20 +282,6 @@ def detect_dhana_yogas(chart_data: Dict) -> List[Dict]:
                 'is_forming': True
             })
     
-    # 4. Lakshmi Yoga - Venus in Kendra from Moon
-    moon_sign = planet_positions.get('Moon', {}).get('sign_index', -1)
-    if moon_sign >= 0 and ven_sign >= 0:
-        ven_house_from_moon = get_house_from_lagna(ven_sign, moon_sign)
-        if ven_house_from_moon in KENDRAS:
-            yogas.append({
-                'name': 'लक्ष्मी योग',
-                'name_en': 'Lakshmi Yoga',
-                'description': 'शुक्र चंद्रमा से केंद्र में',
-                'effect': 'धन-धान्य, सुख-समृद्धि, सौंदर्य',
-                'strength': 'उच्च',
-                'planets': ['Venus', 'Moon'],
-                'is_forming': True
-            })
     
     return yogas
 
@@ -443,18 +432,9 @@ def detect_chandra_yogas(chart_data: Dict) -> List[Dict]:
             'is_forming': True
         })
     
-    # 4. Kemadruma Yoga - No planets in 2nd and 12th from Moon (inauspicious)
-    if not planets_in_2nd and not planets_in_12th:
-        yogas.append({
-            'name': 'केमद्रुम योग',
-            'name_en': 'Kemadruma Yoga',
-            'description': 'चंद्रमा के दोनों ओर कोई ग्रह नहीं',
-            'effect': 'कठिनाई, मानसिक अशांति, संघर्ष (निवारण: गुरु-शुक्र की कृपा से)',
-            'strength': 'अशुभ',
-            'planets': ['Moon'],
-            'is_forming': True
-        })
-    
+    # 4. Kemadruma is finalized in detect_additional_chart_yogas(), where
+    # cancellation is checked. Do not emit an active Kemadruma here.
+
     # 5. Gaja Kesari Yoga - Jupiter in Kendra from Moon
     jup_sign = planet_positions.get('Jupiter', {}).get('sign_index', -1)
     if jup_sign >= 0:
@@ -696,22 +676,6 @@ def detect_special_yogas(chart_data: Dict) -> List[Dict]:
     lagna = chart_data['lagna_sign']
     planet_positions = chart_data['planet_positions']
     
-    # 1. Mleccha Yoga - Foreign connections
-    # Rahu in Kendra or with lagna lord
-    rahu_sign = planet_positions.get('Rahu', {}).get('sign_index', -1)
-    if rahu_sign >= 0:
-        rahu_house = get_house_from_lagna(rahu_sign, lagna)
-        if rahu_house in KENDRAS:
-            yogas.append({
-                'name': 'म्लेच्छ योग',
-                'name_en': 'Mleccha Yoga',
-                'description': 'राहु केंद्र में स्थित',
-                'effect': 'विदेश यात्रा, विदेशी संपर्क, अपरंपरागत कार्य',
-                'strength': 'मध्यम',
-                'planets': ['Rahu'],
-                'is_forming': True
-            })
-    
     # 2. Pravrajya Yoga - Renunciation
     # Moon and Saturn together, or 4 or more planets in one house
     moon_sign = planet_positions.get('Moon', {}).get('sign_index', -1)
@@ -786,9 +750,562 @@ def detect_special_yogas(chart_data: Dict) -> List[Dict]:
     return yogas
 
 
+
+# ============================================================
+# CATEGORY 9: SURYA YOGAS (सूर्य योग)
+# ============================================================
+
+def detect_surya_yogas(chart_data: Dict) -> List[Dict]:
+    """Detect Veshi, Voshi and Ubhayachari Yogas from Sun."""
+    yogas = []
+    positions = chart_data.get('planet_positions', {})
+    sun_sign = positions.get('Sun', {}).get('sign_index', -1)
+    if sun_sign < 0:
+        return yogas
+
+    # Classical rule: planets other than Moon, Rahu and Ketu.
+    other_planets = ['Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn']
+    second_sign = (sun_sign + 1) % 12
+    twelfth_sign = (sun_sign - 1) % 12
+
+    in_2nd = [p for p in other_planets
+              if positions.get(p, {}).get('sign_index', -1) == second_sign]
+    in_12th = [p for p in other_planets
+               if positions.get(p, {}).get('sign_index', -1) == twelfth_sign]
+
+    if in_2nd:
+        yogas.append({
+            'name': 'वेशि योग',
+            'name_en': 'Veshi Yoga',
+            'description': f'सूर्य से 2रे भाव में ग्रह: {", ".join(in_2nd)}',
+            'effect': 'व्यक्तित्व, आत्मविश्वास, प्रशासनिक क्षमता और प्रभाव',
+            'strength': 'उच्च',
+            'planets': ['Sun'] + in_2nd,
+            'is_forming': True
+        })
+
+    if in_12th:
+        yogas.append({
+            'name': 'वोशि योग',
+            'name_en': 'Voshi Yoga',
+            'description': f'सूर्य से 12वें भाव में ग्रह: {", ".join(in_12th)}',
+            'effect': 'व्यावहारिक बुद्धि, अनुशासन और कार्यक्षमता',
+            'strength': 'उच्च',
+            'planets': ['Sun'] + in_12th,
+            'is_forming': True
+        })
+
+    if in_2nd and in_12th:
+        yogas.append({
+            'name': 'उभयचरी योग',
+            'name_en': 'Ubhayachari Yoga',
+            'description': 'सूर्य के दोनों ओर 2रे और 12वें स्थान पर ग्रह',
+            'effect': 'संतुलित व्यक्तित्व, प्रतिष्ठा, नेतृत्व और कार्यक्षमता',
+            'strength': 'बहुत उच्च',
+            'planets': ['Sun'] + in_2nd + in_12th,
+            'is_forming': True
+        })
+
+    return yogas
+
+
+# ============================================================
+# CATEGORY 10: SARASWATI / MAHA YOGA
+# ============================================================
+
+def detect_saraswati_yoga(chart_data: Dict) -> List[Dict]:
+    """Detect Saraswati Yoga using Mercury, Jupiter and Venus."""
+    yogas = []
+    lagna = chart_data['lagna_sign']
+    positions = chart_data.get('planet_positions', {})
+
+    houses = {}
+    for p in ['Mercury', 'Jupiter', 'Venus']:
+        sign = positions.get(p, {}).get('sign_index', -1)
+        if sign >= 0:
+            houses[p] = get_house_from_lagna(sign, lagna)
+
+    # Source rule: Mercury, Jupiter and Venus strong in Kendra/Trikona.
+    favorable = KENDRAS + TRIKONAS
+    if len(houses) == 3 and all(h in favorable for h in houses.values()):
+        strong = []
+        for p in ['Mercury', 'Jupiter', 'Venus']:
+            sign = positions[p].get('sign_index', -1)
+            if sign == EXALTATION.get(p) or sign in OWN_SIGNS.get(p, []):
+                strong.append(p)
+
+        yogas.append({
+            'name': 'सरस्वती योग',
+            'name_en': 'Saraswati Yoga',
+            'description': 'बुध, गुरु और शुक्र केंद्र/त्रिकोण में स्थित',
+            'effect': 'विद्या, वाणी, लेखन, कला, शोध और बौद्धिक क्षमता',
+            'strength': 'बहुत उच्च' if len(strong) >= 2 else 'उच्च',
+            'planets': ['Mercury', 'Jupiter', 'Venus'],
+            'is_forming': True
+        })
+    return yogas
+
+
+def detect_maha_yoga(chart_data: Dict) -> List[Dict]:
+    """Detect Maha Yoga through exchanges among auspicious-house lords."""
+    yogas = []
+    lagna = chart_data['lagna_sign']
+    positions = chart_data.get('planet_positions', {})
+    lordship = get_planet_lordship(chart_data)
+
+    # User/source rule: 1,2,4,5,7,9,10,11 are auspicious houses.
+    auspicious_houses = [0, 1, 3, 4, 6, 8, 9, 10]
+    lord_for_house = {}
+    for h in auspicious_houses:
+        sign = (lagna + h) % 12
+        for p in PLANETS[:7]:
+            if sign in OWN_SIGNS.get(p, []):
+                lord_for_house[h] = p
+                break
+
+    seen = set()
+    for h1 in auspicious_houses:
+        for h2 in auspicious_houses:
+            if h1 >= h2 or h1 not in lord_for_house or h2 not in lord_for_house:
+                continue
+            p1, p2 = lord_for_house[h1], lord_for_house[h2]
+            key = tuple(sorted((p1, p2)))
+            if key in seen or p1 == p2:
+                continue
+            s1 = positions.get(p1, {}).get('sign_index', -1)
+            s2 = positions.get(p2, {}).get('sign_index', -1)
+            if s1 == (lagna + h2) % 12 and s2 == (lagna + h1) % 12:
+                seen.add(key)
+                yogas.append({
+                    'name': 'महा योग',
+                    'name_en': 'Maha Yoga',
+                    'description': f'{h1+1}वें और {h2+1}वें भावेशों का राशि परिवर्तन ({p1}-{p2})',
+                    'effect': 'उच्च क्षमता, सफलता और महत्वपूर्ण उपलब्धियां',
+                    'strength': 'बहुत उच्च',
+                    'planets': [p1, p2],
+                    'is_forming': True
+                })
+    return yogas
+
+
+# ============================================================
+# CATEGORY 11: DAINYA / KHALA YOGAS
+# ============================================================
+
+def detect_dainya_khala_yogas(chart_data: Dict) -> List[Dict]:
+    """Detect Dainya and Khala Parivartana patterns."""
+    yogas = []
+    lagna = chart_data['lagna_sign']
+    positions = chart_data.get('planet_positions', {})
+    lordship = get_planet_lordship(chart_data)
+
+    def lord_of_house(h):
+        for p in PLANETS[:7]:
+            if h in lordship.get(p, []):
+                return p
+        return None
+
+    # Dainya: 6/8/12 lord exchanges with a non-dusthana lord.
+    dusthana = {5, 7, 11}
+    other_houses = set(range(12)) - dusthana
+    for dh in dusthana:
+        dp = lord_of_house(dh)
+        if not dp:
+            continue
+        dp_sign = positions.get(dp, {}).get('sign_index', -1)
+        for oh in other_houses:
+            op = lord_of_house(oh)
+            if not op or op == dp:
+                continue
+            op_sign = positions.get(op, {}).get('sign_index', -1)
+            if dp_sign == (lagna + oh) % 12 and op_sign == (lagna + dh) % 12:
+                yogas.append({
+                    'name': 'दैन्य योग',
+                    'name_en': 'Dainya Parivartana Yoga',
+                    'description': f'{dh+1}वें त्रिकेश {dp} और {oh+1}वें भावेश {op} का राशि परिवर्तन',
+                    'effect': 'संघर्ष, उतार-चढ़ाव और विपरीत परिस्थितियों से सीख',
+                    'strength': 'अशुभ',
+                    'planets': [dp, op],
+                    'is_forming': True
+                })
+
+    # Khala: 3rd lord exchanges with another non-trik/dusthana auspicious lord.
+    third = lord_of_house(2)
+    favorable = {0, 1, 3, 4, 6, 8, 9, 10}
+    if third:
+        third_sign = positions.get(third, {}).get('sign_index', -1)
+        for oh in favorable:
+            op = lord_of_house(oh)
+            if not op or op == third:
+                continue
+            op_sign = positions.get(op, {}).get('sign_index', -1)
+            if third_sign == (lagna + oh) % 12 and op_sign == (lagna + 2) % 12:
+                yogas.append({
+                    'name': 'खल योग',
+                    'name_en': 'Khala Parivartana Yoga',
+                    'description': f'3रे भावेश {third} और {oh+1}वें भावेश {op} का राशि परिवर्तन',
+                    'effect': 'अति-उत्साह, अस्थिरता और सफलता-असफलता का चक्र',
+                    'strength': 'मिश्रित',
+                    'planets': [third, op],
+                    'is_forming': True
+                })
+    return yogas
+
+
+# ============================================================
+# CATEGORY 12: TECHNICAL / RESEARCH + CHART-SPECIFIC YOGAS
+# ============================================================
+
+
+def detect_lakshmi_yoga(chart_data: Dict) -> List[Dict]:
+    """
+    Audited Lakshmi Yoga:
+    - strong Lagna lord
+    - 9th lord in Kendra/Trikona
+    - 9th lord in own or exaltation sign
+    Venus-Mars conjunction alone is never sufficient.
+    """
+    yogas = []
+    try:
+        lagna = chart_data['lagna_sign']
+        positions = chart_data.get('planet_positions', {})
+        lordship = get_planet_lordship(chart_data)
+
+        def house_of(planet):
+            s = positions.get(planet, {}).get('sign_index', -1)
+            return get_house_from_lagna(s, lagna) if s >= 0 else -1
+
+        lagna_lord = next((p for p in PLANETS[:7] if 0 in lordship.get(p, [])), None)
+        ninth_lord = next((p for p in PLANETS[:7] if 8 in lordship.get(p, [])), None)
+
+        if not lagna_lord or not ninth_lord:
+            return yogas
+
+        lagna_pos = positions.get(lagna_lord, {})
+        ninth_pos = positions.get(ninth_lord, {})
+        ninth_house = house_of(ninth_lord)
+
+        own_sign = ninth_pos.get('sign_index', -1) in lordship.get(ninth_lord, [])
+        exalted = bool(ninth_pos.get('is_exalted', False) or ninth_pos.get('exalted', False))
+
+        # Prefer existing strength helper when available.
+        try:
+            lagna_strong = bool(is_strong_planet(lagna_lord, chart_data))
+        except Exception:
+            lagna_strong = bool(
+                lagna_pos.get('is_exalted', False)
+                or lagna_pos.get('exalted', False)
+                or lagna_pos.get('is_own_sign', False)
+                or lagna_pos.get('own_sign', False)
+            )
+
+        if (
+            lagna_strong
+            and ninth_house in (KENDRAS | TRIKONAS)
+            and (own_sign or exalted)
+        ):
+            yogas.append({
+                'name': 'लक्ष्मी योग',
+                'name_en': 'Lakshmi Yoga',
+                'description': 'बलवान लग्नेश तथा केंद्र/त्रिकोण में स्वराशि या उच्चस्थ नवमेश',
+                'effect': 'समृद्धि, भाग्य, प्रतिष्ठा और संसाधनों की वृद्धि',
+                'strength': 'उच्च',
+                'planets': [lagna_lord, ninth_lord],
+                'is_forming': True
+            })
+    except Exception:
+        pass
+    return yogas
+
+def detect_additional_chart_yogas(chart_data: Dict) -> List[Dict]:
+    """Detect requested additional/chart-specific yoga patterns."""
+    yogas = []
+    lagna = chart_data['lagna_sign']
+    positions = chart_data.get('planet_positions', {})
+    lordship = get_planet_lordship(chart_data)
+
+    def house_of(planet):
+        s = positions.get(planet, {}).get('sign_index', -1)
+        return get_house_from_lagna(s, lagna) if s >= 0 else -1
+    # Budhaditya is already emitted by detect_special_yogas().
+    # Do not emit it again here.
+
+    # Technical / Innovation pattern requested from source:
+    # Rahu in 5th with Lagna lord and/or 9th lord (Bhagyesh).
+    fifth_lord = next((p for p in PLANETS[:7] if 4 in lordship.get(p, [])), None)
+    ninth_lord = next((p for p in PLANETS[:7] if 8 in lordship.get(p, [])), None)
+    lagna_lord = next((p for p in PLANETS[:7] if 0 in lordship.get(p, [])), None)
+    rahu_house = house_of('Rahu')
+    rahu_sign = positions.get('Rahu', {}).get('sign_index', -1)
+
+    if rahu_house == 4 and rahu_sign >= 0:
+        associated = [p for p in [lagna_lord, ninth_lord, 'Mercury']
+                      if p and house_of(p) == 4]
+        if associated:
+            yogas.append({
+                'name': 'तकनीकी एवं शोध योग',
+                'name_en': 'Technical & Innovation / Research Yoga',
+                'description': f'5वें भाव में राहु के साथ: {", ".join(associated)}',
+                'effect': 'IT, AI, Software, Data Analytics, आधुनिक तकनीक और शोध की ओर विशेष झुकाव',
+                'strength': 'उच्च',
+                'planets': ['Rahu'] + associated,
+                'is_forming': True
+            })
+
+    # Kemadruma Bhanga: first verify Kemadruma-like emptiness,
+    # then check common cancellation evidence from the supplied rule.
+    moon_sign = positions.get('Moon', {}).get('sign_index', -1)
+    if moon_sign >= 0:
+        second = (moon_sign + 1) % 12
+        twelfth = (moon_sign - 1) % 12
+        side_planets = []
+        for p in PLANETS[:7]:
+            if p == 'Moon':
+                continue
+            ps = positions.get(p, {}).get('sign_index', -1)
+            if ps in (second, twelfth):
+                side_planets.append(p)
+
+        benefics = ['Jupiter', 'Venus', 'Mercury']
+        benefic_kendra_from_moon = []
+        for p in benefics:
+            ps = positions.get(p, {}).get('sign_index', -1)
+            if ps >= 0 and get_house_from_lagna(ps, moon_sign) in KENDRAS:
+                benefic_kendra_from_moon.append(p)
+
+        # Common practical cancellation evidence: benefic in Kendra from Moon
+        # or Moon itself in Kendra from Lagna.
+        moon_house = house_of('Moon')
+        if not side_planets and (benefic_kendra_from_moon or moon_house in KENDRAS):
+            reasons = []
+            if benefic_kendra_from_moon:
+                reasons.append('चंद्र से केंद्र में शुभ ग्रह')
+            if moon_house in KENDRAS:
+                reasons.append('चंद्रमा लग्न से केंद्र में')
+            yogas.append({
+                'name': 'केमद्रुम भंग',
+                'name_en': 'Kemadruma Bhanga',
+                'description': 'केमद्रुम की मूल स्थिति के साथ भंगकारी शुभ प्रभाव: ' + '; '.join(reasons),
+                'effect': 'मानसिक स्थिरता, अंतर्दृष्टि और अकेलेपन/अस्थिरता में कमी',
+                'strength': 'उच्च',
+                'planets': ['Moon'] + benefic_kendra_from_moon,
+                'is_forming': True
+            })
+
+    # 5th-house affliction requested in source: Sun + Rahu in 5th.
+    if house_of('Sun') == 4 and house_of('Rahu') == 4:
+        yogas.append({
+            'name': 'पंचम भाव बाधक प्रभाव',
+            'name_en': '5th House Affliction / Mild Obstruction',
+            'description': '5वें भाव में सूर्य-राहु युति',
+            'effect': 'शिक्षा, निर्णय और रचनात्मक कार्यों में कभी-कभी overthinking या distraction',
+            'strength': 'मध्यम',
+            'planets': ['Sun', 'Rahu'],
+            'is_forming': True
+        })
+
+    return yogas
+
+
+# ============================================================
+# CATEGORY 13: MARAKA ANALYSIS
+# ============================================================
+
+def detect_maraka_analysis(chart_data: Dict) -> List[Dict]:
+    """Analyze 2nd/7th lord and occupants as requested."""
+    yogas = []
+    lagna = chart_data['lagna_sign']
+    positions = chart_data.get('planet_positions', {})
+    lordship = get_planet_lordship(chart_data)
+
+    maraka_houses = [1, 6]  # zero-based: 2nd and 7th
+    trik = set(TRIK_HOUSES)
+    trikonas = set(TRIKONAS)
+    kendras = set(KENDRAS)
+
+    def house_of(p):
+        s = positions.get(p, {}).get('sign_index', -1)
+        return get_house_from_lagna(s, lagna) if s >= 0 else -1
+
+    maraka_lords = []
+    for p in PLANETS[:7]:
+        if any(h in lordship.get(p, []) for h in maraka_houses):
+            maraka_lords.append(p)
+
+    occupants = []
+    for p in PLANETS:
+        h = house_of(p)
+        if h in maraka_houses:
+            occupants.append(p)
+
+    # One structured entry is easier for the frontend than one card per planet.
+    if maraka_lords or occupants:
+        details = []
+        for p in dict.fromkeys(maraka_lords + occupants):
+            h = house_of(p)
+            sign = positions.get(p, {}).get('sign_index', -1)
+            state = []
+            if sign == EXALTATION.get(p):
+                state.append('उच्च')
+            if sign == DEBILITATION.get(p):
+                state.append('नीच')
+            if sign in OWN_SIGNS.get(p, []):
+                state.append('स्वराशि')
+            if h in trikonas:
+                state.append('त्रिकोण')
+            elif h in kendras:
+                state.append('केंद्र')
+            elif h in trik:
+                state.append('त्रिक')
+            if h == 6:
+                state.append('7वें मारक भाव')
+            if h == 1:
+                state.append('2रे मारक भाव')
+            details.append({
+                'planet': p,
+                'house': h + 1 if h >= 0 else None,
+                'role': 'मारकेश' if p in maraka_lords else 'मारक भाव स्थित',
+                'strength_factors': state
+            })
+
+        yogas.append({
+            'name': 'मारक विश्लेषण',
+            'name_en': 'Maraka Analysis',
+            'description': '2रे/7वें भावेश तथा इन भावों में स्थित ग्रहों का बल और स्थिति',
+            'effect': 'मारकत्व का मूल्यांकन दशा, बल, उच्च-नीच, केंद्र/त्रिकोण/त्रिक स्थिति के साथ किया जाना चाहिए',
+            'strength': 'विश्लेषण',
+            'planets': list(dict.fromkeys(maraka_lords + occupants)),
+            'details': details,
+            'is_forming': True
+        })
+    return yogas
+
 # ============================================================
 # MAIN YOGA DETECTION FUNCTION
 # ============================================================
+
+def _dedup_yoga_records(records):
+    seen = set()
+    out = []
+    for y in records or []:
+        if not isinstance(y, dict):
+            continue
+        sig = (y.get('id') or y.get('name_en') or y.get('name'), tuple(sorted(y.get('planets', []) or [])), tuple(sorted(y.get('houses', []) or [])))
+        if sig not in seen:
+            seen.add(sig)
+            out.append(y)
+    return out
+
+def audit_yoga_results(all_yogas):
+    for k, v in list(all_yogas.items()):
+        if isinstance(v, list):
+            all_yogas[k] = _dedup_yoga_records(v)
+    # Maraka analysis is not a Yoga category for total counting.
+    # Placement/supporting-factor records must remain outside Yoga counts.
+    return all_yogas
+
+
+# ============================================================
+# COMPLETE YOGA CHECKLIST
+# Every supported named yoga gets an explicit ✓ / ✗ status.
+# This is display/audit metadata and is excluded from Yoga counts.
+# ============================================================
+
+YOGA_CHECKLIST_CATALOG = [
+    ('Raj Yoga', 'raja_yogas', None),
+    ('Dharma-Karmadhipati Raja Yoga', 'raja_yogas', 'Dharma-Karmadhipati Raja Yoga'),
+    ('Kendra-Trikona Raja Yoga', 'raja_yogas', 'Kendra-Trikona Raja Yoga'),
+
+    ('Dhana Yoga', 'dhana_yogas', None),
+    ('Guru-Shukra Dhana Yoga', 'dhana_yogas', 'Guru-Shukra Dhana Yoga'),
+    ('Dhana Parivartana Yoga', 'dhana_yogas', 'Dhana Parivartan Yoga'),
+    ('Jupiter Dhana Yoga', 'dhana_yogas', 'Jupiter Dhana Yoga'),
+
+    ('Ruchaka Yoga', 'pancha_mahapurusha_yogas', 'Ruchaka Yoga'),
+    ('Bhadra Yoga', 'pancha_mahapurusha_yogas', 'Bhadra Yoga'),
+    ('Hamsa Yoga', 'pancha_mahapurusha_yogas', 'Hamsa Yoga'),
+    ('Malavya Yoga', 'pancha_mahapurusha_yogas', 'Malavya Yoga'),
+    ('Shasha Yoga', 'pancha_mahapurusha_yogas', 'Sasa Yoga'),
+
+    ('Gaja Kesari Yoga', 'chandra_yogas', 'Gaja Kesari Yoga'),
+    ('Sunapha Yoga', 'chandra_yogas', 'Sunafa Yoga'),
+    ('Anapha Yoga', 'chandra_yogas', 'Anafa Yoga'),
+    ('Durudhara Yoga', 'chandra_yogas', 'Durudhara Yoga'),
+    ('Kemadruma Yoga', 'chandra_yogas', 'Kemadruma Yoga'),
+
+    ('Veshi Yoga', 'surya_yogas', 'Veshi Yoga'),
+    ('Voshi Yoga', 'surya_yogas', 'Voshi Yoga'),
+    ('Ubhayachari Yoga', 'surya_yogas', 'Ubhayachari Yoga'),
+
+    ('Saraswati Yoga', 'saraswati_yogas', 'Saraswati Yoga'),
+    ('Maha Yoga', 'maha_yogas', 'Maha Yoga'),
+
+    ('Neecha Bhanga Raja Yoga', 'neecha_bhanga_raja_yoga', 'Neecha Bhanga Raja Yoga'),
+
+    ('Viparita Raja Yoga', 'viparita_raja_yogas', None),
+    ('Harsha Yoga', 'viparita_raja_yogas', 'Harsha Yoga'),
+    ('Sarala Yoga', 'viparita_raja_yogas', 'Sarala Yoga'),
+    ('Vimala Yoga', 'viparita_raja_yogas', 'Vimala Yoga'),
+
+    ('Arishta Yoga', 'arishta_yogas', None),
+    ('Moon-Rahu Grahan Yoga', 'arishta_yogas', 'Moon-Rahu Grahan Yoga'),
+    ('Moon-Ketu Grahan Yoga', 'arishta_yogas', 'Moon-Ketu Grahan Yoga'),
+
+    ('Dainya Yoga', 'dainya_khala_yogas', 'Dainya Parivartana Yoga'),
+    ('Khala Yoga', 'dainya_khala_yogas', 'Khala Parivartana Yoga'),
+
+    ('Budhaditya Yoga', 'special_yogas', 'Budhaditya Yoga'),
+    ('Pravrajya Yoga', 'special_yogas', 'Pravrajya Yoga'),
+    ('Nipuna Yoga', 'special_yogas', 'Nipuna Yoga'),
+    ('Kalanidhi Yoga', 'special_yogas', 'Kalanidhi Yoga'),
+
+    ('Technical & Innovation / Research Yoga', 'additional_yogas', 'Technical & Innovation / Research Yoga'),
+    ('Kemadruma Bhanga', 'additional_yogas', 'Kemadruma Bhanga'),
+    ('5th House Affliction / Mild Obstruction', 'additional_yogas', '5th House Affliction / Mild Obstruction'),
+
+    ('Lakshmi Yoga', 'lakshmi_yogas', 'Lakshmi Yoga'),
+
+    # Source/project-specific items retained for audit visibility,
+    # but explicitly marked as supporting/non-classical rather than
+    # silently promoted to a classical named Yoga.
+    ('Malefics in Kendra', 'additional_yogas', 'Malefics in Kendra'),
+]
+
+def build_yoga_checklist(all_yogas):
+    """
+    Return every supported Yoga with explicit check/cross status.
+
+    ✓ = the corresponding detector found the Yoga.
+    ✗ = the detector did not find it.
+    No item is inferred merely from a similar/alias combination.
+    """
+    checklist = []
+
+    for label, category, expected_name in YOGA_CHECKLIST_CATALOG:
+        records = all_yogas.get(category, []) or []
+
+        if expected_name is None:
+            formed = len(records) > 0
+        else:
+            formed = any(
+                isinstance(y, dict)
+                and (
+                    y.get('name_en') == expected_name
+                    or y.get('name') == expected_name
+                )
+                for y in records
+            )
+
+        checklist.append({
+            'name': label,
+            'name_en': label,
+            'status': '✓' if formed else '✗',
+            'is_forming': formed,
+            'category': category,
+            'classical_status': 'named_yoga',
+        })
+
+    return checklist
 
 def detect_all_yogas(chart_data: Dict) -> Dict[str, List[Dict]]:
     """
@@ -805,20 +1322,43 @@ def detect_all_yogas(chart_data: Dict) -> Dict[str, List[Dict]]:
         'neecha_bhanga_raja_yoga': detect_neecha_bhanga_raja_yoga(chart_data),
         'viparita_raja_yogas': detect_viparita_raja_yogas(chart_data),
         'arishta_yogas': detect_arishta_yogas(chart_data),
-        'special_yogas': detect_special_yogas(chart_data)
+        'special_yogas': detect_special_yogas(chart_data),
+        'surya_yogas': detect_surya_yogas(chart_data),
+        'saraswati_yogas': detect_saraswati_yoga(chart_data),
+        'maha_yogas': detect_maha_yoga(chart_data),
+        'dainya_khala_yogas': detect_dainya_khala_yogas(chart_data),
+        'additional_yogas': detect_additional_chart_yogas(chart_data),
+        'lakshmi_yogas': detect_lakshmi_yoga(chart_data),
+        'maraka_analysis': detect_maraka_analysis(chart_data)
     }
     
-    # Calculate summary statistics
-    total_yogas = sum(len(yogas) for yogas in all_yogas.values())
-    auspicious_count = sum(len(yogas) for key, yogas in all_yogas.items() 
-                          if key != 'arishta_yogas')
-    inauspicious_count = len(all_yogas['arishta_yogas'])
-    
+    all_yogas = audit_yoga_results(all_yogas)
+
+    # Complete ✓ / ✗ audit list. This is NOT counted as Yoga records.
+    all_yogas['yoga_checklist'] = build_yoga_checklist(all_yogas)
+
+    # Calculate summary statistics.
+    # Maraka Analysis is an assessment block, not a Yoga.
+    summary_excluded = {'maraka_analysis', 'yoga_checklist'}
+    yoga_categories = {
+        key: value for key, value in all_yogas.items()
+        if key not in summary_excluded
+    }
+
+    total_yogas = sum(len(yogas) for yogas in yoga_categories.values())
+
+    # Explicitly adverse groups.
+    inauspicious_count = (
+        len(all_yogas.get('arishta_yogas', [])) +
+        len(all_yogas.get('dainya_khala_yogas', []))
+    )
+    auspicious_count = max(total_yogas - inauspicious_count, 0)
+
     all_yogas['summary'] = {
         'total_yogas': total_yogas,
         'auspicious_yogas': auspicious_count,
         'inauspicious_yogas': inauspicious_count,
-        'categories': len(all_yogas) - 1  # Exclude summary itself
+        'categories': len(yoga_categories)
     }
-    
+
     return all_yogas
