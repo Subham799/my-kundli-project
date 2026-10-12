@@ -1,0 +1,307 @@
+"""
+api.py — KundaliMaker Flask API (Medical Analysis Route)
+=========================================================
+Add this block to your existing api.py.
+
+This route:
+    1. Parses the birth data payload.
+    2. Calls existing KundaliMaker calculators (mocked here; replace with real calls).
+    3. Invokes generate_medical_report() from medical_engine.py.
+    4. Returns the structured JSON response.
+
+Integration note:
+    Replace all `_mock_*` functions below with your actual
+    calculate_astrology(), calculate_divisional_chart(), compute_kp_significators(),
+    get_dasha_periods(), and get_current_transits() functions.
+"""
+
+from flask import Flask, request, jsonify, abort
+from datetime import datetime
+import traceback
+
+# ── Medical Engine ─────────────────────────────────────────────────────────────
+from medical_engine import generate_medical_report
+
+app = Flask(__name__)   # Remove this line if api.py already has an app instance.
+
+
+# ==============================================================================
+# MOCK CALCULATOR STUBS (Replace with real KundaliMaker functions)
+# ==============================================================================
+
+def _mock_calculate_d_charts(dob: str, tob: str, lat: float, lon: float, tz: float) -> dict:
+    """
+    STUB: Replace with your actual calculate_divisional_chart() call.
+
+    Expected return format:
+    {
+        "D1": { <planet>: { "house": int, "degree_absolute": float, ... }, ... },
+        "D6": { ... },
+        "D30": { ... },
+        "D30_benefic_support": bool,
+    }
+    """
+    # In production → return calculate_divisional_chart(dob, tob, lat, lon, tz, charts=["D1","D6","D30"])
+    raise NotImplementedError(
+        "Replace _mock_calculate_d_charts with your actual divisional chart calculator."
+    )
+
+
+def _mock_compute_kp_data(dob: str, tob: str, lat: float, lon: float, tz: float) -> dict:
+    """
+    STUB: Replace with your actual compute_kp_significators() call.
+
+    Expected return format:
+    {
+        "house_csls": {
+            "1": {"sub_lord": str},
+            "6": {"sub_lord": str},
+            "8": {"sub_lord": str},
+            "12": {"sub_lord": str},
+            ...
+        },
+        "planet_significators": {
+            <planet>: {"signified_houses": [int, ...]},
+            ...
+        }
+    }
+    """
+    raise NotImplementedError(
+        "Replace _mock_compute_kp_data with your actual KP significator function."
+    )
+
+
+def _mock_get_dasha_data(dob: str, tob: str) -> dict:
+    """
+    STUB: Replace with your actual get_dasha_periods() / get_current_dasha() call.
+
+    Expected return format:
+    {
+        "MD": str,   # Mahadasha lord name, e.g. "Saturn"
+        "AD": str,   # Antardasha lord name
+        "PD": str,   # Pratyantar dasha lord name
+    }
+    """
+    raise NotImplementedError(
+        "Replace _mock_get_dasha_data with your actual dasha calculator."
+    )
+
+
+def _mock_get_transit_data(lat: float, lon: float, tz: float) -> dict:
+    """
+    STUB: Replace with your actual get_current_transits() call.
+
+    Expected return format:
+    {
+        <planet>: {
+            "degree": float,              # 0–360 absolute degree
+            "nakshatra_lord": str,        # Lord of nakshatra the planet is in
+            "transit_house": int,         # Which natal house the planet is transiting
+        },
+        ...
+    }
+    """
+    raise NotImplementedError(
+        "Replace _mock_get_transit_data with your actual transit calculator."
+    )
+
+
+# ==============================================================================
+# REQUEST VALIDATION HELPER
+# ==============================================================================
+
+def _validate_birth_payload(data: dict) -> tuple[bool, str]:
+    """
+    Validate the incoming birth data payload.
+
+    Args:
+        data: Parsed JSON request body.
+
+    Returns:
+        (is_valid: bool, error_message: str)
+    """
+    required_fields = ["dob", "tob", "lat", "lon", "timezone"]
+
+    for field in required_fields:
+        if field not in data:
+            return False, f"Missing required field: '{field}'"
+
+    # Validate date format
+    try:
+        datetime.strptime(data["dob"], "%Y-%m-%d")
+    except ValueError:
+        return False, "Invalid 'dob' format. Expected: YYYY-MM-DD"
+
+    # Validate time format
+    try:
+        datetime.strptime(data["tob"], "%H:%M")
+    except ValueError:
+        return False, "Invalid 'tob' format. Expected: HH:MM (24-hour)"
+
+    # Validate numeric ranges
+    try:
+        lat = float(data["lat"])
+        lon = float(data["lon"])
+        tz  = float(data["timezone"])
+    except (TypeError, ValueError):
+        return False, "Fields 'lat', 'lon', 'timezone' must be numeric."
+
+    if not (-90 <= lat <= 90):
+        return False, f"Invalid latitude: {lat}. Must be between -90 and 90."
+    if not (-180 <= lon <= 180):
+        return False, f"Invalid longitude: {lon}. Must be between -180 and 180."
+    if not (-12 <= tz <= 14):
+        return False, f"Invalid timezone: {tz}. Must be between -12 and +14."
+
+    return True, ""
+
+
+# ==============================================================================
+# MEDICAL ANALYSIS ENDPOINT
+# ==============================================================================
+
+@app.route("/api/medical-analysis", methods=["POST"])
+def medical_analysis():
+    """
+    POST /api/medical-analysis
+
+    Accepts birth data and returns a full multi-layer medical astrology report.
+
+    Request Body (JSON):
+    --------------------
+    {
+        "dob":      "1990-01-01",    # Date of birth (YYYY-MM-DD)
+        "tob":      "10:30",         # Time of birth (HH:MM, 24-hour)
+        "lat":      28.61,           # Latitude (decimal degrees)
+        "lon":      77.20,           # Longitude (decimal degrees)
+        "timezone": 5.5              # UTC offset (e.g., 5.5 for IST)
+    }
+
+    Response Body (JSON):
+    ----------------------
+    {
+        "success": true,
+        "report": {
+            "report_metadata": { ... },
+            "overall_summary": { ... },
+            "top_risk_systems": [ ... ],
+            "all_systems": [ ... ],
+            "global_protection_factors": [ ... ],
+            "dasha_context": { ... },
+            "legal_disclaimer": "..."
+        }
+    }
+
+    Error Responses:
+    ----------------
+    400 → Validation error (missing/invalid fields)
+    500 → Internal computation error
+    """
+
+    # ── Step 1: Parse & Validate Request ──────────────────────────────────────
+    if not request.is_json:
+        return jsonify({
+            "success": False,
+            "error": "Content-Type must be application/json"
+        }), 400
+
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({
+            "success": False,
+            "error": "Invalid or empty JSON body"
+        }), 400
+
+    is_valid, validation_error = _validate_birth_payload(data)
+    if not is_valid:
+        return jsonify({
+            "success": False,
+            "error": validation_error
+        }), 400
+
+    # ── Step 2: Extract Birth Data ─────────────────────────────────────────────
+    dob = str(data["dob"])          # "1990-01-01"
+    tob = str(data["tob"])          # "10:30"
+    lat = float(data["lat"])        # 28.61
+    lon = float(data["lon"])        # 77.20
+    tz  = float(data["timezone"])   # 5.5
+
+    # ── Step 3: Run Astrological Calculators ───────────────────────────────────
+    try:
+        # ① D1, D6, D30 chart data
+        # TODO: Replace _mock_calculate_d_charts with your real function.
+        d_chart_data = _mock_calculate_d_charts(dob, tob, lat, lon, tz)
+
+        # ② KP significators + CSLs
+        # TODO: Replace _mock_compute_kp_data with your real function.
+        kp_data = _mock_compute_kp_data(dob, tob, lat, lon, tz)
+
+        # ③ Current dasha periods
+        # TODO: Replace _mock_get_dasha_data with your real function.
+        dasha_data = _mock_get_dasha_data(dob, tob)
+
+        # ④ Current planetary transits
+        # TODO: Replace _mock_get_transit_data with your real function.
+        transit_data = _mock_get_transit_data(lat, lon, tz)
+
+    except NotImplementedError as nie:
+        # Development-mode: return a clear message about missing real calculators
+        return jsonify({
+            "success": False,
+            "error":   "Calculator not yet integrated.",
+            "detail":  str(nie),
+            "hint":    (
+                "Replace all _mock_* functions in api.py with your real "
+                "KundaliMaker calculator functions."
+            )
+        }), 501   # 501 Not Implemented
+
+    except Exception as calc_error:
+        app.logger.error(
+            "Calculator error for dob=%s tob=%s lat=%s lon=%s tz=%s: %s",
+            dob, tob, lat, lon, tz, traceback.format_exc()
+        )
+        return jsonify({
+            "success": False,
+            "error":   "Astrology calculation failed.",
+            "detail":  str(calc_error),
+        }), 500
+
+    # ── Step 4: Generate Medical Report ───────────────────────────────────────
+    try:
+        report = generate_medical_report(
+            d_chart_data = d_chart_data,
+            kp_data      = kp_data,
+            dasha_data   = dasha_data,
+            transit_data = transit_data,
+        )
+    except Exception as engine_error:
+        app.logger.error(
+            "Medical engine error: %s", traceback.format_exc()
+        )
+        return jsonify({
+            "success": False,
+            "error":   "Medical analysis engine failed.",
+            "detail":  str(engine_error),
+        }), 500
+
+    # ── Step 5: Return JSON Response ──────────────────────────────────────────
+    return jsonify({
+        "success": True,
+        "birth_data": {
+            "dob": dob,
+            "tob": tob,
+            "lat": lat,
+            "lon": lon,
+            "timezone": tz,
+        },
+        "report": report,
+    }), 200
+
+
+# ==============================================================================
+# DEV SERVER ENTRY POINT (Remove in production)
+# ==============================================================================
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)

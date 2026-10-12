@@ -1,0 +1,8 @@
+ {activeTab === "drishti" && (
+                    <DrishtiGrid
+                      drishti={chartData.drishti}
+                      bhavDrishti={chartData.bhavDrishti || {}}
+                      advancedDrishti={chartData.chalit?._advancedDrishti || []}                      planets={chartData.planets}
+                      houses={chartData.houses || []}
+                    />
+                  )}

@@ -1,0 +1,493 @@
+/**
+ * VivahPanel.jsx — v2.0
+ * Sirf sutras — no scores. User khud decide kare.
+ * Strong color contrast throughout.
+ */
+import { CollapsibleSection, EmptyState, GlassCard } from "../shared/ui";
+import { HI, C } from "../shared/designTokens";
+import useKundliStore from "../../store/useKundliStore";
+
+// ── Design tokens for vivah panel ─────────────────────────
+const passColor  = "#22D3EE";   // cyan
+const warnColor  = "#FCD34D";   // yellow — visible on dark
+const failColor  = "#FB7185";   // rose
+const neutColor  = "#94A3B8";   // slate
+const infoColor  = "#C084FC";   // purple
+const goldColor  = "#F59E0B";   // amber
+
+// ── Atoms ─────────────────────────────────────────────────
+function Verdict({ text, color }) {
+  return (
+    <div style={{
+      display:"inline-block", padding:"5px 14px",
+      borderRadius:"20px", marginBottom:"10px",
+      background:`${color}18`, border:`1.5px solid ${color}55`,
+      fontSize:"0.82rem", fontWeight:700, color, ...HI,
+    }}>{text}</div>
+  );
+}
+
+function SutraRow({ text, icon = "•", color = "rgba(255,255,255,0.8)" }) {
+  return (
+    <div style={{
+      display:"flex", gap:"8px", alignItems:"flex-start",
+      padding:"7px 10px", borderRadius:"8px", marginBottom:"5px",
+      background:"rgba(255,255,255,0.05)",
+      border:"1px solid rgba(255,255,255,0.1)",
+    }}>
+      <span style={{ fontSize:"0.85rem", flexShrink:0, marginTop:"1px" }}>{icon}</span>
+      <span style={{ ...HI, fontSize:"0.79rem", color, lineHeight:1.5 }}>{text}</span>
+    </div>
+  );
+}
+
+function Section2Col({ title, left, right }) {
+  return (
+    <div>
+      <div style={{ ...HI, fontSize:"0.7rem", color:"rgba(255,255,255,0.4)", marginBottom:"8px" }}>{title}</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px" }}>
+        <div>{left}</div>
+        <div>{right}</div>
+      </div>
+    </div>
+  );
+}
+
+function PlanetChipRow({ label, planets, color }) {
+  if (!planets?.length) return null;
+  return (
+    <div style={{ display:"flex", gap:"6px", alignItems:"center", flexWrap:"wrap", marginBottom:"6px" }}>
+      <span style={{ fontSize:"0.7rem", color:"rgba(255,255,255,0.45)", ...HI, minWidth:"80px" }}>{label}:</span>
+      {planets.map((p,i) => (
+        <span key={i} style={{
+          padding:"2px 10px", borderRadius:"8px", fontSize:"0.75rem", fontWeight:700,
+          background:`${color}20`, border:`1px solid ${color}50`, color, ...HI,
+        }}>{p}</span>
+      ))}
+    </div>
+  );
+}
+
+function Divider({ color = "rgba(255,255,255,0.08)" }) {
+  return <div style={{ height:"1px", background:color, margin:"10px 0" }} />;
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════
+export default function VivahPanel() {
+  const chartData = useKundliStore(s => s.chartData);
+
+  if (!chartData)
+    return <EmptyState icon="💍" message="पहले कुंडली लोड करें" subtext="विवाह विश्लेषण के लिए जन्म कुंडली जरूरी है" />;
+
+  const vd = chartData?.enginesData?.vivah;
+  if (!vd?.computed)
+    return <EmptyState icon="⏳" message="विवाह डेटा लोड हो रहा है..." subtext="Phase 2 engines का इंतजार करें" />;
+
+  const { saptam, mangalik, vilamb, prem_vivah, vichchhed, swabhaav, avivahit, vivah_kaal, daampatya_sukh } = vd;
+
+  return (
+    <div className="p-3 space-y-3">
+
+      {/* Header */}
+      <div style={{ borderBottom:"1px solid rgba(255,255,255,0.08)", paddingBottom:"10px" }}>
+        <div style={{ ...HI, fontWeight:800, fontSize:"1.05rem", color:"#F472B6" }}>💍 विवाह विश्लेषण</div>
+        <div style={{ fontSize:"0.7rem", color:"rgba(255,255,255,0.45)", marginTop:"3px", ...HI }}>
+          सप्तम भाव · मांगलिक · प्रेम विवाह · विलंब · विच्छेद · जीवनसाथी · समय
+        </div>
+      </div>
+
+      {/* ─── 1. SAPTAM BHAV ─────────────────────────────── */}
+      <CollapsibleSection icon="💑" title="सप्तम भाव — विवाह का मूल" color={saptam?.color || warnColor} defaultOpen={true}>
+        <div style={{ padding:"4px 0 8px" }}>
+          <Verdict text={saptam?.verdict} color={saptam?.color || warnColor} />
+
+          {/* 7th lord */}
+          <SutraRow
+            icon="🏠"
+            text={`सप्तमेश: ${saptam?.h7_lord_hi} — ${saptam?.h7_lord_house}वें भाव में${saptam?.lord_in_trik ? " (त्रिक — अशुभ स्थिति)" : " (शुभ स्थिति)"}`}
+            color={saptam?.lord_in_trik ? failColor : passColor}
+          />
+
+          {/* SAV */}
+          <SutraRow
+            icon="🔢"
+            text={`7वें भाव सर्वाष्टकवर्ग: ${saptam?.h7_sav} बिंदु${saptam?.h7_sav <= 14 ? " — अत्यंत कमजोर" : saptam?.h7_sav <= 22 ? " — खतरे का क्षेत्र (14-22)" : saptam?.h7_sav >= 28 ? " — बलवान" : " — सामान्य"}`}
+            color={saptam?.h7_sav <= 22 ? failColor : saptam?.h7_sav >= 28 ? passColor : warnColor}
+          />
+
+          <Divider />
+
+          <PlanetChipRow label="🔴 पाप ग्रह (7वें में)" planets={saptam?.kroor_in_7} color={failColor} />
+          <PlanetChipRow label="✅ शुभ ग्रह (7वें में)" planets={saptam?.shubh_in_7} color={passColor} />
+          <PlanetChipRow label="🔴 पाप दृष्टि (7वें पर)" planets={saptam?.kroor_aspects} color={warnColor} />
+          <PlanetChipRow label="✅ शुभ दृष्टि (7वें पर)" planets={saptam?.shubh_aspects} color={passColor} />
+
+          <Divider />
+
+          <SutraRow
+            icon="💕"
+            text={`विवाह कारक (${saptam?.vivah_karak}): BAV ${saptam?.karak_bav} — ${saptam?.karak_strong ? "बलवान, विवाह होगा" : "कमजोर BAV, विवाह में देरी संभव"}`}
+            color={saptam?.karak_strong ? passColor : warnColor}
+          />
+        </div>
+      </CollapsibleSection>
+
+      {/* ─── 2. MANGALIK ──────────────────────────────────── */}
+      <CollapsibleSection icon="🔴" title="मांगलिक दोष" color={mangalik?.color || failColor} defaultOpen={true}>
+        <div style={{ padding:"4px 0 8px" }}>
+          <Verdict text={mangalik?.label} color={mangalik?.color || failColor} />
+
+          <SutraRow
+            icon="🪐"
+            text={`मंगल ${mangalik?.mars_house}वें भाव में | BAV: ${mangalik?.mars_bav}/8`}
+            color={mangalik?.is_mangalik ? warnColor : passColor}
+          />
+
+          {mangalik?.is_mangalik && (
+            <SutraRow
+              icon={mangalik?.cancelled ? "✅" : "⚠️"}
+              text={mangalik?.cancelled
+                ? `दोष रद्द — ${mangalik?.cancel_reasons?.join(" | ")}`
+                : "दोष सक्रिय — जीवनसाथी भी मांगलिक होना चाहिए"}
+              color={mangalik?.cancelled ? passColor : failColor}
+            />
+          )}
+
+          <SutraRow
+            icon="📜"
+            text="नियम: मंगल 1/4/7/8/12 भाव में = मांगलिक। गुरु दृष्टि/स्वराशि/उच्च से रद्द होता है।"
+            color="rgba(255,255,255,0.55)"
+          />
+        </div>
+      </CollapsibleSection>
+
+      {/* ─── 3. VIVAH VILAMB ──────────────────────────────── */}
+      <CollapsibleSection icon="⏳" title="विवाह विलंब" color={vilamb?.delay_count > 0 ? warnColor : passColor} defaultOpen={vilamb?.delay_count > 0}>
+        <div style={{ padding:"4px 0 8px" }}>
+          <Verdict text={vilamb?.verdict} color={vilamb?.color || warnColor} />
+
+          {vilamb?.delay_factors?.length > 0 && (
+            <>
+              <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>⚠️ विलंब के कारण:</div>
+              {vilamb.delay_factors.map((f, i) => <SutraRow key={i} icon="⚠️" text={f} color={warnColor} />)}
+            </>
+          )}
+
+          {vilamb?.protect_factors?.length > 0 && (
+            <>
+              <Divider />
+              <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>✅ रक्षा कारक:</div>
+              {vilamb.protect_factors.map((f, i) => <SutraRow key={i} icon="✅" text={f} color={passColor} />)}
+            </>
+          )}
+
+          {vilamb?.upay?.length > 0 && (
+            <>
+              <Divider />
+              <div style={{ ...HI, fontSize:"0.72rem", color:goldColor, fontWeight:700, marginBottom:"6px" }}>🙏 उपाय:</div>
+              {vilamb.upay.map((u, i) => <SutraRow key={i} icon="🕯️" text={u} color={goldColor} />)}
+            </>
+          )}
+        </div>
+      </CollapsibleSection>
+
+      {/* ─── 4. PREM VIVAH ────────────────────────────────── */}
+      <CollapsibleSection icon="❤️" title="प्रेम विवाह योग" color={prem_vivah?.has_prem_vivah_yoga ? passColor : neutColor} defaultOpen={prem_vivah?.has_prem_vivah_yoga}>
+        <div style={{ padding:"4px 0 8px" }}>
+          <Verdict text={prem_vivah?.verdict} color={prem_vivah?.color || neutColor} />
+
+          {prem_vivah?.prem_yoga_factors?.length > 0 && (
+            <>
+              <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>✅ प्रेम विवाह योग:</div>
+              {prem_vivah.prem_yoga_factors.map((f, i) => <SutraRow key={i} icon="💕" text={f} color={passColor} />)}
+            </>
+          )}
+
+          {prem_vivah?.is_anterjatiya && prem_vivah?.anterjatiya_factors?.length > 0 && (
+            <>
+              <Divider />
+              <div style={{ ...HI, fontSize:"0.72rem", color:warnColor, fontWeight:700, marginBottom:"6px" }}>⚠️ अंतर्जातीय विवाह के संकेत:</div>
+              {prem_vivah.anterjatiya_factors.map((f, i) => <SutraRow key={i} icon="⚠️" text={f} color={warnColor} />)}
+            </>
+          )}
+
+          <Divider />
+          <SutraRow
+            icon={prem_vivah?.family_approval ? "✅" : "⚠️"}
+            text={prem_vivah?.family_note}
+            color={prem_vivah?.family_approval ? passColor : warnColor}
+          />
+        </div>
+      </CollapsibleSection>
+
+      {/* ─── 5. VIVAH VICHCHHED ───────────────────────────── */}
+      <CollapsibleSection icon="💔" title="विवाह विच्छेद / तलाक" color={vichchhed?.risk_level === "low" ? passColor : vichchhed?.risk_level === "high" ? failColor : warnColor} defaultOpen={vichchhed?.risk_level !== "low"}>
+        <div style={{ padding:"4px 0 8px" }}>
+          <Verdict text={vichchhed?.verdict} color={vichchhed?.color || warnColor} />
+
+          {vichchhed?.vichchhed_factors?.length > 0 && (
+            <>
+              <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>❌ जोखिम के कारण:</div>
+              {vichchhed.vichchhed_factors.map((f, i) => <SutraRow key={i} icon="❌" text={f} color={failColor} />)}
+            </>
+          )}
+
+          {vichchhed?.protection_factors?.length > 0 && (
+            <>
+              <Divider />
+              <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>🛡️ सुरक्षा कारक:</div>
+              {vichchhed.protection_factors.map((f, i) => <SutraRow key={i} icon="🛡️" text={f} color={passColor} />)}
+            </>
+          )}
+
+          {vichchhed?.upay?.length > 0 && (
+            <>
+              <Divider />
+              {vichchhed.upay.map((u, i) => <SutraRow key={i} icon="🙏" text={u} color={goldColor} />)}
+            </>
+          )}
+
+          {/* SAV reminder */}
+          <Divider />
+          <SutraRow icon="📜" text={`7वें भाव SAV: ${vichchhed?.h7_sav} — नियम: 14-22 = खतरे का क्षेत्र, <14 = अत्यंत कमजोर, ≥28 = बलवान`} color="rgba(255,255,255,0.55)" />
+        </div>
+      </CollapsibleSection>
+
+      {/* ─── 6. JEEVANASATHI SWABHAAV ─────────────────────── */}
+      <CollapsibleSection icon="👤" title="जीवनसाथी का स्वभाव" color={infoColor} defaultOpen={true}>
+        <div style={{ padding:"4px 0 8px" }}>
+          <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"8px" }}>
+            7वें भाव में बैठे ग्रहों और सप्तमेश की स्थिति से जीवनसाथी का स्वभाव:
+          </div>
+          {swabhaav?.descriptions?.map((d, i) => (
+            <div key={i} style={{
+              display:"flex", gap:"10px", alignItems:"flex-start",
+              padding:"10px 12px", borderRadius:"10px", marginBottom:"8px",
+              background:"rgba(192,132,252,0.08)", border:"1px solid rgba(192,132,252,0.25)",
+            }}>
+              <span style={{ fontSize:"1.3rem", flexShrink:0 }}>{d.icon}</span>
+              <div>
+                <div style={{ ...HI, fontSize:"0.82rem", fontWeight:700, color:infoColor }}>{d.planet}</div>
+                <div style={{ ...HI, fontSize:"0.76rem", color:"rgba(255,255,255,0.75)", marginTop:"3px", lineHeight:1.5 }}>{d.nature}</div>
+              </div>
+            </div>
+          ))}
+          {(!swabhaav?.descriptions || swabhaav.descriptions.length === 0) && (
+            <SutraRow icon="ℹ️" text="सप्तमेश की स्थिति से जीवनसाथी का स्वभाव जाना जाता है" color="rgba(255,255,255,0.55)" />
+          )}
+        </div>
+      </CollapsibleSection>
+
+      {/* ─── 7. VIVAH KAAL ────────────────────────────────── */}
+      <CollapsibleSection icon="📅" title="विवाह का संभावित समय" color={passColor} defaultOpen={true}>
+        <div style={{ padding:"4px 0 8px" }}>
+
+          {vivah_kaal?.current_note && (
+            <div style={{
+              padding:"8px 12px", borderRadius:"10px", marginBottom:"10px",
+              background:`${passColor}15`, border:`1.5px solid ${passColor}40`,
+              ...HI, fontSize:"0.82rem", fontWeight:700, color:passColor,
+            }}>
+              {vivah_kaal.current_note}
+            </div>
+          )}
+
+          <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"8px" }}>
+            🔑 इन दशाओं में विवाह की संभावना:
+          </div>
+          <div style={{ display:"flex", gap:"8px", flexWrap:"wrap", marginBottom:"12px" }}>
+            {vivah_kaal?.key_dashas?.map((p, i) => (
+              <div key={i} style={{
+                padding:"5px 14px", borderRadius:"10px",
+                background:`${passColor}18`, border:`1.5px solid ${passColor}45`,
+                fontSize:"0.8rem", fontWeight:700, color:passColor, ...HI,
+              }}>{p}</div>
+            ))}
+          </div>
+
+          {vivah_kaal?.timing_notes?.map((n, i) => (
+            <SutraRow key={i} icon="🕐" text={n} color="rgba(255,255,255,0.75)" />
+          ))}
+
+          <Divider />
+          <SutraRow icon="📜" text={vivah_kaal?.rule} color="rgba(255,255,255,0.5)" />
+        </div>
+      </CollapsibleSection>
+
+      {/* ─── 8. DAAMPATYA BHAV BREAKDOWN ─────────────────── */}
+      <CollapsibleSection icon="🏠" title="दांपत्य सुख — भाव विश्लेषण" color={goldColor} defaultOpen={false}>
+        <div style={{ padding:"4px 0 8px" }}>
+          <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"8px" }}>
+            नियम: 7वाँ (विवाह), 4वाँ (गृह शांति), 12वाँ (शैय्या), 2रा (परिवार) — सभी बलवान हों तो दांपत्य सुखी।
+          </div>
+          {daampatya_sukh?.breakdown?.map((b, i) => {
+            const col = b.sav >= 28 ? passColor : b.sav >= 22 ? warnColor : failColor;
+            return (
+              <div key={i} style={{
+                display:"flex", alignItems:"center", gap:"10px",
+                padding:"8px 12px", borderRadius:"10px", marginBottom:"6px",
+                background:"rgba(255,255,255,0.04)", border:`1px solid ${col}30`,
+              }}>
+                <div style={{ ...HI, fontSize:"0.8rem", color:"rgba(255,255,255,0.8)", flex:2 }}>{b.bhav}</div>
+                <div style={{
+                  padding:"3px 10px", borderRadius:"8px", minWidth:"50px", textAlign:"center",
+                  background:`${col}18`, border:`1px solid ${col}45`,
+                  fontSize:"0.82rem", fontWeight:800, color:col, fontFamily:"monospace",
+                }}>{b.sav}</div>
+                <div style={{ ...HI, fontSize:"0.7rem", color:"rgba(255,255,255,0.4)", width:"30px" }}>{b.weight}</div>
+                <div style={{
+                  fontSize:"0.72rem", color:col, ...HI, flex:1,
+                }}>
+                  {b.sav >= 28 ? "✅ बलवान" : b.sav >= 22 ? "🟡 सामान्य" : "⚠️ कमजोर"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CollapsibleSection>
+
+      {/* ─── 9. AVIVAHIT (only if risk exists) ───────────── */}
+      {avivahit?.risk !== "none" && (
+        <CollapsibleSection icon="⚠️" title="अविवाहित रहने के संकेत" color={avivahit?.color || warnColor} defaultOpen={false}>
+          <div style={{ padding:"4px 0 8px" }}>
+            <Verdict text={avivahit?.verdict} color={avivahit?.color || warnColor} />
+            {avivahit?.factors?.map((f, i) => <SutraRow key={i} icon="⚠️" text={f} color={warnColor} />)}
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* ─── 10. PREM SAMBANDH VS VIVAH ──────────────────── */}
+      <CollapsibleSection icon="🌹" title="प्रेम संबंध बनाम प्रेम विवाह" color={infoColor} defaultOpen={false}>
+        <div style={{ padding:"4px 0 8px" }}>
+          <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"8px" }}>
+            📜 प्रेम संबंध होना और प्रेम विवाह तक पहुँचना — दो अलग बातें हैं
+          </div>
+
+          {vd.prem_sambandh?.prem_type && (
+            <div style={{
+              padding:"8px 12px", borderRadius:"10px", marginBottom:"10px",
+              background:`${infoColor}15`, border:`1.5px solid ${infoColor}40`,
+              ...HI, fontSize:"0.85rem", fontWeight:700, color:infoColor,
+            }}>
+              {vd.prem_sambandh.prem_type}
+            </div>
+          )}
+
+          {vd.prem_sambandh?.love_strength?.length > 0 && (
+            <>
+              <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>💕 प्रेम के संकेत:</div>
+              {vd.prem_sambandh.love_strength.map((f,i) => <SutraRow key={i} icon="💕" text={f} color={infoColor} />)}
+            </>
+          )}
+
+          {vd.prem_sambandh?.vivah_strength?.length > 0 && (
+            <>
+              <Divider />
+              <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>💍 विवाह तक पहुँचने के संकेत:</div>
+              {vd.prem_sambandh.vivah_strength.map((f,i) => <SutraRow key={i} icon="✅" text={f} color={passColor} />)}
+            </>
+          )}
+
+          {vd.prem_sambandh?.breakup_risk?.length > 0 && (
+            <>
+              <Divider />
+              <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>⚠️ टूटने के संकेत:</div>
+              {vd.prem_sambandh.breakup_risk.map((f,i) => <SutraRow key={i} icon="⚠️" text={f} color={warnColor} />)}
+            </>
+          )}
+
+          <Divider />
+          <SutraRow icon="📜" text={vd.prem_sambandh?.note} color="rgba(255,255,255,0.5)" />
+        </div>
+      </CollapsibleSection>
+
+      {/* ─── 11. DWI VIVAH ────────────────────────────────── */}
+      <CollapsibleSection icon="💒" title="द्विविवाह योग" color={vd.dwi_vivah?.has_risk ? warnColor : neutColor} defaultOpen={false}>
+        <div style={{ padding:"4px 0 8px" }}>
+          <Verdict text={vd.dwi_vivah?.verdict} color={vd.dwi_vivah?.has_risk ? warnColor : passColor} />
+
+          {vd.dwi_vivah?.factors?.length > 0 && (
+            <>
+              <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>⚠️ द्विविवाह के संकेत:</div>
+              {vd.dwi_vivah.factors.map((f,i) => <SutraRow key={i} icon="⚠️" text={f} color={warnColor} />)}
+            </>
+          )}
+
+          {vd.dwi_vivah?.su_pati_yoga?.length > 0 && (
+            <>
+              <Divider />
+              <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>✅ सुभार्या/सुपति योग:</div>
+              {vd.dwi_vivah.su_pati_yoga.map((f,i) => <SutraRow key={i} icon="✅" text={f} color={passColor} />)}
+            </>
+          )}
+
+          <Divider />
+          <SutraRow icon="📜" text={vd.dwi_vivah?.note} color="rgba(255,255,255,0.5)" />
+        </div>
+      </CollapsibleSection>
+
+      {/* ─── 12. VAIDHAVYA (Stri kundli) ─────────────────── */}
+      {vd.vaidhavya?.applicable !== false && (
+        <CollapsibleSection icon="🕯️" title="वैधव्य योग (स्त्री कुंडली)" color={vd.vaidhavya?.has_risk ? failColor : passColor} defaultOpen={false}>
+          <div style={{ padding:"4px 0 8px" }}>
+            <Verdict text={vd.vaidhavya?.verdict} color={vd.vaidhavya?.has_risk ? failColor : passColor} />
+
+            {vd.vaidhavya?.factors?.length > 0 && (
+              <>
+                <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>⚠️ वैधव्य के संकेत:</div>
+                {vd.vaidhavya.factors.map((f,i) => <SutraRow key={i} icon="⚠️" text={f} color={failColor} />)}
+              </>
+            )}
+
+            {vd.vaidhavya?.protect?.length > 0 && (
+              <>
+                <Divider />
+                <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>🛡️ सुरक्षा कारक:</div>
+                {vd.vaidhavya.protect.map((f,i) => <SutraRow key={i} icon="🛡️" text={f} color={passColor} />)}
+              </>
+            )}
+
+            <Divider />
+            <SutraRow icon="📜" text={vd.vaidhavya?.note_8th} color="rgba(255,255,255,0.5)" />
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* ─── 13. VYABHICHAR (Charitra) ─────────────────────── */}
+      <CollapsibleSection icon="⚖️" title="चरित्र विश्लेषण" color={vd.vyabhichar?.has_risk ? failColor : neutColor} defaultOpen={false}>
+        <div style={{ padding:"4px 0 8px" }}>
+          <Verdict text={vd.vyabhichar?.verdict} color={vd.vyabhichar?.has_risk ? failColor : passColor} />
+
+          {vd.vyabhichar?.factors?.length > 0 && (
+            <>
+              <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>⚠️ चरित्र पर संकेत:</div>
+              {vd.vyabhichar.factors.map((f,i) => <SutraRow key={i} icon="⚠️" text={f} color={warnColor} />)}
+            </>
+          )}
+
+          {vd.vyabhichar?.protect_factors?.length > 0 && (
+            <>
+              <Divider />
+              <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.45)", marginBottom:"6px" }}>✅ नैतिकता के रक्षक:</div>
+              {vd.vyabhichar.protect_factors.map((f,i) => <SutraRow key={i} icon="✅" text={f} color={passColor} />)}
+            </>
+          )}
+
+          <Divider />
+          <SutraRow icon="📌" text={vd.vyabhichar?.important_note || "ये संकेत हैं — दशा + परिस्थिति + इच्छाशक्ति भी भूमिका निभाती है।"} color={goldColor} />
+        </div>
+      </CollapsibleSection>
+
+      {/* ─── NOTE ─────────────────────────────────────────── */}
+      <GlassCard className="p-3" style={{ background:"rgba(255,255,255,0.03)" }}>
+        <div style={{ ...HI, fontSize:"0.72rem", color:"rgba(255,255,255,0.4)", lineHeight:1.6 }}>
+          📌 <strong style={{ color:"rgba(255,255,255,0.6)" }}>नोट:</strong> ये सभी संकेत हैं — अंतिम निर्णय आप स्वयं लें।
+          दशा + गोचर का मिलान भी देखें। गुरु की दृष्टि अशुभ योगों को कम करती है।
+        </div>
+      </GlassCard>
+
+    </div>
+  );
+}
