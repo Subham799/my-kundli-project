@@ -2862,6 +2862,58 @@ def api_yearly():
         return jsonify({"error": str(e)}), 500
 
 
+# ── TRANSIT POSITIONS — Swiss Ephemeris for a selected calendar date ───────
+@app.route('/api/transit_positions', methods=['POST', 'OPTIONS'])
+def api_transit_positions():
+    """Return accurate Lahiri sidereal sign/longitude for all 9 grahas.
+    Body: {"date": "YYYY-MM-DD"}. The date is interpreted at 12:00 IST.
+    """
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    try:
+        body = request.get_json(force=True) or {}
+        date_str = str(body.get('date', '')).strip()
+        if not date_str:
+            return jsonify({"success": False, "error": "date is required (YYYY-MM-DD)"}), 400
+        try:
+            local_date = datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"success": False, "error": "date must use YYYY-MM-DD"}), 400
+
+        # Selected calendar date is evaluated at noon India Standard Time (UTC+5:30).
+        jd = swe.julday(local_date.year, local_date.month, local_date.day, 6.5)
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
+        planet_ids = {
+            "Su": swe.SUN, "Mo": swe.MOON, "Ma": swe.MARS,
+            "Me": swe.MERCURY, "Ju": swe.JUPITER, "Ve": swe.VENUS,
+            "Sa": swe.SATURN, "Ra": swe.TRUE_NODE,
+        }
+        positions = {}
+        for code, swe_id in planet_ids.items():
+            values, _retflags = swe.calc_ut(jd, swe_id, flags)
+            longitude = float(values[0]) % 360.0
+            positions[code] = {
+                "sign": int(longitude // 30) + 1,
+                "sign_index": int(longitude // 30),
+                "longitude": longitude,
+                "degree_in_sign": longitude % 30.0,
+                "retrograde": float(values[3]) < 0,
+            }
+        rahu_longitude = positions["Ra"]["longitude"]
+        ketu_longitude = (rahu_longitude + 180.0) % 360.0
+        positions["Ke"] = {
+            "sign": int(ketu_longitude // 30) + 1,
+            "sign_index": int(ketu_longitude // 30),
+            "longitude": ketu_longitude,
+            "degree_in_sign": ketu_longitude % 30.0,
+            "retrograde": True,
+        }
+        return jsonify({"success": True, "date": date_str, "ayanamsha": "Lahiri", "positions": positions})
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  गोचर खोज Route — GocharPanel.jsx → AdvancedTransitSearcher का backend
 # ══════════════════════════════════════════════════════════════════════════

@@ -1,9 +1,10 @@
 // GocharPanel.jsx — गोचर एवं दशा पूर्वानुमान
 // Auto-detects today's date → calculates current transits → predicts Shani/Guru/Rahu gochar effects
 // Falls back to asking user for date if needed
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import DailyGocharTab from './DailyGocharTab';   // ← NEW
+import InteractiveKundli from "../chart/InteractiveKundli";
 
 // ── Production fix: Vercel → Render bridge ──────────────────────────────────
 // Vercel पर VITE_API_URL = "https://your-app.onrender.com" set करो
@@ -82,18 +83,24 @@ function getTransitPositions(date) {
   // Ketu always opposite Rahu
   const ketuSign = ((rahuSign - 1 + 6) % 12) + 1;
 
-  // Mars: ~45 days per sign. Was in Mesha (1) at Mar 2024
-  const marsBase = 1; // Mesha at Mar 2024
-  const marsYearsFrom2024 = fracYear - 2024.25;
-  const marsSignOffset = Math.floor(marsYearsFrom2024 / (45/360.0));
-  const marsSign = ((marsBase - 1 + marsSignOffset) % 12) + 1;
+  // Mars and the inner planets use simplified date-based sign estimates.
+  // For exact sidereal positions, connect this panel to the app's Swiss Ephemeris engine.
+  const daysFrom = (epoch) => Math.floor((d - new Date(`${epoch}T12:00:00`)) / 86400000);
+  const cycleSign = (epoch, daysPerSign, baseSign = 1) => {
+    const offset = Math.floor(daysFrom(epoch) / daysPerSign);
+    return ((baseSign - 1 + offset) % 12 + 12) % 12 + 1;
+  };
+  const marsSign = cycleSign('2024-03-21', 45, 1);
+  const sunSign = cycleSign('2024-03-20', 30.436, 1);
+  const moonSign = cycleSign('2024-03-20', 2.295, 1);
+  const mercurySign = cycleSign('2024-03-20', 7.33, 1);
+  const venusSign = cycleSign('2024-03-20', 18.75, 1);
+  const planet = (sign) => ({ sign, signHi: SIGN_NAMES_HI[sign-1], signEn: SIGN_NAMES_EN[sign-1] });
 
   return {
-    Saturn: { sign: saturnSign, signHi: SIGN_NAMES_HI[saturnSign-1], signEn: SIGN_NAMES_EN[saturnSign-1] },
-    Jupiter: { sign: jupiterSign, signHi: SIGN_NAMES_HI[jupiterSign-1], signEn: SIGN_NAMES_EN[jupiterSign-1] },
-    Rahu: { sign: rahuSign, signHi: SIGN_NAMES_HI[rahuSign-1], signEn: SIGN_NAMES_EN[rahuSign-1] },
-    Ketu: { sign: ketuSign, signHi: SIGN_NAMES_HI[ketuSign-1], signEn: SIGN_NAMES_EN[ketuSign-1] },
-    Mars: { sign: marsSign, signHi: SIGN_NAMES_HI[marsSign-1], signEn: SIGN_NAMES_EN[marsSign-1] },
+    Sun: planet(sunSign), Moon: planet(moonSign), Mercury: planet(mercurySign),
+    Venus: planet(venusSign), Mars: planet(marsSign), Jupiter: planet(jupiterSign),
+    Saturn: planet(saturnSign), Rahu: planet(rahuSign), Ketu: planet(ketuSign),
   };
 }
 
@@ -1292,34 +1299,125 @@ const TABS=[
   {k:"jupiter",   l:"♃ गुरु",         color:C.yellow},
   {k:"rahu",      l:"☊ राहु-केतु",   color:C.purple},
   {k:"daily",     l:"📅 दैनिक",       color:C.blue},
+  {k:"chart",     l:"🔷 Transit Chart", color:C.amber},
   {k:"search",    l:"🔍 गोचर खोज",   color:C.teal},
   {k:"weak",      l:"⚠️ कमजोर गोचर", color:C.rose},
 ];
 
 export default function GocharPanel({ chartData }) {
   const [tab, setTab] = useState("combined");
-  const [useCustomDate, setUseCustomDate] = useState(false);
-  const [customDate, setCustomDate] = useState("");
+  // Keep the selected Gochar date when this panel unmounts while switching main tabs.
+  const [useCustomDate, setUseCustomDate] = useState(() => {
+    try { return window.sessionStorage.getItem("gochar-use-custom-date") === "true"; }
+    catch { return false; }
+  });
+  const [customDate, setCustomDate] = useState(() => {
+    try { return window.sessionStorage.getItem("gochar-custom-date") || ""; }
+    catch { return ""; }
+  });
   const [transitPos, setTransitPos] = useState(null);
+  const [transitRotation, setTransitRotation] = useState(1);
+  const transitChartRef = useRef(null);
+
+  const downloadTransitChart = () => {
+    const svg = transitChartRef.current?.querySelector("svg");
+    if (!svg) {
+      window.alert("Transit chart abhi ready nahi hai. Thodi der baad try karein.");
+      return;
+    }
+    const clone = svg.cloneNode(true);
+    const box = svg.viewBox?.baseVal;
+    const width = Math.max(600, Math.ceil(box?.width || svg.clientWidth || 440));
+    const height = Math.max(600, Math.ceil(box?.height || svg.clientHeight || 440));
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("width", String(width));
+    clone.setAttribute("height", String(height));
+    const svgText = new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = width * 2;
+      canvas.height = height * 2;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { URL.revokeObjectURL(url); return; }
+      ctx.scale(2, 2);
+      ctx.fillStyle = "#07111F";
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((png) => {
+        if (!png) return;
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(png);
+        link.download = `Transit_Chart_${customDate || new Date().toISOString().slice(0,10)}.png`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      }, "image/png");
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); window.alert("Chart download nahi ho paya. Dobara try karein."); };
+    img.src = url;
+  };
 
   // Pull saturn/punarjanma from enginesData (formerly from SaturnPanel)
   const saturnData    = chartData?.enginesData?.saturn_transit;
   const punarjanmaData = chartData?.enginesData?.punarjanma;
 
-  // Auto-detect today's date and compute transits
+  // Persist the chosen date across tabs/panel unmounts in the current browser session.
   useEffect(() => {
-    const today = new Date();
-    setTransitPos(getTransitPositions(today));
-  }, []);
+    try {
+      window.sessionStorage.setItem("gochar-use-custom-date", String(useCustomDate));
+      if (customDate) window.sessionStorage.setItem("gochar-custom-date", customDate);
+    } catch { /* sessionStorage may be unavailable; keep the panel usable */ }
+  }, [useCustomDate, customDate]);
 
-  // If user provides custom date
+  // Always request selected-date sidereal positions from the backend Swiss Ephemeris.
+  // The chosen date is kept in sessionStorage when this panel unmounts between tabs.
   useEffect(() => {
-    if(useCustomDate && customDate) {
-      const d = new Date(customDate);
-      if(!isNaN(d)) setTransitPos(getTransitPositions(d));
-    } else if(!useCustomDate) {
-      setTransitPos(getTransitPositions(new Date()));
-    }
+    let cancelled = false;
+    const now = new Date();
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const dateToCalculate = useCustomDate && customDate ? customDate : localToday;
+
+    const loadTransitPositions = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/transit_positions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: dateToCalculate }),
+        });
+        if (!response.ok) throw new Error(`Transit API returned ${response.status}`);
+        const payload = await response.json();
+        if (!payload?.success || !payload?.positions) throw new Error(payload?.error || "Invalid transit response");
+        const names = { Su:"Sun", Mo:"Moon", Ma:"Mars", Me:"Mercury", Ju:"Jupiter", Ve:"Venus", Sa:"Saturn", Ra:"Rahu", Ke:"Ketu" };
+        const converted = {};
+        Object.entries(names).forEach(([code, name]) => {
+          const p = payload.positions[code];
+          if (!p) return;
+          const sign = Number(p.sign);
+          if (!Number.isInteger(sign) || sign < 1 || sign > 12) return;
+          converted[name] = {
+            sign,
+            signHi: SIGN_NAMES_HI[sign - 1],
+            signEn: SIGN_NAMES_EN[sign - 1],
+            longitude: Number(p.longitude),
+            degree: Number(p.degree_in_sign),
+            retrograde: Boolean(p.retrograde),
+          };
+        });
+        if (Object.keys(converted).length !== 9) throw new Error("Backend did not return all 9 planets");
+        if (!cancelled) setTransitPos(converted);
+      } catch (error) {
+        console.error("Swiss Ephemeris transit positions failed:", error);
+        // Do not silently show approximate positions as if they were accurate.
+        if (!cancelled) setTransitPos(null);
+      }
+    };
+    loadTransitPositions();
+    return () => { cancelled = true; };
   }, [useCustomDate, customDate]);
 
   // Get Moon sign from natal chart (1-indexed)
@@ -1351,8 +1449,21 @@ export default function GocharPanel({ chartData }) {
     ? getTransitHouse(transitPos.Ketu.sign, moonSignNum) : null;
 
   // Today display
-  const today = useCustomDate && customDate ? new Date(customDate) : new Date();
+  const today = useCustomDate && customDate ? new Date(`${customDate}T12:00:00`) : new Date();
   const todayStr = today.toLocaleDateString("hi-IN", {day:"numeric",month:"long",year:"numeric"});
+
+  // Transit chart uses Swiss Ephemeris positions returned by the backend for the selected date.
+  // This is a sign-based chart (not a location/time-dependent transit Lagna chart).
+  const transitPlanetMap = { Sun:"Su", Moon:"Mo", Mars:"Ma", Mercury:"Me", Jupiter:"Ju", Venus:"Ve", Saturn:"Sa", Rahu:"Ra", Ketu:"Ke" };
+  const transitHouses = Array.from({length:12}, (_, i) => ({
+    num:i+1, sign_index:i, sign:SIGN_NAMES_EN[i], planets:[], category:"", av:0,
+  }));
+  if (transitPos) {
+    Object.entries(transitPlanetMap).forEach(([name, code]) => {
+      const sign = Number(transitPos?.[name]?.sign);
+      if (Number.isInteger(sign) && sign >= 1 && sign <= 12) transitHouses[sign-1].planets.push(code);
+    });
+  }
 
   return (
     <div className="pb-8">
@@ -1431,6 +1542,43 @@ export default function GocharPanel({ chartData }) {
             <JupiterTransitBlock transitHouse={jupiterH} moonSignHi={moonSignHi} transitPos={transitPos}/></Card>}
           {tab==="rahu"    && <Card color={C.purple}><SLabel color={C.purple}>☊ राहु-केतु गोचर फलादेश</SLabel>
             <RahuTransitBlock rahuHouse={rahuH} ketuHouse={ketuH} moonSignHi={moonSignHi} transitPos={transitPos}/></Card>}
+          {tab==="chart"   && <Card color={C.amber}>
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+              <div className="min-w-0 flex-1"><SLabel color={C.amber}>🔷 चुनी हुई तिथि का Transit Chart</SLabel></div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-400">Rotate</span>
+                <select value={transitRotation} onChange={e => setTransitRotation(Number(e.target.value))}
+                  className="bg-slate-950 border border-slate-700 rounded-md text-[10px] text-slate-300 px-2 py-1.5"
+                  title="Chart rotation चुनें">
+                  {Array.from({length:12}, (_,i) => i+1).map(n => <option key={n} value={n}>H{n}</option>)}
+                </select>
+                <button type="button" onClick={downloadTransitChart}
+                  className="flex-shrink-0 px-3 py-2 rounded-lg text-[11px] font-bold border"
+                  style={{background:"rgba(245,158,11,.12)",color:C.amber,borderColor:"rgba(245,158,11,.4)",...HI}}
+                  title="Transit chart को PNG में डाउनलोड करें">
+                  ⬇ Download PNG
+                </button>
+              </div>
+            </div>
+            <div className="text-sm text-slate-300 mb-3" style={HI}>
+              📅 {todayStr} · North Indian style · राशि-आधारित गोचर
+            </div>
+            {transitPos ? <>
+              <div ref={transitChartRef} className="max-w-xl mx-auto rounded-xl p-2" style={{background:"#07111F"}}>
+                <InteractiveKundli houses={transitHouses} showHeader={false} rotation={transitRotation} />
+              </div>
+              <div className="flex flex-wrap justify-center gap-2 mt-3" style={HI}>
+                {[["Su","सूर्य"],["Mo","चंद्र"],["Ma","मंगल"],["Me","बुध"],["Ju","गुरु"],["Ve","शुक्र"],["Sa","शनि"],["Ra","राहु"],["Ke","केतु"]].map(([code,label]) => {
+                  const planetName = {Su:"Sun",Mo:"Moon",Ma:"Mars",Me:"Mercury",Ju:"Jupiter",Ve:"Venus",Sa:"Saturn",Ra:"Rahu",Ke:"Ketu"}[code];
+                  const signHi = transitPos?.[planetName]?.signHi;
+                  return <span key={code} className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-200" style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.10)"}}>{code} · {label}: {signHi || "—"}</span>;
+                })}
+              </div>
+              <div className="mt-2 text-xs text-slate-400 leading-relaxed" style={HI}>
+                सभी 9 ग्रह दिखाए गए हैं। यह राशि-आधारित chart है; स्थान और समय से निकला Transit Lagna इसमें शामिल नहीं है।
+              </div>
+            </> : <div className="text-sm text-slate-400" style={HI}>तिथि के transit positions लोड हो रहे हैं…</div>}
+          </Card>}
           {tab==="daily"   && <DailyGocharTab data={chartData?.enginesData?.daily_prediction} />}
           {tab==="search"  && <AdvancedTransitSearcher />}
           {tab==="weak"    && <WeakGocharTab chartData={chartData} />}
