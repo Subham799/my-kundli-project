@@ -404,31 +404,38 @@ def _check_both_methods(lagna_deg: float, astro_static: dict, candidate_astro: O
     astro_temp["La"]["Degree"]      = lagna_deg
     astro_temp["La"]["SignDegree"]  = lagna_deg % 30
 
-    # D24 update is derived from the candidate Lagna degree.
-    d24_idx = _get_d24_idx_from_degree(lagna_deg)
-    astro_temp["La"].setdefault("Vargas", {})["D24"] = {"Idx": d24_idx, "Name": RASHI_NAMES[d24_idx]}
+    # Use the exact Swiss Ephemeris D24 placements when a full candidate chart
+    # is available. Derive D24 only for lightweight/fallback snapshots that do
+    # not already contain a D24 varga entry.
+    lagna_vargas = astro_temp["La"].setdefault("Vargas", {})
+    if not isinstance(lagna_vargas.get("D24"), dict) or "Idx" not in lagna_vargas["D24"]:
+        d24_idx = _get_d24_idx_from_degree(lagna_deg)
+        lagna_vargas["D24"] = {"Idx": d24_idx, "Name": RASHI_NAMES[d24_idx]}
 
-    # Lightweight candidate snapshots intentionally contain only degrees.
-    # Materialize the D24 index lazily so the D24 checker never needs a full
-    # calculate_astrology() result.
     for _p in ("Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa"):
         if _p in astro_temp:
             _pd = astro_temp[_p]
             _deg = float(_pd.get("Degree", 0.0))
             _pd.setdefault("SignDegree", _deg % 30.0)
-            _pd.setdefault("Vargas", {})["D24"] = {
-                "Idx": _get_d24_idx_from_degree(_deg),
-                "Name": RASHI_NAMES[_get_d24_idx_from_degree(_deg)],
-            }
+            _vargas = _pd.setdefault("Vargas", {})
+            if not isinstance(_vargas.get("D24"), dict) or "Idx" not in _vargas["D24"]:
+                _d24_idx = _get_d24_idx_from_degree(_deg)
+                _vargas["D24"] = {"Idx": _d24_idx, "Name": RASHI_NAMES[_d24_idx]}
 
     cil = compute_cil(astro_temp)
     d24 = compute_d24_matrukaraka(astro_temp)
 
+    # PASS flags come only from the two method engines. Never manufacture a
+    # shared PASS from UI/list membership.
+    cil_pass = bool(cil.get("computed") and cil.get("cil_connected"))
+    d24_pass = bool(d24.get("computed") and d24.get("d24_connected"))
+    both_pass = bool(cil_pass and d24_pass)
+
     return {
         "lagna_deg":   round(lagna_deg, 4),
-        "cil_pass":    cil.get("cil_connected", False),
-        "d24_pass":    d24.get("d24_connected", False),
-        "both_pass":   cil.get("cil_connected", False) and d24.get("d24_connected", False),
+        "cil_pass":    cil_pass,
+        "d24_pass":    d24_pass,
+        "both_pass":   both_pass,
         "cil_detail":  cil.get("connection_detail", ""),
         "d24_detail":  d24.get("connection_type", ""),
         "cil_ssl":     cil.get("lagna_ssl", ""),
@@ -452,6 +459,10 @@ def auto_rectify(astro: dict, search_range_minutes: int = 30, birth_datetime: Op
     - pass_windows: contiguous ranges for BOTH/CIL-only/D24-only/FAIL
     """
     base_lagna = astro["La"]["Degree"]
+    exact_candidates_complete = bool(candidate_charts) and all(
+        offset in candidate_charts and candidate_charts[offset] is not None
+        for offset in range(-search_range_minutes, search_range_minutes + 1)
+    )
 
     all_results     = []
     both_pass_times = []
@@ -467,12 +478,16 @@ def auto_rectify(astro: dict, search_range_minutes: int = 30, birth_datetime: Op
         else:
             new_lagna = _get_lagna_degree_at_offset(base_lagna, offset)
         result    = _check_both_methods(new_lagna, astro, candidate_astro=candidate_astro)
+        # Keep the combined result logically tied to both real method results.
+        result["cil_pass"] = bool(result.get("cil_pass"))
+        result["d24_pass"] = bool(result.get("d24_pass"))
+        result["both_pass"] = bool(result["cil_pass"] and result["d24_pass"])
         result["offset_minutes"] = offset
         result["candidate_time"] = candidate_dt.strftime("%H:%M") if candidate_dt else None
         result["candidate_time_12h"] = candidate_dt.strftime("%I:%M %p") if candidate_dt else None
         result["candidate_datetime"] = candidate_dt.isoformat(timespec="minutes") if candidate_dt else None
         if candidate_astro is not None:
-            result["calculation_mode"] = "exact"
+            result["calculation_mode"] = "exact_swiss_ephemeris_candidate"
         else:
             result["calculation_mode"] = "lagna_estimate"
 
@@ -521,9 +536,26 @@ def auto_rectify(astro: dict, search_range_minutes: int = 30, birth_datetime: Op
     for row in all_results:
         categorized[_category(row)].append(row)
 
+    # Exclusive buckets keep the 61-minute summary mutually exclusive.
+    # In addition, expose overlapping CIL/D24 pass windows so shared matches
+    # are visible in each method's own list as well as in BOTH PASS.
     condition_windows = {
         key: _group_ranges(rows) for key, rows in categorized.items()
     }
+
+    # Method-wise PASS windows are intentionally overlapping: if a candidate
+    # passes both methods, it must appear in BOTH the CIL PASS and D24 PASS
+    # lists as well as in the combined BOTH-PASS category.
+    cil_pass_times = [r for r in all_results if r.get("cil_pass")]
+    d24_pass_times = [r for r in all_results if r.get("d24_pass")]
+    cil_pass_windows = _group_ranges(cil_pass_times)
+    d24_pass_windows = _group_ranges(d24_pass_times)
+    condition_windows["cil_pass"] = _group_ranges(
+        [r for r in all_results if r.get("cil_pass")]
+    )
+    condition_windows["d24_pass"] = _group_ranges(
+        [r for r in all_results if r.get("d24_pass")]
+    )
 
     def _pick_stable(rows):
         if not rows:
@@ -616,12 +648,34 @@ def auto_rectify(astro: dict, search_range_minutes: int = 30, birth_datetime: Op
         ],
         "all_results":          all_results,
         "condition_windows":    condition_windows,
+        # These method-specific lists are real per-method Boolean results,
+        # not duplicated labels. Shared candidates are included in both.
+        "cil_pass_windows":     cil_pass_windows,
+        "d24_pass_windows":     d24_pass_windows,
+        "cil_pass_times": [
+            {"offset_minutes": r["offset_minutes"], "candidate_time": r.get("candidate_time"),
+             "candidate_time_12h": r.get("candidate_time_12h"), "lagna_deg": r.get("lagna_deg"),
+             "cil_pass": bool(r.get("cil_pass")), "d24_pass": bool(r.get("d24_pass")),
+             "both_pass": bool(r.get("both_pass"))}
+            for r in cil_pass_times
+        ],
+        "d24_pass_times": [
+            {"offset_minutes": r["offset_minutes"], "candidate_time": r.get("candidate_time"),
+             "candidate_time_12h": r.get("candidate_time_12h"), "lagna_deg": r.get("lagna_deg"),
+             "cil_pass": bool(r.get("cil_pass")), "d24_pass": bool(r.get("d24_pass")),
+             "both_pass": bool(r.get("both_pass"))}
+            for r in d24_pass_times
+        ],
         "total_checked":        len(all_results),
-        "calculation_mode":     "smart_lightweight" if candidate_charts else "lagna_estimate",
+        "calculation_mode":     "exact_swiss_ephemeris" if exact_candidates_complete else "lagna_estimate",
+        "exact_candidates_complete": exact_candidates_complete,
         "recommendation_mode":  "stable_window_then_nearest",
         "total_both_pass":     len(both_pass_times),
         "total_cil_only":      len(cil_only_times),
         "total_d24_only":      len(d24_only_times),
+        # Overlapping method totals: include the shared BOTH-PASS candidates.
+        "total_cil_pass":      sum(1 for r in all_results if bool(r.get("cil_pass"))),
+        "total_d24_pass":      sum(1 for r in all_results if bool(r.get("d24_pass"))),
         "search_range":        f"±{search_range_minutes} minutes",
     }
 

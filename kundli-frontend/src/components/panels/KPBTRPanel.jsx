@@ -314,7 +314,11 @@ function RectificationSection({ rect, timeAdjust }) {
   const hasBothPass = rect.total_both_pass > 0;
   const windows = rect.both_pass_windows || [];
   const allResults = rect.all_results || [];
-  const conditionWindows = rect.condition_windows || {};
+  const conditionWindows = {
+    ...(rect.condition_windows || {}),
+    cil_pass_windows: rect.cil_pass_windows || [],
+    d24_pass_windows: rect.d24_pass_windows || [],
+  };
 
   const statusFor = (row) => {
     if (row.both_pass) return { label: "CIL + D24", color: passColor, icon: "✅" };
@@ -387,15 +391,17 @@ function RectificationSection({ rect, timeAdjust }) {
           <div style={{ marginTop: "10px" }}>
             <StrengthBar value={rect.confidence} color={hasBothPass ? passColor : warnColor} />
             <div style={{ ...HI, fontSize: "0.72rem", color: "rgba(255,255,255,0.4)", marginTop: "4px" }}>
-              विश्वसनीयता: {rect.confidence}% · {rect.total_checked || allResults.length} candidate times · {rect.calculation_mode === "smart_lightweight" ? "Smart Swiss Ephemeris scan — full engine नहीं चला" : (rect.calculation_mode === "exact" ? "Exact calculation" : "Lagna estimate")}
+              विश्वसनीयता: {rect.confidence}% · {rect.total_checked || allResults.length} candidate times · {rect.calculation_mode === "exact_swiss_ephemeris" || rect.calculation_mode === "exact" ? "Swiss Ephemeris candidate charts — each minute recalculated" : (rect.calculation_mode === "smart_lightweight" ? "Smart Swiss Ephemeris scan — full engine नहीं चला" : "Lagna estimate — exact candidate charts unavailable")}
             </div>
           </div>
         </GlassCard>
 
         {/* Counts */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "7px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "7px" }}>
           {[
-            { label: "दोनों", value: rect.total_both_pass, color: passColor },
+            { label: "दोनों PASS", value: rect.total_both_pass, color: passColor },
+            { label: "CIL PASS (shared सहित)", value: rect.total_cil_pass ?? (rect.total_cil_only + rect.total_both_pass), color: infoColor },
+            { label: "D24 PASS (shared सहित)", value: rect.total_d24_pass ?? (rect.total_d24_only + rect.total_both_pass), color: warnColor },
             { label: "केवल CIL", value: rect.total_cil_only, color: infoColor },
             { label: "केवल D24", value: rect.total_d24_only, color: warnColor },
             { label: "दोनों FAIL", value: Math.max(0, (rect.total_checked || allResults.length) - rect.total_both_pass - rect.total_cil_only - rect.total_d24_only), color: failColor },
@@ -422,10 +428,23 @@ function RectificationSection({ rect, timeAdjust }) {
             </div>
             <div className="space-y-2">
               {renderWindowGroup("CIL + D24 दोनों PASS", "both_pass", passColor, "✅")}
+              {renderWindowGroup("CIL PASS — shared matches सहित", "cil_pass", infoColor, "🔗")}
+              {renderWindowGroup("D24 PASS — shared matches सहित", "d24_pass", warnColor, "🪐")}
               {renderWindowGroup("केवल CIL PASS", "cil_only", infoColor, "🔗")}
               {renderWindowGroup("केवल D24 PASS", "d24_only", warnColor, "🪐")}
               {renderWindowGroup("दोनों FAIL", "fail", failColor, "❌")}
             </div>
+          </div>
+        )}
+
+        {/* Method-wise PASS windows: shared BOTH-PASS candidates must appear in each method list */}
+        {(rect.cil_pass_windows || rect.d24_pass_windows) && (
+          <div className="space-y-2">
+            <div style={{ ...HI, fontSize: "0.75rem", color: "rgba(255,255,255,0.45)", marginBottom: "8px" }}>
+              🧪 अलग-अलग विधि के वास्तविक PASS परिणाम (shared matches दोनों में शामिल)
+            </div>
+            {renderWindowGroup(`CIL PASS — ${rect.total_cil_pass ?? rect.cil_pass_times?.length ?? 0} candidates`, "cil_pass", infoColor, "🔗")}
+            {renderWindowGroup(`D24 PASS — ${rect.total_d24_pass ?? rect.d24_pass_times?.length ?? 0} candidates`, "d24_pass", warnColor, "🪐")}
           </div>
         )}
 
