@@ -245,22 +245,22 @@ function WelcomeState() {
         <Moon size={28} className="text-amber-400" />
       </div>
       <div>
-        <div className="text-lg font-semibold text-slate-300 mb-2">Enter Birth Details</div>
+        <div className="text-lg font-semibold text-slate-300 mb-2">जन्म विवरण भरें</div>
         <p className="text-sm text-slate-600 max-w-xs leading-relaxed">
-          Fill in the form on the left for a complete Vedic astrology analysis.
+          सम्पूर्ण वैदिक ज्योतिष विश्लेषण के लिए बाईं ओर फ़ॉर्म भरें।
         </p>
       </div>
       <button
         onClick={loadDemo}
         className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 text-sm hover:bg-amber-500/15 transition-all"
       >
-        <Zap size={14} /> Load Demo Chart
+        <Zap size={14} /> डेमो कुंडली देखें
       </button>
       <Link
         to="/consultancy"
         className="px-4 py-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl hover:bg-amber-500/20 transition-all text-sm font-bold"
       >
-        Client Reviews 🌟
+        क्लाइंट्स के रिव्यू देखें 🌟
       </Link>
     </div>
   );
@@ -308,7 +308,7 @@ function buildPDFPage(pageNum, chartData) {
     }
     return Number.isNaN(dt.getTime()) ? null : dt;
   })();
-  const birthWeekdayPDF = birthDateForPDF ? ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][birthDateForPDF.getDay()] : "—";
+  const birthWeekdayPDF = birthDateForPDF ? ["रविवार","सोमवार","मंगलवार","बुधवार","गुरुवार","शुक्रवार","शनिवार"][birthDateForPDF.getDay()] : "—";
   const tob       = meta.time  || pd.inputData?.time || "—";
   const pob       = meta.city  || pd.inputData?.city || "—";
   const lagnaSign = meta.lagnaSign || "—";
@@ -317,12 +317,12 @@ function buildPDFPage(pageNum, chartData) {
   const lagnaDeg  = meta.lagnaRashiDegree ? meta.lagnaRashiDegree + "°" : "";
 
   const RASHI  = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
-  const PH     = {Su:"Sun",Mo:"Moon",Ma:"Mars",Me:"Mercury",Ju:"Jupiter",Ve:"Venus",Sa:"Saturn",Ra:"Rahu",Ke:"Ketu"};
+  const PH     = {Su:"सूर्य",Mo:"चंद्र",Ma:"मंगल",Me:"बुध",Ju:"गुरु",Ve:"शुक्र",Sa:"शनि",Ra:"राहु",Ke:"केतु"};
   const PS     = {Su:"☉",Mo:"☽",Ma:"♂",Me:"☿",Ju:"♃",Ve:"♀",Sa:"♄",Ra:"☊",Ke:"☋"};
   const DC     = {Uchcha:"#4ADE80",उच्च:"#4ADE80",Neecha:"#FB7185",नीच:"#FB7185",Swa:"#22D3EE",Swagraha:"#22D3EE",स्वराशि:"#22D3EE",Mitra:"#C084FC",मित्र:"#C084FC",Shatru:"#FB923C",शत्रु:"#FB923C",Sama:"#64748B",सम:"#64748B",Yogakaraka:"#F59E0B"};
   const DI     = {Uchcha:"⬆️",उच्च:"⬆️",Neecha:"⬇️",नीच:"⬇️",Swa:"🏠",Swagraha:"🏠",स्वराशि:"🏠",Mitra:"💜",मित्र:"💜",Shatru:"🔴",शत्रु:"🔴",Sama:"⚪",सम:"⚪",Yogakaraka:"⭐"};
   const FC     = {Yogakaraka:"#F59E0B",Malefic:"#FB7185","Functional Benefic":"#4ADE80","Functional Ben":"#4ADE80",Neutral:"#64748B"};
-  const DASHA_FX={Su:"Confidence, father, leadership",Mo:"Mind, mother, travel",Ma:"Courage, property, energy",Me:"Intellect, business, education",Ju:"Knowledge, children, dharma",Ve:"Love, wealth, arts",Sa:"Work, discipline, delays",Ra:"Ambition, foreign links",Ke:"Spirituality, detachment"};
+  const DASHA_FX={Su:"आत्मबल, पिता, नेतृत्व",Mo:"मन, माता, यात्रा",Ma:"साहस, भूमि, ऊर्जा",Me:"बुद्धि, व्यापार, शिक्षा",Ju:"ज्ञान, संतान, धर्म",Ve:"प्रेम, धन, कला",Sa:"कर्म, अनुशासन, देरी",Ra:"महत्वाकांक्षा, विदेश",Ke:"आध्यात्म, वैराग्य"};
   const RAHU_T ={1:"चतुर, रहस्यमई, स्वार्थी | सिर दर्द | नौकरी से सफलता | खतरा: 5वर्ष",2:"वाणी जादूगर, झूठ का शौक | दांत/आंख/गला | झूठ से बचें | खतरा: 12-24",3:"✅ उत्तम — धन, यश, पराक्रम | श्वास नली | खतरा: 21",4:"यात्राएं, घर से दूरी | माता को चर्म रोग | खतरा: 8,16",5:"राजनैतिक बुद्धि | पेट/गैस | सरकारी से झगड़ा न करें | खतरा: 5,19",6:"✅✅ श्रेष्ठ — शत्रु नाश | मंगल+राहु=लक्ष्मी योग | खतरा: 21,37",7:"दांपत्य कलह | किडनी | व्यापार में धोखा | खतरा: 37",8:"गूढ़ शक्तियां, तांत्रिक | गुप्त रोग, बवासीर | खतरा: 25,32",9:"धर्म में अरुचि | पिता कष्ट | विदेश में भाग्य | खतरा: 19,29",10:"✅ धनवान, विद्वान | 54वर्ष नौकरी खतरा",11:"✅✅ श्रेष्ठ — धन, सम्मान | बड़े भाई कष्ट | खतरा: 45",12:"विदेश यात्रा, जन्मस्थान छोड़ना | चर्म रोग | खतरा: 36,48"};
   const KETU_T ={1:"वैराग्य, आत्मज्ञान | सिर दर्द | आध्यात्मिक उन्नति",2:"वाणी असामान्य | दांत/गला | रहस्यमय ज्ञान",3:"साहस, पराक्रम | भाई कष्ट | तंत्र-मंत्र",4:"माता-गृह अलगाव | छाती/फेफड़े | आध्यात्मिक जागृति",5:"✅ तंत्र सिद्धि, पूर्वजन्म ज्ञान | संतान देरी",6:"✅✅ शत्रु नाशक — अति शुभ",7:"विवाह देरी | किडनी | जीवनसाथी उदासीन",8:"गूढ़ शक्ति, दीर्घायु | गुप्त रोग | दुर्घटना भय",9:"भाग्य बाधित | पिता कष्ट | पूर्वजन्म संस्कार",10:"करियर उतार-चढ़ाव, आध्यात्मिक पेशा | घुटने",11:"✅ बड़ी उपलब्धि | अनिश्चित आय",12:"✅ मोक्ष योग, विदेश सफलता | खर्चे अधिक"};
   const DIS_MAP={Su:["हृदय रोग","पित्त","आंख (दाईं)"],Mo:["मानसिक तनाव","कफ","किडनी"],Ma:["रक्त विकार","दुर्घटना","बवासीर"],Me:["त्वचा","नसें","एलर्जी"],Ju:["मोटापा","डायबिटीज","लीवर"],Ve:["किडनी","प्रजनन","मधुमेह"],Sa:["जोड़ों का दर्द","दांत","वात"],Ra:["कैंसर भय","नशा","अज्ञात रोग"],Ke:["दुर्घटना","रहस्यमय रोग","ऑपरेशन"]};
@@ -369,7 +369,7 @@ function buildPDFPage(pageNum, chartData) {
   // ── helpers ──
   const sect = (t,c="#F59E0B") => `<div style="margin:12px 0 5px;padding:5px 10px;background:${c}12;border-left:3px solid ${c};font-size:12px;font-weight:900;color:${c}">${t}</div>`;
   const badge = (t,c) => `<span style="display:inline-block;margin:2px;padding:2px 7px;border-radius:5px;background:${c}18;color:${c};border:1px solid ${c}30;font-size:10px;font-weight:700">${t}</span>`;
-  const foot = (n,total) => `<div style="text-align:center;font-size:9px;color:#334155;margin-top:14px;padding-top:7px;border-top:1px solid rgba(245,158,11,.12)">🪐 Complete Vedic Kundli — ${name} | Page ${n}${total?" / "+total:""} | © Nadi AI Jyotish</div>`;
+  const foot = (n,total) => `<div style="text-align:center;font-size:9px;color:#334155;margin-top:14px;padding-top:7px;border-top:1px solid rgba(245,158,11,.12)">🪐 सम्पूर्ण वैदिक कुंडली — ${name} | पृष्ठ ${n}${total?" / "+total:""} | © Nadi AI Jyotish</div>`;
 
   // ── Planet Table ──
   const pRows = Object.entries(pl).map(([c,p])=>{
@@ -437,7 +437,7 @@ function buildPDFPage(pageNum, chartData) {
       <td style="padding:4px 6px;color:#64748B;font-size:10px">${d.years||"—"}</td>
       <td style="padding:4px 6px;color:#475569;font-size:10px">${DASHA_FX[d.code]||DASHA_FX[d.lord]||"—"}</td>
     </tr>`;}).join("")}
-  </table>`:`<div style="color:#475569;text-align:center;padding:10px">Dasha data unavailable</div>`;
+  </table>`:`<div style="color:#475569;text-align:center;padding:10px">दशा डेटा उपलब्ध नहीं</div>`;
 
   const getPlIn=(hs)=>Object.entries(pl).filter(([c,p])=>p&&hs.includes(p.house)).map(([c,p])=>{
     const d=p.dignityHindi||p.dignity||"";
@@ -496,19 +496,19 @@ function buildPDFPage(pageNum, chartData) {
 
   const head=(title)=>`<!DOCTYPE html><html lang="hi"><head><meta charset="UTF-8"/><title>${title} — ${name}</title><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700;900&display=swap" rel="stylesheet"/><style>${css}</style></head><body>`;
   const close=`</body></html>`;
-  const TOTAL_PAGES = 5;
+  const TOTAL_PAGES = 6;
 
   const headerBlock=(showDasha=true)=>`<div class="hdr">
-    <div style="font-size:19px;font-weight:900;color:#F59E0B">🪐 Complete Vedic Kundli</div>
+    <div style="font-size:19px;font-weight:900;color:#F59E0B">🪐 सम्पूर्ण वैदिक कुंडली</div>
     <div style="font-size:11px;color:#94A3B8;margin-top:1px">Vedic Jyotish Report — Swiss Ephemeris + Nadi AI</div>
     <div class="igrid">
-      <div class="ii"><div class="il">Name</div><div class="iv">${name}</div></div>
-      <div class="ii"><div class="il">Ascendant</div><div class="iv" style="color:#22D3EE">${lagnaSign} ${lagnaDeg}</div></div>
-      <div class="ii"><div class="il">Date of Birth</div><div class="iv">${dob}</div></div>
-      <div class="ii"><div class="il">Weekday</div><div class="iv">${birthWeekdayPDF}</div></div>
-      <div class="ii"><div class="il">Time / Place</div><div class="iv">${tob} | ${pob}</div></div>
-      ${lagnaNak?`<div class="ii"><div class="il">Ascendant Nakshatra</div><div class="iv" style="color:#C084FC">${lagnaNak}</div></div>`:""}
-      ${showDasha && dasha.mahadasha?`<div class="ii"><div class="il">Current Mahadasha</div><div class="iv" style="color:#F59E0B">${dasha.mahadasha} → ${dasha.antardasha||"—"} (${dasha.endDate||""})</div></div>`:""}
+      <div class="ii"><div class="il">नाम</div><div class="iv">${name}</div></div>
+      <div class="ii"><div class="il">लग्न</div><div class="iv" style="color:#22D3EE">${lagnaSign} ${lagnaDeg}</div></div>
+      <div class="ii"><div class="il">जन्म तिथि</div><div class="iv">${dob}</div></div>
+      <div class="ii"><div class="il">जन्म वार / Day</div><div class="iv">${birthWeekdayPDF}</div></div>
+      <div class="ii"><div class="il">समय / स्थान</div><div class="iv">${tob} | ${pob}</div></div>
+      ${lagnaNak?`<div class="ii"><div class="il">लग्न नक्षत्र</div><div class="iv" style="color:#C084FC">${lagnaNak}</div></div>`:""}
+      ${showDasha && dasha.mahadasha?`<div class="ii"><div class="il">वर्तमान महादशा</div><div class="iv" style="color:#F59E0B">${dasha.mahadasha} → ${dasha.antardasha||"—"} (${dasha.endDate||""})</div></div>`:""}
     </div>
   </div>`;
 
@@ -536,29 +536,29 @@ function buildPDFPage(pageNum, chartData) {
       return `<tr>${row}</tr>`;
     }).join("");
     if (bavRows) {
-      bavTableHtml = `${sect("Bhinnashtakavarga (BAV) — Planetary Points", "#C084FC")}
-      <table style="font-size:10px;text-align:center;margin-bottom:15px"><tr style="background:rgba(255,255,255,0.05)"><th>ग्रह / भाव ➔</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th><th>Total</th></tr>${bavRows}</table>`;
+      bavTableHtml = `${sect("भिन्नाष्टकवर्ग (BAV) — ग्रहों के बिंदु", "#C084FC")}
+      <table style="font-size:10px;text-align:center;margin-bottom:15px"><tr style="background:rgba(255,255,255,0.05)"><th>ग्रह / भाव ➔</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th><th>कुल</th></tr>${bavRows}</table>`;
     }
   }
 
 
   const pages = {
-    1: ()=>`${head("Planets + Houses")}<div class="page">
+    1: ()=>`${head("ग्रह + भाव")}<div class="page">
       ${headerBlock(true)}
-      ${sect("Planetary Positions — Nine Planets")}
-      <table><tr><th>Planet</th><th>Sign</th><th>House</th><th>Degree</th><th>Nakshatra</th><th>Nakshatra Lord</th><th>Sign Lord</th><th>Dignity</th><th>Nature</th><th>Strength %</th></tr>${pRows}</table>
-      <div style="margin-top:5px;padding:4px 8px;border-radius:5px;background:rgba(245,158,11,.05);font-size:8px;color:#475569">⬆️Exalted &nbsp;⬇️Debilitated &nbsp;🏠Own Sign &nbsp;💜Friend &nbsp;🔴Enemy &nbsp;⭐Yogakaraka &nbsp;⟲Retrograde &nbsp;🔥Combust</div>
-      ${sect("Shadbala — Obtained Strength and Standards", "#F59E0B")}
-      <table><tr><th>Planet</th><th>Virupas</th><th>Rupas</th><th>Minimum Standard</th><th>Status</th></tr>${(shadbalaData.planets || []).map(x=>{const min=({Su:390,Mo:360,Ma:300,Me:420,Ju:390,Ve:330,Sa:300})[x.code];const total=Number(x.total_virupas||0);const pct=min?total/min*100:0;return `<tr><td>${x.planet||PH[x.code]||x.code}</td><td>${total.toFixed(2)}</td><td>${(total/60).toFixed(2)}</td><td>${min||"—"}</td><td style="font-weight:700;color:${pct>=100?"#4ADE80":"#FB7185"}">${pct.toFixed(1)}% · ${pct>=100?"At or Above Standard":"Below Standard"}</td></tr>`;}).join("") || `<tr><td colspan="5">Shadbala data unavailable</td></tr>`}</table>
-      ${sect("House Positions — 12 Houses","#22D3EE")}
-      <table><tr><th>House</th><th>Sign</th><th>Planets</th><th>AV Points</th></tr>${hRows}</table>
+      ${sect("ग्रह स्थिति — नवग्रह (9 Planets)")}
+      <table><tr><th>ग्रह</th><th>राशि</th><th>भाव</th><th>डिग्री</th><th>नक्षत्र</th><th>नक्ष.स्वामी</th><th>राशि स्वामी</th><th>अवस्था</th><th>स्वभाव</th><th>बल%</th></tr>${pRows}</table>
+      <div style="margin-top:5px;padding:4px 8px;border-radius:5px;background:rgba(245,158,11,.05);font-size:8px;color:#475569">⬆️उच्च &nbsp;⬇️नीच &nbsp;🏠स्वराशि &nbsp;💜मित्र &nbsp;🔴शत्रु &nbsp;⭐योगकारक &nbsp;⟲वक्री &nbsp;🔥अस्त</div>
+      ${sect("षड्बल (Shadbala) — प्राप्त बल और मानक", "#F59E0B")}
+      <table><tr><th>ग्रह</th><th>प्राप्त विरूपा</th><th>रूप</th><th>न्यूनतम मानक</th><th>स्थिति</th></tr>${(shadbalaData.planets || []).map(x=>{const min=({Su:390,Mo:360,Ma:300,Me:420,Ju:390,Ve:330,Sa:300})[x.code];const total=Number(x.total_virupas||0);const pct=min?total/min*100:0;return `<tr><td>${x.planet||PH[x.code]||x.code}</td><td>${total.toFixed(2)}</td><td>${(total/60).toFixed(2)}</td><td>${min||"—"}</td><td style="font-weight:700;color:${pct>=100?"#4ADE80":"#FB7185"}">${pct.toFixed(1)}% · ${pct>=100?"मानक से ज्यादा/बराबर":"मानक से कम"}</td></tr>`;}).join("") || `<tr><td colspan="5">Shadbala डेटा उपलब्ध नहीं</td></tr>`}</table>
+      ${sect("भाव स्थिति — 12 भाव","#22D3EE")}
+      <table><tr><th>भाव</th><th>राशि</th><th>ग्रह</th><th>AV अंक</th></tr>${hRows}</table>
       ${foot(1,TOTAL_PAGES)}</div>${close}`,
 
-    2: ()=>`${head("Dasha + Yogas")}<div class="page">
-      ${sect("Vimshottari Dasha — Complete Timeline","#FB923C")}
-      <div style="padding:6px 8px;border-radius:6px;background:rgba(251,146,60,.05);margin-bottom:7px;font-size:9px;color:#475569">💡 Vimshottari system: a 120-year cycle based on the birth nakshatra. Current: <b style="color:#F59E0B">${dasha.mahadasha||"—"} Mahadasha → ${dasha.antardasha||"—"} Antardasha | Ends: ${dasha.endDate||"—"}</b></div>
+    2: ()=>`${head("दशा + योग")}<div class="page">
+      ${sect("विंशोत्तरी दशा — पूर्ण समयरेखा","#FB923C")}
+      <div style="padding:6px 8px;border-radius:6px;background:rgba(251,146,60,.05);margin-bottom:7px;font-size:9px;color:#475569">💡 विंशोत्तरी पद्धति: जन्म नक्षत्र से 120 वर्ष का चक्र। वर्तमान: <b style="color:#F59E0B">${dasha.mahadasha||"—"} महादशा → ${dasha.antardasha||"—"} अंतर्दशा | समाप्त: ${dasha.endDate||"—"}</b></div>
       ${dashaTable}
-      ${allYogas.length>0?`${sect(`Yogas — ${allYogas.length} Active`,"#4ADE80")}<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+      ${allYogas.length>0?`${sect(`योग — ${allYogas.length} सक्रिय`,"#4ADE80")}<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
         ${allYogas.slice(0,18).map(y=>{const yn=y.name||y.yoga_name||"";const yd=y.effect||y.description||"";const yc=yn.includes("राज")||yn.includes("Raja")?"#F59E0B":yn.includes("धन")||yn.includes("Dhana")?"#4ADE80":"#22D3EE";return`<div style="padding:5px 8px;border-radius:6px;background:${yc}07;border:1px solid ${yc}20"><div style="font-size:11px;color:${yc};font-weight:700">${yn}</div>${yd?`<div style="font-size:9px;color:#475569;margin-top:1px">${yd.slice(0,60)}${yd.length>60?"...":""}</div>`:""}</div>`;}).join("")}
       </div>`:""}
       ${foot(2,TOTAL_PAGES)}</div>${close}`,
@@ -570,8 +570,8 @@ function buildPDFPage(pageNum, chartData) {
     const currentDasha = dasha || {};
     
     if (!dashaSeqData || dashaSeqData.length === 0) {
-      return `${head("Vimshottari Dasha")}<div class="page">
-        <div style="color:#475569;text-align:center;padding:20px">Dasha data unavailable</div>
+      return `${head("वशोत्तरी दशा")}<div class="page">
+        <div style="color:#475569;text-align:center;padding:20px">दशा डेटा उपलब्ध नहीं</div>
         ${foot(3, TOTAL_PAGES)}</div>${close}`;
     }
 
@@ -579,6 +579,7 @@ function buildPDFPage(pageNum, chartData) {
     const currentMD = currentDasha.mahadasha || "—";
     const currentAD = currentDasha.antardasha || "—";
     const currentPD = currentDasha.pratyantar || "—";
+    const endDate = currentDasha.endDate || "—";
 
     // Find current MD object to get ALL its antardashas
     const currentMDObj = dashaSeqData.find(md => {
@@ -588,17 +589,18 @@ function buildPDFPage(pageNum, chartData) {
     
     const antardashas = currentMDObj?.antardashas || currentMDObj?.subperiods || [];
 
-    return `${head("Vimshottari Dasha — Complete Timeline")}<div class="page">
-      <div style="margin:12px 0;padding:8px 10px;background:rgba(34,211,238,.04);border-radius:8px;border:1px solid rgba(34,211,238,.12);font-size:10px;color:#64748B">
-        This page contains details of the current Mahadasha Antardasha and Pratyantardasha only. The complete Mahadasha timeline is on Page 2.
+    return `${head("वशोत्तरी दशा — पूर्ण समयरेखा")}<div class="page">
+      <div style="margin:12px 0;padding:10px;background:rgba(245,158,11,.06);border-radius:8px;border:1px solid rgba(245,158,11,.2)">
+        <div style="font-size:11px;color:#475569;margin-bottom:5px">💡 <strong>वशोत्तरी पद्धति:</strong> जन्म नक्षत्र से 120 वर्ष का चक्र।</div>
+        <div style="font-size:11px;color:#0f766e"><strong>वर्तमान:</strong> ${currentMD} महादशा → ${currentAD} अंतर्दशा → ${currentPD} प्रत्यंतर | समाप्ति: ${endDate}</div>
       </div>
 
       <div style="padding:5px 8px;border-radius:6px;background:rgba(34,211,238,.05);margin-bottom:7px;font-size:9px;color:#475569">
-        The complete Mahadasha timeline is on Page 2. This page contains only Antardasha and Pratyantardasha details.
+        महादशा की पूर्ण समयरेखा पृष्ठ 2 पर दी गई है। इस पृष्ठ पर केवल अंतर्दशा और प्रत्यंतर का विवरण है।
       </div>
 
       ${antardashas.length > 0 ? `
-      ${sect("Antardasha — All 9 sub-periods of "+currentMD+" Mahadasha","#22D3EE")}
+      ${sect("अंतर्दशा — "+currentMD+" महादशा के सभी 9 अंतर्दशा","#22D3EE")}
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:10px">
         ${antardashas.map((ad, i) => {
           const planetName = ad.planet || ad.lord || ad.name || "—";
@@ -621,7 +623,7 @@ function buildPDFPage(pageNum, chartData) {
             <div style="color:#64748B;font-size:7px;margin-bottom:4px">${startDate}<br/>–<br/>${endDateAD}</div>
             ${pratyantars.length > 0 ? `
             <div style="padding:3px;background:rgba(192,132,252,.06);border-radius:4px;border:1px solid rgba(192,132,252,.15)">
-              <div style="font-size:6px;color:#94A3B8;margin-bottom:2px;font-weight:700">Pratyantardasha (${pratyantars.length}):</div>
+              <div style="font-size:6px;color:#94A3B8;margin-bottom:2px;font-weight:700">प्रत्यंतर (${pratyantars.length}):</div>
               ${pratyantars.map((pd, j) => {
                 const pdPlanet = pd.planet || pd.lord || pd.name || "—";
                 const pdLord = PH[pdPlanet] || pdPlanet;
@@ -644,11 +646,248 @@ function buildPDFPage(pageNum, chartData) {
     </div>${close}`;
   };
 
-  // PAGE 4 — Shodashvarga (Divisional Charts) + Retrograde Summary
+  // PAGE 4 — चलित कुंडली (Bhav Chalit Chart — Sri Pati Paddhati)
   pages[4] = () => {
+    const chalit        = pd.chalit || {};
+    // engine se aate hain: _comparison (sandhi_risk, summary) aur _planets
+    const chalitCmp     = chalit._comparison || {};
+    const chalitSummary = chalitCmp.summary  || {};
+    const sandhiRisk    = chalitCmp.sandhi_risk || [];
+    const chalitEntries = Object.entries(chalit).filter(([k]) => !k.startsWith("_"));
+    const changedCount  = chalitSummary.changed_count
+                          ?? chalitEntries.filter(([,d]) => d.is_changed).length;
+    const sandhiCount   = chalitSummary.sandhi_count ?? sandhiRisk.length;
+    const stability     = chalitSummary.chart_stability || "";
+
+    const PLANET_ORDER  = ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
+    const BHAV_KARAKA   = {
+      1:"लग्न",2:"धन",3:"पराक्रम",4:"सुख",5:"संतान",6:"रोग",
+      7:"विवाह",8:"आयु",9:"भाग्य",10:"कर्म",11:"लाभ",12:"व्यय"
+    };
+
+    // ── Main table rows ───────────────────────────────────────────
+    const chalitRows = PLANET_ORDER
+      .filter(pc => chalit[pc])
+      .map(pc => {
+        const data    = chalit[pc];
+        const pInfo   = pl[pc] || {};
+        const changed = data.is_changed;
+        const isBhavS = data.is_bhav_sandhi  || false;
+        const isRashiS= data.is_rashi_sandhi || false;
+        const bsDist  = data.bhav_sandhi_dist != null ? Number(data.bhav_sandhi_dist).toFixed(2) : null;
+        const madhyaDist = data.dist_from_madhya != null ? Number(data.dist_from_madhya).toFixed(2) : null;
+        const bsNear  = data.bhav_sandhi_near;
+
+        const d1H  = data.d1_house || "—";
+        const chH  = data.house    || "—";
+
+        const statusCol = changed  ? "#F59E0B" : "#4ADE80";
+        const chHCol    = changed  ? "#F59E0B" : "#CBD5E1";
+        const bsCol     = isBhavS  ? "#FB7185" : isRashiS ? "#FB923C" : "#334155";
+
+        const rashi     = pInfo.hindi_sign || pInfo.sign || "—";
+        const deg       = pInfo.degree || (data.degree ? Number(data.degree).toFixed(2)+"°" : "—");
+        const nakshatra = pInfo.nakshatra    || "—";
+        const nakLord   = pInfo.nakshatraLord|| "—";
+        const dignity   = pInfo.dignityHindi || pInfo.dignity || "—";
+        const digCol    = DC[pInfo.dignity]  || DC[pInfo.dignityHindi] || "#64748B";
+        const digIcon   = DI[pInfo.dignity]  || DI[pInfo.dignityHindi] || "⚪";
+
+        const sandhiTag = isBhavS && isRashiS
+          ? `<span style="font-size:7px;padding:1px 4px;border-radius:3px;background:rgba(251,113,133,.2);color:#FB7185;font-weight:700">⚠️ भाव+राशि सन्धि</span>`
+          : isBhavS
+          ? `<span style="font-size:7px;padding:1px 4px;border-radius:3px;background:rgba(251,113,133,.15);color:#FB7185;font-weight:700">⚠️ भाव सन्धि ${bsDist ? bsDist+"°" : ""}</span>`
+          : isRashiS
+          ? `<span style="font-size:7px;padding:1px 4px;border-radius:3px;background:rgba(251,146,60,.15);color:#FB923C;font-weight:700">⚠️ राशि सन्धि</span>`
+          : `<span style="font-size:7px;color:#334155">मध्य ${madhyaDist ? madhyaDist+"°" : "—"}</span>`;
+
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,.04);${changed?"background:rgba(245,158,11,.03)":isBhavS?"background:rgba(251,113,133,.02)":""}">
+          <td style="padding:5px 7px">
+            <div style="color:#F59E0B;font-weight:900;font-size:12px">${PH[pc]||pc} ${PS[pc]||""}</div>
+            <div style="font-size:8px;color:#475569;margin-top:1px">${rashi} | ${deg}</div>
+          </td>
+          <td style="padding:5px 7px;font-size:9px;color:#64748B">
+            ${nakshatra}<br/><span style="color:#475569;font-size:8px">${nakLord}</span>
+          </td>
+          <td style="padding:5px 7px;font-size:9px;font-weight:700;color:${digCol}">${digIcon} ${dignity}</td>
+          <td style="padding:5px 7px;text-align:center">
+            <div style="font-size:13px;font-weight:900;color:#94A3B8">${d1H}</div>
+            <div style="font-size:7px;color:#334155">${typeof d1H==="number"?BHAV_KARAKA[d1H]||"":""}</div>
+          </td>
+          <td style="padding:5px 7px;text-align:center">
+            <div style="font-size:13px;font-weight:900;color:${chHCol}">${chH}</div>
+            <div style="font-size:7px;color:${changed?"#92400E":"#334155"}">${typeof chH==="number"?BHAV_KARAKA[chH]||"":""}</div>
+          </td>
+          <td style="padding:5px 7px">
+            <span style="font-size:10px;font-weight:700;color:${statusCol};padding:2px 6px;border-radius:4px;background:${statusCol}12;border:1px solid ${statusCol}25">${changed?"🔄 बदला":"✅ समान"}</span>
+            ${changed?`<div style="font-size:8px;color:#92400E;margin-top:1px">भाव ${d1H}→${chH}</div>`:""}
+          </td>
+          <td style="padding:5px 7px">${sandhiTag}</td>
+        </tr>`;
+      }).join("") ||
+      `<tr><td colspan="7" style="padding:16px;text-align:center;color:#475569">चलित डेटा उपलब्ध नहीं</td></tr>`;
+
+    // ── Bhav grid ────────────────────────────────────────────────
+    const bhavGrid = Array.from({length:12},(_,i)=>{
+      const n  = i+1;
+      const ps = PLANET_ORDER.filter(pc => chalit[pc] && chalit[pc].house === n);
+      const hasChanged = ps.some(pc => chalit[pc]?.is_changed);
+      const hasSandhi  = ps.some(pc => chalit[pc]?.is_bhav_sandhi || chalit[pc]?.is_rashi_sandhi);
+      const bdr = hasChanged ? "rgba(245,158,11,.3)" : hasSandhi ? "rgba(251,113,133,.3)" : "rgba(255,255,255,.06)";
+      const bg  = hasChanged ? "rgba(245,158,11,.07)" : hasSandhi ? "rgba(251,113,133,.05)" : "rgba(255,255,255,.02)";
+      const inner = ps.map(pc => {
+        const ch = chalit[pc];
+        const c  = ch.is_bhav_sandhi ? "#FB7185" : ch.is_changed ? "#F59E0B" : "#94A3B8";
+        return `<span style="font-size:8px;font-weight:700;color:${c}">${PS[pc]||pc}${ch.is_bhav_sandhi?"⚠":ch.is_changed?"*":""}</span>`;
+      }).join(" ");
+      return `<div style="text-align:center;padding:5px 2px;border-radius:6px;background:${bg};border:1px solid ${bdr}">
+        <div style="font-size:7px;color:#334155;margin-bottom:2px">भाव ${n}</div>
+        <div style="min-height:14px;line-height:1.4">${inner||'<span style="color:#1e293b;font-size:8px">—</span>'}</div>
+      </div>`;
+    }).join("");
+
+    // ── Sandhi risk section ───────────────────────────────────────
+    const sandhiHTML = sandhiRisk.length > 0 ? `
+      ${sect(`⚠️ सन्धि ग्रह — ${sandhiCount} ग्रह कमजोर स्थिति में`,"#FB7185")}
+      <div style="margin-bottom:10px">
+        <div style="font-size:9px;color:#64748B;margin-bottom:6px;padding:4px 8px;background:rgba(251,113,133,.05);border-radius:5px;border:1px solid rgba(251,113,133,.15)">
+          💡 <b style="color:#FB7185">सन्धि का अर्थ:</b>
+          <b>भाव सन्धि</b> = ग्रह दो भावों की सीमा पर है (±1°) — दोनों भावों का अनिश्चित फल।
+          <b>राशि सन्धि</b> = ग्रह राशि के अंत/आरंभ पर है (0°/30° के पास) — अगली राशि का भी प्रभाव।
+        </div>
+        ${sandhiRisk.map(sp => {
+          const typeCol = sp.sandhi_type?.includes("Bhav") ? "#FB7185" : "#FB923C";
+          const pInfo = pl[sp.code] || {};
+          const fn = pInfo.functionalNature || "";
+          const fnCol = FC[fn] || "#64748B";
+          return `<div style="padding:6px 10px;border-radius:7px;background:rgba(251,113,133,.05);border:1px solid rgba(251,113,133,.2);margin-bottom:5px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+              <span style="color:#F59E0B;font-weight:900;font-size:11px">${PH[sp.code]||sp.code} ${PS[sp.code]||""}</span>
+              <span style="font-size:9px;padding:1px 6px;border-radius:3px;background:${typeCol}20;color:${typeCol};font-weight:700">${sp.sandhi_type||"सन्धि"}</span>
+              ${fn?`<span style="font-size:8px;color:${fnCol}">${fn}</span>`:""}
+            </div>
+            <div style="font-size:9px;color:#94A3B8">${sp.sandhi_note||""}</div>
+            <div style="font-size:8px;color:#475569;margin-top:1px">D1: भाव ${sp.d1_house} → चलित: भाव ${sp.chalit_house} ${sp.is_changed?"🔄":""}</div>
+          </div>`;
+        }).join("")}
+      </div>` : "";
+
+    // ── Changed planets summary ───────────────────────────────────
+    const changedHTML = PLANET_ORDER
+      .filter(pc => chalit[pc]?.is_changed)
+      .map(pc => {
+        const d   = chalit[pc];
+        const fn  = pl[pc]?.functionalNature || "";
+        const fnCol = FC[fn] || "#64748B";
+        const isSandhi = d.is_bhav_sandhi || d.is_rashi_sandhi;
+        return `<div style="padding:6px 10px;border-radius:7px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.18);display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="color:#F59E0B;font-weight:900;font-size:11px">${PH[pc]||pc} ${PS[pc]||""}</span>
+          <span style="font-size:11px;color:#94A3B8">भाव <b style="color:#CBD5E1">${d.d1_house}</b> → <b style="color:#F59E0B">${d.house}</b></span>
+          <div style="display:flex;gap:4px;align-items:center">
+            ${isSandhi?`<span style="font-size:7px;color:#FB7185;padding:1px 4px;border-radius:3px;background:rgba(251,113,133,.15)">⚠️ सन्धि</span>`:""}
+            ${fn?`<span style="font-size:8px;color:${fnCol};padding:1px 5px;border-radius:3px;background:${fnCol}15">${fn}</span>`:""}
+          </div>
+        </div>`;
+      }).join("");
+
+    return `${head("चलित कुंडली")}<div class="page">
+      ${headerBlock(false)}
+      ${sect("चलित कुंडली (Bhav Chalit Chart) — श्री पति पद्धति", "#22D3EE")}
+
+      <div style="padding:8px 12px;border-radius:7px;background:rgba(34,211,238,.04);border:1px solid rgba(34,211,238,.15);margin-bottom:10px;font-size:9px;color:#64748B;line-height:1.8">
+        💡 <b style="color:#22D3EE">चलित कुंडली:</b> D1 राशि-मध्य से भाव गिनता है।
+        चलित में <b>श्री पति पद्धति</b> से exact भाव-सन्धि (cusp) निकाली जाती है।
+        ग्रह यदि boundary पार करे → भाव बदलता है।
+        <b style="color:#FB7185">⚠️ भाव सन्धि</b> = boundary ±1° पर (अनिश्चित फल) &nbsp;|&nbsp;
+        <b style="color:#FB923C">⚠️ राशि सन्धि</b> = 0°/30° पर (दोनों राशि का प्रभाव)
+      </div>
+
+      ${sect("ग्रह-वार चलित स्थिति + सन्धि विश्लेषण","#22D3EE")}
+      <table style="margin-bottom:10px;font-size:10px">
+        <tr style="background:rgba(255,255,255,.05)">
+          <th>ग्रह / राशि</th><th>नक्षत्र</th><th>अवस्था</th>
+          <th style="text-align:center">D1</th>
+          <th style="text-align:center">चलित</th>
+          <th>स्थिति</th>
+          <th>सन्धि</th>
+        </tr>
+        ${chalitRows}
+      </table>
+
+      ${sect("चलित भाव ग्रिड  (* बदला  ⚠ सन्धि)","#C084FC")}
+      <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-bottom:10px">${bhavGrid}</div>
+
+      ${sandhiHTML}
+
+      ${changedCount > 0 ? `
+      ${sect(`🔄 बदले हुए ग्रह — ${changedCount}`, "#F59E0B")}
+      <div style="margin-bottom:8px">${changedHTML}</div>
+      <div style="padding:6px 10px;border-radius:6px;background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.15);font-size:9px;color:#94A3B8">
+        <b style="color:#F59E0B">फलादेश नियम:</b> shifted ग्रह का फल → <b>चलित भाव</b> से।
+        Sign/Dignity → <b>D1</b> से। सन्धि ग्रह का फल दोनों भावों से मिलाकर देखें।
+      </div>` : `
+      <div style="padding:8px 12px;border-radius:7px;background:rgba(74,222,128,.04);border:1px solid rgba(74,222,128,.18);font-size:10px;color:#CBD5E1;margin-bottom:8px">
+        ✅ सभी ग्रह D1 और चलित में <b>समान भाव</b> — कुंडली अत्यंत स्थिर।
+      </div>`}
+
+      ${stability ? `<div style="text-align:right;font-size:9px;color:#475569;margin-top:4px">कुंडली स्थिरता: <b style="color:#22D3EE">${stability}</b></div>` : ""}
+
+      ${(()=>{
+        const strength = pd.chalit?._planetStrength || {};
+        if (!Object.keys(strength).length) return "";
+        const ORDER = ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
+        let bal=0, madhyam=0, durbal=0;
+        ORDER.forEach(k=>{ const s=strength[k]; if(!s) return; if(s.score>=14) bal++; else if(s.score>=8) madhyam++; else durbal++; });
+        const rows = ORDER.map(k=>{
+          const s = strength[k];
+          if(!s) return "";
+          const sc   = Number(s.score||0).toFixed(2);
+          const col  = s.score>=14 ? "#4ADE80" : s.score>=8 ? "#F59E0B" : "#FB7185";
+          const purv = s.prev_cusp!=null ? Number(s.prev_cusp).toFixed(2)+"°" : (s.bhav_prev!=null ? Number(s.bhav_prev).toFixed(2)+"°" : "—");
+          const uttar= s.next_cusp!=null ? Number(s.next_cusp).toFixed(2)+"°" : (s.bhav_next!=null ? Number(s.bhav_next).toFixed(2)+"°" : "—");
+          return `<tr style="border-bottom:1px solid rgba(255,255,255,.04)">
+            <td style="padding:5px 7px;color:#F59E0B;font-weight:900;font-size:11px">${PH[k]||k} ${PS[k]||""}</td>
+            <td style="padding:5px 7px;text-align:center;color:#94A3B8;font-weight:700">${s.house||"—"}</td>
+            <td style="padding:5px 7px;text-align:center">
+              <span style="font-size:13px;font-weight:900;color:${col}">${sc}</span>
+              <span style="font-size:8px;color:#475569">/20</span>
+            </td>
+            <td style="padding:5px 7px">
+              <span style="font-size:9px;font-weight:700;color:${col};padding:2px 6px;border-radius:4px;background:${col}12;border:1px solid ${col}25">${s.status_hi||"—"}</span>
+            </td>
+            <td style="padding:5px 7px;font-size:9px;color:#64748B">${purv}</td>
+            <td style="padding:5px 7px;font-size:9px;color:#64748B">${uttar}</td>
+          </tr>`;
+        }).join("");
+        return `
+        ${sect("🔢 विंशोपक बल (Bhav Strength)","#818CF8")}
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div style="padding:5px 10px;border-radius:6px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);font-size:10px;font-weight:700;color:#4ADE80">💪 ${bal} बलवान</div>
+          <div style="padding:5px 10px;border-radius:6px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);font-size:10px;font-weight:700;color:#F59E0B">〰️ ${madhyam} मध्यम</div>
+          <div style="padding:5px 10px;border-radius:6px;background:rgba(251,113,133,.08);border:1px solid rgba(251,113,133,.25);font-size:10px;font-weight:700;color:#FB7185">⚠️ ${durbal} दुर्बल</div>
+        </div>
+        <table style="font-size:10px;margin-bottom:8px">
+          <tr style="background:rgba(255,255,255,.05)">
+            <th>ग्रह</th><th style="text-align:center">भाव</th><th style="text-align:center">Score (/20)</th><th>स्थिति</th><th>पूर्व°</th><th>उत्तर°</th>
+          </tr>
+          ${rows}
+        </table>
+        <div style="padding:5px 9px;border-radius:5px;background:rgba(129,140,248,.04);border:1px solid rgba(129,140,248,.12);font-size:8px;color:#64748B;line-height:1.8">
+          💪 <b style="color:#4ADE80">बलवान</b> = 14 से अधिक (मध्य के पास) &nbsp;|&nbsp;
+          〰️ <b style="color:#F59E0B">मध्यम</b> = 8–14 &nbsp;|&nbsp;
+          ⚠️ <b style="color:#FB7185">दुर्बल</b> = 8 से कम या सन्धि पर
+        </div>`;
+      })()}
+
+      ${foot(4, TOTAL_PAGES)}</div>${close}`;
+  };
+
+
+  // 🆕 PAGE 25 — षोडशवर्ग चक्र (16 D-Charts) + वक्री ग्रह सारांश
+  pages[5] = () => {
     const VARGA_KEYS = ["D1","D2","D3","D4","D6","D7","D9","D10","D12","D16","D20","D24","D27","D30","D40","D45","D60"];
     const PL_KEYS    = ["La","Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
-    const PL_NAMES   = {"La":"Ascendant","Su":"Sun","Mo":"Moon","Ma":"Mars","Me":"Mercury","Ju":"Jupiter","Ve":"Venus","Sa":"Saturn","Ra":"Rahu","Ke":"Ketu"};
+    const PL_NAMES   = {"La":"लग्न","Su":"सूर्य","Mo":"चंद्र","Ma":"मंगल","Me":"बुध","Ju":"गुरु","Ve":"शुक्र","Sa":"शनि","Ra":"राहु","Ke":"केतु"};
 
     const getVarga = (p, k) => {
       try {
@@ -664,7 +903,7 @@ function buildPDFPage(pageNum, chartData) {
     const vakri = PLANET_KEYS.filter(p => pl[p]?.Retrograde || pl[p]?.retrograde);
     const vakriBadge = vakri.length > 0
       ? vakri.map(p => `<span style="display:inline-block;margin:2px 3px;padding:3px 8px;border-radius:20px;background:rgba(129,140,248,.15);border:1px solid rgba(129,140,248,.4);color:#818CF8;font-size:9px;font-weight:900">${PL_NAMES[p]||p} ⟲</span>`).join("")
-      : `<span style="color:#4ADE80;font-size:9px">✅ No planets are currently retrograde</span>`;
+      : `<span style="color:#4ADE80;font-size:9px">✅ इस समय कोई ग्रह वक्री नहीं है</span>`;
 
     const rows = PL_KEYS.map(p => {
       const isLagna  = p === "La";
@@ -682,20 +921,20 @@ function buildPDFPage(pageNum, chartData) {
     }).join("");
 
     const body = `
-      ${sect("Shodashvarga Matrix (Divisional Charts)", "#F59E0B")}
+      ${sect("षोडशवर्ग चक्र (16 D-Charts Matrix)", "#F59E0B")}
       <div style="font-size:9px;color:#64748B;margin-bottom:8px">
-        💡 Complete matrix of the ascendant and planetary signs across the divisional charts.
-        <b style="color:#22D3EE">D9 (नवांश)</b> is especially important — <b style="color:#818CF8">⟲ = Retrograde planet</b>।
+        💡 सभी 16 वर्ग कुण्डलियों में लग्न और ग्रहों की राशियों का सम्पूर्ण मैट्रिक्स।
+        <b style="color:#22D3EE">D9 (नवांश)</b> विशेष महत्वपूर्ण — <b style="color:#818CF8">⟲ = वक्री ग्रह</b>।
       </div>
 
       <div style="padding:7px 10px;border-radius:7px;background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.2);margin-bottom:10px">
-        <span style="font-size:9px;font-weight:900;color:#818CF8">⟲ Currently Retrograde: </span>${vakriBadge}
+        <span style="font-size:9px;font-weight:900;color:#818CF8">⟲ वर्तमान वक्री ग्रह: </span>${vakriBadge}
       </div>
 
       <div style="border-radius:8px;border:1px solid rgba(255,255,255,.1);overflow:hidden">
         <table style="font-size:8px;text-align:center;width:100%;border-collapse:collapse;margin:0">
           <tr style="background:rgba(245,158,11,.12)">
-            <th style="padding:6px 3px;text-align:left;color:#F59E0B;width:70px">Planet</th>
+            <th style="padding:6px 3px;text-align:left;color:#F59E0B;width:45px">ग्रह</th>
             ${VARGA_KEYS.map(k => `<th style="padding:6px 2px;color:${k==="D9"?"#22D3EE":"#F59E0B"}">${k}</th>`).join("")}
           </tr>
           ${rows}
@@ -703,23 +942,24 @@ function buildPDFPage(pageNum, chartData) {
       </div>
 
       <div style="margin-top:10px;padding:8px;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);font-size:8px;color:#94A3B8;line-height:1.6">
-        <b>Divisional Chart Guide:</b> <b>D1</b> (Body and overall life), <b>D2</b> (Wealth), <b>D3</b> (Siblings), <b>D4</b> (Property), <b>D7</b> (Children),
-        <b>D9</b> (Spouse and deeper fortune), <b>D10</b> (Work and career), <b>D12</b> (Parents), <b>D16</b> (Vehicles and comforts), <b>D20</b> (Spirituality),
-        <b>D24</b> (Education), <b>D27</b> (Strength), <b>D30</b> (Adversities), <b>D40</b> (Auspicious and inauspicious influences), <b>D45</b> (Overall character), <b>D60</b> (Past-life karma)।
+        <b>कुण्डली उपयोग:</b> <b>D1</b> (शारीरिक व मूल), <b>D2</b> (धन), <b>D3</b> (भाई-बहन), <b>D4</b> (संपत्ति), <b>D7</b> (संतान),
+        <b>D9</b> (जीवनसाथी/सूक्ष्म भाग्य), <b>D10</b> (कर्म/करियर), <b>D12</b> (माता-पिता), <b>D16</b> (वाहन सुख), <b>D20</b> (आध्यात्मिक),
+        <b>D24</b> (शिक्षा), <b>D27</b> (बल), <b>D30</b> (अरिष्ट), <b>D40</b> (शुभ/अशुभ), <b>D45</b> (समग्र चरित्र), <b>D60</b> (पूर्वजन्म कर्म)।
       </div>
     `;
 
-    return `${head("Shodashvarga")}<div class="page">
+    return `${head("षोडशवर्ग")}<div class="page">
+      ${headerBlock(false)}
       ${body}
-      ${foot(4, TOTAL_PAGES)}
+      ${foot(5, TOTAL_PAGES)}
     </div>${close}`;
   };
 
   // One-page quick reference: D1/D9, Shadbala, current MD/AD/PD and SAV.
-  pages[5] = () => {
-    const rashiHi = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
+  pages[6] = () => {
+    const rashiHi = ["मेष","वृषभ","मिथुन","कर्क","सिंह","कन्या","तुला","वृश्चिक","धनु","मकर","कुंभ","मीन"];
     const planetKeys = ["Su","Mo","Ma","Me","Ju","Ve","Sa","Ra","Ke"];
-    const planetNames = {Su:"Sun",Mo:"Moon",Ma:"Mars",Me:"Mercury",Ju:"Jupiter",Ve:"Venus",Sa:"Saturn",Ra:"Rahu",Ke:"Ketu"};
+    const planetNames = {Su:"सूर्य",Mo:"चंद्र",Ma:"मंगल",Me:"बुध",Ju:"गुरु",Ve:"शुक्र",Sa:"शनि",Ra:"राहु",Ke:"केतु"};
     const vargaSignIndex = (p, key) => {
       const v = p?.Vargas?.[key] || p?.vargas?.[key];
       if (typeof v === "number") return ((v % 12) + 12) % 12;
@@ -736,14 +976,14 @@ function buildPDFPage(pageNum, chartData) {
         const house = idx == null || asc == null ? "—" : ((idx - asc + 12) % 12) + 1;
         return `<tr><td>${planetNames[code]}</td><td>${idx == null ? (key === "D1" ? (pln.sign || "—") : "—") : rashiHi[idx]}</td><td>${house}</td></tr>`;
       }).join("");
-      const label = key === "D1" ? "(Ascendant)" : key === "D9" ? "(Navamsha)" : "(Dashamsha)";
-      return `<div style="width:32.5%;display:inline-block;vertical-align:top"><h3 style="color:#22D3EE;margin:4px 0">${key} ${label}</h3><table><tr><th>Planet</th><th>Sign</th><th>House</th></tr>${rows}</table></div>`;
+      const label = key === "D1" ? "(लग्न)" : key === "D9" ? "(नवांश)" : "(दशांश)";
+      return `<div style="width:32.5%;display:inline-block;vertical-align:top"><h3 style="color:#22D3EE;margin:4px 0">${key} ${label}</h3><table><tr><th>ग्रह</th><th>राशि</th><th>भाव</th></tr>${rows}</table></div>`;
     };
     const shadRows = (shadbalaData.planets || []).map(x => {
       const min = ({Su:390,Mo:360,Ma:300,Me:420,Ju:390,Ve:330,Sa:300})[x.code];
       const total = Number(x.total_virupas || 0);
       const pct = min ? total / min * 100 : 0;
-      return `<tr><td>${x.planet || planetNames[x.code] || x.code}</td><td>${total.toFixed(2)}</td><td>${(total/60).toFixed(2)}</td><td>${min || "—"}</td><td style="color:${pct>=100?'#15803D':'#B91C1C'};font-weight:700">${pct.toFixed(1)}% · ${pct>=100?'At or Above Standard':'Below Standard'}</td></tr>`;
+      return `<tr><td>${x.planet || planetNames[x.code] || x.code}</td><td>${total.toFixed(2)}</td><td>${(total/60).toFixed(2)}</td><td>${min || "—"}</td><td style="color:${pct>=100?'#15803D':'#B91C1C'};font-weight:700">${pct.toFixed(1)}% · ${pct>=100?'मानक से ज्यादा/बराबर':'मानक से कम'}</td></tr>`;
     }).join("");
     const currentMD = dasha.mahadasha || "—";
     const mdObj = dashaSeq.find(x => (x.lord || x.mahadasha || x.planet || x.name) === currentMD) || dashaSeq.find(x => String(x.lord || x.mahadasha || x.planet || x.name || "").includes(currentMD)) || null;
@@ -753,7 +993,7 @@ function buildPDFPage(pageNum, chartData) {
     const pds = adObj?.pratyantardashas || adObj?.pratyantar || adObj?.subperiods || [];
     const fmtPeriod = x => `${x.lord || x.mahadasha || x.planet || x.name || "—"} (${x.start || x.startDate || x.from || "—"} → ${x.end || x.endDate || x.to || "—"})`;
     const adRows = ads.map(x => `<tr><td>${fmtPeriod(x)}</td></tr>`).join("");
-    const pdRows = pds.length ? pds.map(x => `<tr><td>${fmtPeriod(x)}</td></tr>`).join("") : `<tr><td>Current Pratyantardasha: ${dasha.pratyantara || dasha.pratyantar || "Data unavailable"} ${dasha.pratyantaraStart || ""} ${dasha.pratyantaraEnd || ""}</td></tr>`;
+    const pdRows = pds.length ? pds.map(x => `<tr><td>${fmtPeriod(x)}</td></tr>`).join("") : `<tr><td>वर्तमान प्रत्यंतर: ${dasha.pratyantara || dasha.pratyantar || "डेटा उपलब्ध नहीं"} ${dasha.pratyantaraStart || ""} ${dasha.pratyantaraEnd || ""}</td></tr>`;
     const sav = ed.sav || ed.ashtakvarga_complete?.sav || ed.ashtakvarga_complete?.analysis?.sign_wise_points || pd.sav || [];
     const savVals = Array.isArray(sav) ? sav : Array.from({length:12}, (_,i)=>sav[i] ?? sav[String(i)] ?? sav[i+1] ?? sav[String(i+1)] ?? "—");
     let dobDate = new Date(`${dob}T12:00:00`);
@@ -762,10 +1002,17 @@ function buildPDFPage(pageNum, chartData) {
       if (dm) dobDate = new Date(Number(dm[3]), Number(dm[2]) - 1, Number(dm[1]), 12);
     }
     const weekday = !Number.isNaN(dobDate.getTime()) ? ["रविवार","सोमवार","मंगलवार","बुधवार","गुरुवार","शुक्रवार","शनिवार"][dobDate.getDay()] : "—";
-    return `${head("One-Page Kundli Summary")}<div class="page" style="font-size:9px">
-      ${sect("Sarvashtakavarga (SAV) Points", "#C084FC")}<table><tr>${rashiHi.map((r,i)=>`<th>${r}</th>`).join("")}</tr><tr>${rashiHi.map((r,i)=>`<td>${savVals[i] ?? "—"}</td>`).join("")}</tr></table>
+    return `${head("एक-पृष्ठ कुंडली सारांश")}<div class="page" style="font-size:9px">
+      ${headerBlock(false)}
+      ${sect("जन्म विवरण + जन्म-दिवस", "#22D3EE")}<div style="padding:5px 8px">जन्म तिथि: <b>${dob}</b> · वार: <b>${weekday}</b> · समय: <b>${tob}</b> · स्थान: <b>${pob}</b> · सूर्योदय: <b>${meta.sunrise || "—"}</b></div>
+      ${sect("D1 · D9 · D10 ग्रह स्थिति", "#22D3EE")}<div style="display:flex;justify-content:space-between;gap:6px;align-items:flex-start">${chartMiniTable("D1")}${chartMiniTable("D9")}${chartMiniTable("D10")}</div>
+      ${sect("षड्बल — सभी ग्रह (प्राप्त बनाम न्यूनतम मानक)", "#F59E0B")}<table><tr><th>ग्रह</th><th>विरूपा</th><th>रूप</th><th>मानक</th><th>स्थिति</th></tr>${shadRows || `<tr><td colspan="5">Shadbala data उपलब्ध नहीं</td></tr>`}</table>
+      ${sect("वर्तमान विंशोत्तरी दशा", "#F59E0B")}<div style="padding:5px 8px">वर्तमान महादशा: <b>${currentMD}</b> · वर्तमान अंतर्दशा: <b>${currentAD}</b> · वर्तमान प्रत्यंतर: <b>${dasha.pratyantara || dasha.pratyantar || "—"}</b></div>
+      ${sect(`वर्तमान महादशा ${currentMD} — सभी अंतर्दशाएँ`, "#22D3EE")}<table>${adRows || `<tr><td>वर्तमान MD की AD सूची उपलब्ध नहीं</td></tr>`}</table>
+      ${sect(`वर्तमान AD ${currentAD} — प्रत्यंतर दशा`, "#C084FC")}<table>${pdRows}</table>
+      ${sect("सर्वाष्टकवर्ग (SAV) अंक", "#C084FC")}<table><tr>${rashiHi.map((r,i)=>`<th>${r}</th>`).join("")}</tr><tr>${rashiHi.map((r,i)=>`<td>${savVals[i] ?? "—"}</td>`).join("")}</tr></table>
       ${bavTableHtml}
-      ${foot(5,TOTAL_PAGES)}</div>${close}`;
+      ${foot(6,TOTAL_PAGES)}</div>${close}`;
   };
 
   const bodyOnly = (html) => {
@@ -774,14 +1021,14 @@ function buildPDFPage(pageNum, chartData) {
     return s;
   };
 
-  const ALL_PAGE_NUMS  = Array.from({length:5}, (_,i)=>i+1);
+  const ALL_PAGE_NUMS  = Array.from({length:6}, (_,i)=>i+1);
 
   if(pageNum==="all"){
     const combined = ALL_PAGE_NUMS.map((n, i) => {
       const pageHtml = bodyOnly(pages[n]());
       return i === 0 ? pageHtml : `<div class="pb"></div>${pageHtml}`;
     }).join("\n");
-    return `${head("Complete Vedic Kundli")}${combined}</body></html>`;
+    return `${head("सम्पूर्ण वैदिक कुंडली")}${combined}</body></html>`;
   }
   return pages[pageNum]?pages[pageNum]():`<h1>Page not found</h1>`;
 }
@@ -789,80 +1036,15 @@ function buildPDFPage(pageNum, chartData) {
 
 
 
-function parseBirthDateValue(value) {
-  const raw = String(value ?? "").trim();
-  if (!raw || raw === "—") return null;
-
-  const months = {
-    jan:0, january:0, feb:1, february:1, mar:2, march:2,
-    apr:3, april:3, may:4, jun:5, june:5, jul:6, july:6,
-    aug:7, august:7, sep:8, sept:8, september:8, oct:9,
-    october:9, nov:10, november:10, dec:11, december:11
-  };
-
-  const makeDate = (year, month, day) => {
-    year = Number(year);
-    month = Number(month);
-    day = Number(day);
-    if (!Number.isInteger(year) || !Number.isInteger(month) ||
-        !Number.isInteger(day) || year < 1 || month < 0 ||
-        month > 11 || day < 1 || day > 31) return null;
-    const date = new Date(year, month, day, 12);
-    return date.getFullYear() === year &&
-      date.getMonth() === month &&
-      date.getDate() === day ? date : null;
-  };
-
-  // Match the PDF's supported month-name formats without relying on
-  // browser-native parsing: "04 July 1999" and "July 04, 1999".
-  let match = raw.match(/^(\d{1,2})\s+([A-Za-z]+),?\s+(\d{4})$/);
-  if (match) {
-    const month = months[match[2].toLowerCase()];
-    if (month !== undefined) return makeDate(match[3], month, match[1]);
+function getBirthWeekday(dob) {
+  const raw = String(dob || "").trim();
+  if (!raw) return "—";
+  let date = new Date(`${raw}T12:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    const m = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (m) date = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), 12);
   }
-
-  match = raw.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
-  if (match) {
-    const month = months[match[1].toLowerCase()];
-    if (month !== undefined) return makeDate(match[3], month, match[2]);
-  }
-
-  // ISO date (optionally followed by a time).
-  match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|T|\s)/);
-  if (match) return makeDate(match[1], Number(match[2]) - 1, match[3]);
-
-  // Numeric DD/MM/YYYY, DD-MM-YYYY, or DD.MM.YYYY.
-  match = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
-  if (match) {
-    const first = Number(match[1]);
-    const second = Number(match[2]);
-    if (first > 12) return makeDate(match[3], second - 1, first);
-    if (second > 12) return makeDate(match[3], first - 1, second);
-    return makeDate(match[3], second - 1, first); // DD/MM/YYYY convention
-  }
-
-  // Same final fallback behavior as the PDF for other browser-recognized dates.
-  const parsed = new Date(raw);
-  if (!Number.isNaN(parsed.getTime())) {
-    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 12);
-  }
-  return null;
-}
-
-// Resolve DOB in the same order as buildPDFPage(): meta.dob, then inputData.dob.
-// Accept either a raw DOB or the full chartData object.
-function getBirthWeekday(value) {
-  const candidates = value && typeof value === "object" && !(value instanceof Date)
-    ? [value?.meta?.dob, value?.inputData?.dob]
-    : [value];
-
-  for (const candidate of candidates) {
-    const date = parseBirthDateValue(candidate);
-    if (date) {
-      return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getDay()];
-    }
-  }
-  return "—";
+  return Number.isNaN(date.getTime()) ? "—" : ["रविवार", "सोमवार", "मंगलवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार"][date.getDay()];
 }
 
 function exportAstroSummaryPNG(chartData) {
@@ -882,7 +1064,13 @@ function exportAstroSummaryPNG(chartData) {
   const NAMES = {Su:"Sun",Mo:"Moon",Ma:"Mars",Me:"Mercury",Ju:"Jupiter",Ve:"Venus",Sa:"Saturn",Ra:"Rahu",Ke:"Ketu",Ur:"Uranus",Ne:"Neptune",Pl:"Pluto"};
   const MIN = {Su:390,Mo:360,Ma:300,Me:420,Ju:390,Ve:330,Sa:300};
   const signIdx = (p, key) => { const v=p?.Vargas?.[key] || p?.vargas?.[key]; if(typeof v==="number") return (v+12)%12; if(Number.isFinite(Number(v?.Idx))) return ((Number(v.Idx)%12)+12)%12; const nm=v?.Name||v?.name; const i=RASHI.indexOf(nm); return i>=0?i:null; };
-  const weekday = getBirthWeekday(chartData);
+  const dobRaw = String(meta.dob || "").trim();
+  let ctxDate = new Date(`${dobRaw}T12:00:00`);
+  if (Number.isNaN(ctxDate.getTime())) {
+    const m = dobRaw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (m) ctxDate = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), 12);
+  }
+  const weekday = !Number.isNaN(ctxDate.getTime()) ? ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][ctxDate.getDay()] : "—";
   const W=2480, H=2480, canvas=document.createElement("canvas"); canvas.width=W; canvas.height=H;
   const ctx=canvas.getContext("2d"); if(!ctx) return;
   const C={bg:"#07111F",panel:"#0E1928",grid:"#253348",gold:"#F59E0B",cyan:"#22D3EE",purple:"#C084FC",white:"#E2E8F0",muted:"#94A3B8",green:"#4ADE80",red:"#FB7185"};
@@ -981,13 +1169,14 @@ function exportKundliPDF(chartData, pageNum="all") {
 
 // PDF PAGE SELECTOR MODAL
 // ─────────────────────────────────────────────────────────────
-const HI = { fontFamily:"Arial, sans-serif" };
+const HI = { fontFamily:"'Noto Sans Devanagari',sans-serif" };
 const PDF_PAGES = [
-  {num:1, icon:"🪐", label:"Planets + Houses", desc:"9 planets, 12 houses, degrees and nakshatras"},
-  {num:2, icon:"⏳", label:"Dasha + Yogas", desc:"Vimshottari Dasha timeline and active yogas"},
-  {num:3, icon:"⏳", label:"Dasha", desc:"Mahadasha, Antardasha and Pratyantardasha"},
-  {num:4, icon:"📊", label:"Shodashvarga Matrix", desc:"Complete 17 D-Chart matrix (D1–D60) + retrograde planets"},
-  {num:5, icon:"📑", label:"Ashtakavarga Summary", desc:"Sarvashtakavarga (SAV) and Bhinnashtakavarga (BAV) scores"},
+  {num:1, icon:"🪐", label:"ग्रह + भाव", desc:"9 ग्रह तालिका, 12 भाव, डिग्री, नक्षत्र"},
+  {num:2, icon:"⏳", label:"दशा + योग", desc:"विंशोत्तरी दशा समयरेखा, सक्रिय योग"},
+  {num:3, icon:"⏳", label:"दशा", desc:"महादशा, अंतरदशा, प्रत्यंतरदशा"},
+  {num:4, icon:"🔄", label:"चलित कुंडली", desc:"श्री पति पद्धति — वास्तविक भाव स्थिति"},
+  {num:5, icon:"📊", label:"षोडशवर्ग चक्र", desc:"17 D-Charts (D1–D60) का सम्पूर्ण मैट्रिक्स + वक्री ग्रह"},
+  {num:6, icon:"📑", label:"एक-पृष्ठ सारांश", desc:"D1/D9, Shadbala, MD/AD/PD, SAV अंक और जन्म-दिवस"},
 ];
 
 function PDFModal({ chartData, onClose }) {
@@ -998,8 +1187,8 @@ function PDFModal({ chartData, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-amber-500/15" style={{background:"rgba(245,158,11,.06)"}}>
           <div>
-            <div className="text-[15px] font-black text-amber-400" style={HI}>📄 Kundli PDF</div>
-            <div className="text-[11px] text-slate-500 mt-0.5" style={HI}>Which page do you need?</div>
+            <div className="text-[15px] font-black text-amber-400" style={HI}>📄 कुंडली PDF</div>
+            <div className="text-[11px] text-slate-500 mt-0.5" style={HI}>कौन सा पेज चाहिए?</div>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors text-xl font-bold w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10">✕</button>
         </div>
@@ -1015,14 +1204,14 @@ function PDFModal({ chartData, onClose }) {
             }}>
             <span className="text-xl">📚</span>
             <div className="flex-1 text-left">
-              <div className="text-[13px] font-black text-amber-400" style={HI}>Complete Kundli — All 5 Pages</div>
-              <div className="text-[10px] text-slate-500 mt-0.5" style={HI}>Complete report — Planets + Houses, Dasha, Vargas and Summary</div>
+              <div className="text-[13px] font-black text-amber-400" style={HI}>सम्पूर्ण कुंडली — सभी 6 पेज</div>
+              <div className="text-[10px] text-slate-500 mt-0.5" style={HI}>Complete report — ग्रह + भाव, दशा, चलित और षोडशवर्ग</div>
             </div>
             {sel===null && <span className="text-amber-400 text-lg">✓</span>}
           </button>
 
           {/* Individual pages */}
-          <div className="text-[10px] text-slate-600 mb-2 px-1" style={HI}>📄 Available PDF Pages (1–5):</div>
+          <div className="text-[10px] text-slate-600 mb-2 px-1" style={HI}>📄 उपलब्ध PDF पेज (1–6):</div>
           <div className="grid grid-cols-2 gap-2 mb-3">
             {PDF_PAGES.map(p=>(
               <button
@@ -1047,7 +1236,7 @@ function PDFModal({ chartData, onClose }) {
 
         {/* Footer buttons */}
         <div className="px-4 pb-4 pt-3 flex gap-2 flex-shrink-0 border-t border-slate-800/50">
-          {sel===5 && <button
+          {sel===6 && <button
             onClick={()=>{ exportAstroSummaryPNG(chartData); onClose(); }}
             className="py-3 px-3 rounded-xl font-black text-[12px] transition-all active:scale-[.98]"
             style={{background:"rgba(34,211,238,.10)",border:"1.5px solid rgba(34,211,238,.4)",color:"#22D3EE",...HI}}>
@@ -1057,10 +1246,10 @@ function PDFModal({ chartData, onClose }) {
             onClick={()=>{ exportKundliPDF(chartData, sel===null?"all":sel); onClose(); }}
             className="flex-1 py-3 rounded-xl font-black text-[13px] transition-all active:scale-[.98]"
             style={{background:"linear-gradient(135deg,rgba(245,158,11,.25),rgba(34,211,238,.15))",border:"1.5px solid rgba(245,158,11,.45)",color:"#F59E0B",...HI}}>
-            {sel===null?"📥 Complete PDF (5 Pages)":"📄 Create PDF for Page "+sel}
+            {sel===null?"📥 सम्पूर्ण PDF (6 पेज)":"📄 पेज "+sel+" PDF बनाएं"}
           </button>
           <button onClick={onClose} className="px-4 py-3 rounded-xl border border-slate-700 text-slate-500 text-[12px] hover:text-white transition-all" style={HI}>
-            Cancel
+            रद्द
           </button>
         </div>
       </div>
@@ -1620,14 +1809,14 @@ function YoginiProgressedContext({ chartData, selectedKey, onSelectKey, selected
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div>
           <div className="text-[13px] font-black text-amber-300">Yogini Progressed Lagna</div>
-          <div className="text-[9px] text-slate-500">Choose a separate Progressed Lagna period according to the Yogini Dasha timeline</div>
+          <div className="text-[9px] text-slate-500">Yogini Dasha के समय-काल के अनुसार Progressed Lagna का अलग period चुनें</div>
         </div>
         <button
           type="button"
           onClick={() => setShowDetails((v) => !v)}
           className="text-[10px] border border-slate-700 rounded-lg px-3 py-1.5 text-amber-300"
         >
-          {showDetails ? "Hide Prediction Details" : "View Prediction Details"}
+          {showDetails ? "फलित विवरण छिपाएँ" : "फलित विवरण देखें"}
         </button>
       </div>
 
@@ -1753,7 +1942,7 @@ function YoginiProgressedContext({ chartData, selectedKey, onSelectKey, selected
               <div className="text-[8px] text-slate-600 mt-0.5">
                 {activeMd?.has_mid_dasha_pl_change
                   ? activeMd.parts.map((p) => `${p.sign} · ${p.padas_label}`).join(" → ")
-                  : "This Progressed Lagna remains the same throughout the MD"}
+                  : "MD के पूरे समय यही Progressed Lagna रहेगा"}
               </div>
             </div>
           </div>
@@ -1761,6 +1950,80 @@ function YoginiProgressedContext({ chartData, selectedKey, onSelectKey, selected
       ) : null}
     </div>
   );
+}
+
+const RAJ_YOGA_SIGN_LORD = ["Mars","Venus","Mercury","Moon","Sun","Mercury","Venus","Mars","Jupiter","Saturn","Saturn","Jupiter"];
+const RAJ_YOGA_PLANET_CODE = { Sun:"Su", Moon:"Mo", Mars:"Ma", Mercury:"Me", Jupiter:"Ju", Venus:"Ve", Saturn:"Sa" };
+const RAJ_YOGA_PAIRS = [
+  { a: 1, b: 4, label: "लग्नेश + चतुर्थेश (L1 + L4)" },
+  { a: 1, b: 5, label: "लग्नेश + पंचमेश (L1 + L5)" },
+  { a: 1, b: 7, label: "लग्नेश + सप्तमेश (L1 + L7)" },
+  { a: 1, b: 9, label: "लग्नेश + नवमेश (L1 + L9)" },
+  { a: 1, b: 10, label: "लग्नेश + दशमेश (L1 + L10)" },
+  { a: 4, b: 5, label: "चतुर्थेश + पंचमेश (L4 + L5)" },
+  { a: 4, b: 9, label: "चतुर्थेश + नवमेश (L4 + L9)" },
+  { a: 5, b: 9, label: "पंचमेश + नवमेश (L5 + L9)" },
+  { a: 5, b: 10, label: "पंचमेश + दशमेश (L5 + L10)" },
+  { a: 7, b: 9, label: "सप्तमेश + नवमेश (L7 + L9)" },
+  { a: 9, b: 10, label: "नवमेश + दशमेश (L9 + L10)" },
+];
+function rajYogaSign(source, key) {
+  const cell = source?.Vargas?.[key] ?? source?.vargas?.[key] ?? source?.[key] ?? (key === "D1" && Number.isFinite(Number(source?.sign_index)) ? Number(source.sign_index) : null);
+  if (typeof cell === "number" && Number.isFinite(cell)) return ((cell % 12) + 12) % 12;
+  const idx = cell?.Idx ?? cell?.idx;
+  if (idx !== undefined && idx !== null && Number.isFinite(Number(idx))) return ((Number(idx) % 12) + 12) % 12;
+  const name = cell?.Name ?? cell?.name ?? (typeof cell === "string" ? cell : null);
+  const names = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"];
+  const found = names.indexOf(name);
+  return found >= 0 ? found : null;
+}
+function rajYogaAspects(fromPlanet, fromSign, toSign) {
+  if (fromSign == null || toSign == null) return false;
+  const distance = (toSign - fromSign + 12) % 12;
+  if (distance === 6) return true; // all planets' 7th aspect
+  if (fromPlanet === "Mars" && (distance === 3 || distance === 7)) return true; // 4th/8th
+  if (fromPlanet === "Jupiter" && (distance === 4 || distance === 8)) return true; // 5th/9th
+  if (fromPlanet === "Saturn" && (distance === 2 || distance === 9)) return true; // 3rd/10th
+  return false;
+}
+function detectChartRajYogas(chartData, key, progressedLagna = null) {
+  if (key === "YOGINI_PL") return { supported: false, yogas: [], reason: "इस chart type के लिए स्वतंत्र sign-placement data उपलब्ध नहीं है।" };
+  // RTN = D1 Lagna / house-lord framework + D9 planetary sign placements.
+  // Never use D9 Lagna to determine RTN house ownership.
+  const placementKey = key === "RTN" ? "D9" : key.replace(/_PL$/, "");
+  const lagnaKey = key === "RTN" ? "D1" : placementKey;
+  const asc = key.endsWith("_PL") && key.startsWith("D1") && Number.isFinite(Number(progressedLagna?.current_sign_idx))
+    ? Number(progressedLagna.current_sign_idx)
+    : rajYogaSign({ Vargas: chartData?.meta?.lagnaVargas || {} }, lagnaKey);
+  if (asc == null) return { supported: false, yogas: [], reason: key === "RTN" ? "RTN के लिए D1 Lagna sign data नहीं मिला।" : "इस chart का Lagna sign data नहीं मिला।" };
+  const signs = {};
+  for (const [planet, code] of Object.entries(RAJ_YOGA_PLANET_CODE)) {
+    signs[planet] = rajYogaSign(chartData?.planets?.[code] || {}, placementKey);
+  }
+  const houseLords = {};
+  for (let house of [1,4,5,7,9,10]) houseLords[house] = RAJ_YOGA_SIGN_LORD[(asc + house - 1) % 12];
+  const yogas = [];
+  for (const pair of RAJ_YOGA_PAIRS) {
+    const a = houseLords[pair.a], b = houseLords[pair.b];
+    if (!a || !b || a === b) continue;
+    const sa = signs[a], sb = signs[b];
+    if (sa == null || sb == null) continue;
+    const formations = [];
+    if (sa === sb) formations.push("युति");
+    if (rajYogaAspects(a, sa, sb) && rajYogaAspects(b, sb, sa)) formations.push("परस्पर दृष्टि");
+    if (sa === (b === "Sun" ? 4 : b === "Moon" ? 3 : b === "Mars" ? [0,7].find(x => x === sa) : b === "Mercury" ? [2,5].find(x => x === sa) : b === "Jupiter" ? [8,11].find(x => x === sa) : b === "Venus" ? [1,6].find(x => x === sa) : b === "Saturn" ? [9,10].find(x => x === sa) : -99) &&
+        sb === (a === "Sun" ? 4 : a === "Moon" ? 3 : a === "Mars" ? [0,7].find(x => x === sb) : a === "Mercury" ? [2,5].find(x => x === sb) : a === "Jupiter" ? [8,11].find(x => x === sb) : a === "Venus" ? [1,6].find(x => x === sb) : a === "Saturn" ? [9,10].find(x => x === sb) : -99)) formations.push("राशि परिवर्तन");
+    if ((sa === (b === "Sun" ? 4 : b === "Moon" ? 3 : b === "Mars" ? [0,7].find(x => x === sa) : b === "Mercury" ? [2,5].find(x => x === sa) : b === "Jupiter" ? [8,11].find(x => x === sa) : b === "Venus" ? [1,6].find(x => x === sa) : b === "Saturn" ? [9,10].find(x => x === sa) : -99) && rajYogaAspects(b, sb, sa)) ||
+        (sb === (a === "Sun" ? 4 : a === "Moon" ? 3 : a === "Mars" ? [0,7].find(x => x === sb) : a === "Mercury" ? [2,5].find(x => x === sb) : a === "Jupiter" ? [8,11].find(x => x === sb) : a === "Venus" ? [1,6].find(x => x === sb) : a === "Saturn" ? [9,10].find(x => x === sb) : -99) && rajYogaAspects(a, sa, sb))) formations.push("राशि स्थिति + दृष्टि");
+    if (formations.length) yogas.push({ ...pair, planets: `${a} + ${b}`, formations: [...new Set(formations)] });
+  }
+  // Yogakaraka: a single planet owns both a Kendra and a Trikona for this Lagna.
+  const kendraLords = [1,4,7,10].map(h => houseLords[h] || RAJ_YOGA_SIGN_LORD[(asc+h-1)%12]);
+  const trikonaLords = [1,5,9].map(h => houseLords[h] || RAJ_YOGA_SIGN_LORD[(asc+h-1)%12]);
+  for (const planet of [...new Set(kendraLords.filter(p => trikonaLords.includes(p)))]) {
+    if (signs[planet] != null) yogas.push({ label: `योगकारक ग्रह: ${planet}`, planets: planet, formations: ["एक ग्रह केंद्र और त्रिकोण दोनों का स्वामी"] });
+  }
+  return { supported: true, yogas };
 }
 
 function VargaGrid({ chartData }) {
@@ -1995,6 +2258,33 @@ function VargaGrid({ chartData }) {
                   showHeader={false}
                 />
               )}
+              {(() => {
+                const raj = detectChartRajYogas(chartData, renderKey, isProgressed ? selectedProgressedLagna : null);
+                return (
+                  <div className="mt-3 rounded-xl border border-amber-500/20 bg-slate-950/60 p-2.5" data-raj-yoga-panel={cardKey}>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="text-[10px] font-black text-amber-300">{baseKey} · केंद्र-त्रिकोण राजयोग</div>
+                      <span className={`rounded-md px-2 py-0.5 text-[9px] font-bold border ${!raj.supported ? "text-slate-400 border-slate-700" : raj.yogas.length ? "text-emerald-300 border-emerald-500/30 bg-emerald-500/5" : "text-rose-300 border-rose-500/30 bg-rose-500/5"}`}>
+                        {!raj.supported ? "डेटा उपलब्ध नहीं" : raj.yogas.length ? `${raj.yogas.length} detected` : "11 में कोई detect नहीं"}
+                      </span>
+                    </div>
+                    {!raj.supported ? (
+                      <div className="text-[9px] text-slate-500">{raj.reason}</div>
+                    ) : raj.yogas.length ? (
+                      <div className="space-y-1.5">
+                        {raj.yogas.map((yoga, idx) => (
+                          <div key={`${yoga.label || yoga.label === "" ? yoga.label : yoga.a + "-" + yoga.b}-${idx}`} className="rounded-lg border border-slate-800/80 px-2 py-1.5">
+                            <div className="text-[9px] font-bold text-slate-200">{yoga.label || yoga.label === "" ? yoga.label : yoga.label || RAJ_YOGA_PAIRS.find(p => p.a === yoga.a && p.b === yoga.b)?.label || `योगकारक: ${yoga.planets}`}</div>
+                            <div className="text-[8px] text-slate-400 mt-0.5">{yoga.planets} · {yoga.formations.join(" + ")}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[9px] text-slate-500">इस chart के उपलब्ध sign placements पर 11 मुख्य pair-rules में कोई formation detect नहीं हुई। यह अन्य प्रकार के योगों का verdict नहीं है।</div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
@@ -2006,7 +2296,7 @@ function VargaGrid({ chartData }) {
 const REMOVED_DASHBOARD_TABS = new Set(["kamukta", "conclusion", "vivah", "chandra_surya", "houses"]);
 const DASHBOARD_TABS = [
   { id: "charts", label: "Charts", phase: 1 },
-  { id: "shadbala", label: "Shadbala", phase: 1 },
+  { id: "shadbala", label: "षड्बल", phase: 1 },
   ...TABS.filter((t) => !REMOVED_DASHBOARD_TABS.has(t.id)),
 ];
 
@@ -2038,9 +2328,10 @@ function MobileChartHeader({ chartData }) {
 
           {/* सूर्योदय */}
           <div className="flex flex-wrap items-center gap-2 mt-1">
-            {chartData.meta.sunrise && <div className="text-[10px] text-amber-400/90 font-medium">🌅 Sunrise: {chartData.meta.sunrise}</div>}
-            <div className="text-[10px] text-cyan-300/90 font-medium">Weekday: {getBirthWeekday(chartData)}</div>
+            {chartData.meta.sunrise && <div className="text-[10px] text-amber-400/90 font-medium">🌅 सूर्योदय: {chartData.meta.sunrise}</div>}
+            <div className="text-[10px] text-cyan-300/90 font-medium">वार: {getBirthWeekday(chartData.meta.dob)}</div>
             <button type="button" onClick={() => exportAstroSummaryPNG(chartData)} className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-bold text-cyan-200">📥 One-page Report PNG</button>
+            <button type="button" onClick={() => exportKundliPDF(chartData, 6)} className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-200">PDF</button>
           </div>
         </div>
         <Badge variant="gold" style={{ fontSize:"10px" }}>
@@ -2307,7 +2598,7 @@ function buildKundliCopyText(chartData, selectedMD, selectedAD) {
   out.push(`लग्न\t${meta?.lagnaSign || meta?.lagna || "—"} ${meta?.lagnaRashiDegree != null ? `${meta.lagnaRashiDegree}°` : ""}`.trim());
   out.push(`जन्म तिथि\t${meta?.dob || "—"}`);
   out.push(`समय / स्थान\t${meta?.time || "—"} | ${meta?.city || "—"}`);
-  out.push(`लग्न नक्षत्र\t${meta?.lagnaNakshatra || "—"}${meta?.lagnaNakshatraPada ? ` (Pada ${meta.lagnaNakshatraPada})` : ""}`);
+  out.push(`लग्न नक्षत्र\t${meta?.lagnaNakshatra || "—"}${meta?.lagnaNakshatraPada ? ` (चरण ${meta.lagnaNakshatraPada})` : ""}`);
   out.push(`वर्तमान दशा\t${b.current?.mahadasha || "—"} → ${b.current?.antardasha || "—"} → ${b.current?.pratyantara || "—"}`);
   out.push("");
 
@@ -2744,31 +3035,31 @@ function CopyableKundliReportModal({ chartData, onClose, onShareLink }) {
           )}
 
           <span className="text-[10px] text-slate-500">
-            Opening the link automatically loads the DOB / Time / Place and the same page state.
+            Link खोलते ही DOB / Time / Place और यही page-state अपने आप load होगा.
           </span>
         </div>
 
         <div className="flex-1 overflow-auto p-3 sm:p-4 space-y-4">
           <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-3 sm:p-4">
-            <div className="text-lg font-black text-slate-100">🪐 Complete Vedic Kundli</div>
+            <div className="text-lg font-black text-slate-100">🪐 सम्पूर्ण वैदिक कुंडली</div>
             <div className="text-[10px] text-slate-500 mt-0.5">Vedic Jyotish Report — Swiss Ephemeris + Nadi AI</div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-4 text-[10px] sm:text-[11px]">
-              <div><span className="text-slate-500">Name:</span> <b className="text-slate-200">{meta?.name || "—"}</b></div>
-              <div><span className="text-slate-500">Ascendant:</span> <b className="text-amber-300">{meta?.lagnaSign || meta?.lagna || "—"} {meta?.lagnaRashiDegree != null ? `${meta.lagnaRashiDegree}°` : ""}</b></div>
-              <div><span className="text-slate-500">Birth Date:</span> <b className="text-slate-200">{meta?.dob || "—"}</b></div>
-              <div><span className="text-slate-500">Time / Place:</span> <b className="text-slate-200">{meta?.time || "—"} | {meta?.city || "—"}</b></div>
-              <div><span className="text-slate-500">Ascendant Nakshatra:</span> <b className="text-slate-200">{meta?.lagnaNakshatra || "—"}{meta?.lagnaNakshatraPada ? ` · Pada ${meta.lagnaNakshatraPada}` : ""}</b></div>
-              <div className="sm:col-span-2 lg:col-span-3"><span className="text-slate-500">Current:</span> <b className="text-cyan-200">{bundle.current?.mahadasha || "—"} → {bundle.current?.antardasha || "—"} → {bundle.current?.pratyantara || "—"}</b></div>
+              <div><span className="text-slate-500">नाम:</span> <b className="text-slate-200">{meta?.name || "—"}</b></div>
+              <div><span className="text-slate-500">लग्न:</span> <b className="text-amber-300">{meta?.lagnaSign || meta?.lagna || "—"} {meta?.lagnaRashiDegree != null ? `${meta.lagnaRashiDegree}°` : ""}</b></div>
+              <div><span className="text-slate-500">जन्म:</span> <b className="text-slate-200">{meta?.dob || "—"}</b></div>
+              <div><span className="text-slate-500">समय / स्थान:</span> <b className="text-slate-200">{meta?.time || "—"} | {meta?.city || "—"}</b></div>
+              <div><span className="text-slate-500">लग्न नक्षत्र:</span> <b className="text-slate-200">{meta?.lagnaNakshatra || "—"}{meta?.lagnaNakshatraPada ? ` · चरण ${meta.lagnaNakshatraPada}` : ""}</b></div>
+              <div className="sm:col-span-2 lg:col-span-3"><span className="text-slate-500">वर्तमान:</span> <b className="text-cyan-200">{bundle.current?.mahadasha || "—"} → {bundle.current?.antardasha || "—"} → {bundle.current?.pratyantara || "—"}</b></div>
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-3 sm:p-4">
-            <div className="text-sm font-black text-cyan-300 mb-2">Select Dasha</div>
+            <div className="text-sm font-black text-cyan-300 mb-2">दशा चुनें</div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <DashaSelectorCard
-                label="Mahadasha — Current default; select any MD"
+                label="महादशा — Current default, कोई भी MD चुनें"
                 value={bundle.mdName}
                 options={bundle.sequence}
                 onChange={changeMD}
@@ -2777,7 +3068,7 @@ function CopyableKundliReportModal({ chartData, onClose, onShareLink }) {
               />
 
               <DashaSelectorCard
-                label={`Antardasha — ${bundle.mdName || "selected MD"}`}
+                label={`अंतर्दशा — ${bundle.mdName || "selected MD"} में`}
                 value={bundle.adName}
                 options={bundle.ads}
                 onChange={setSelectedAD}
@@ -2787,7 +3078,7 @@ function CopyableKundliReportModal({ chartData, onClose, onShareLink }) {
             </div>
 
             <div className="mt-2 rounded-xl border border-purple-500/20 bg-purple-500/5 px-3 py-2 text-[10px]">
-              <span className="text-slate-500">Selected:</span>{" "}
+              <span className="text-slate-500">चयनित:</span>{" "}
               <b className="text-amber-300">{reportDashaLord(bundle.mdObj)}</b>
               <span className="text-slate-600 mx-1">→</span>
               <b className="text-cyan-200">{reportDashaLord(bundle.adObj)}</b>
@@ -2801,7 +3092,7 @@ function CopyableKundliReportModal({ chartData, onClose, onShareLink }) {
 
           <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-800/60">
-              <div className="text-sm font-black text-amber-300">Planet Positions + Vargas</div>
+              <div className="text-sm font-black text-amber-300">ग्रह स्थिति + षोडशवर्ग</div>
               <div className="text-[10px] text-slate-500">
                 Degree और सभी listed D-Charts एक ही table में.
               </div>
@@ -2854,8 +3145,8 @@ function CopyableKundliReportModal({ chartData, onClose, onShareLink }) {
 
           <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-3">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="text-[11px] text-slate-500">Copy-ready Text</div>
-              <div className="text-[9px] text-slate-600">Tab-separated — ready to paste into Word / Excel / Notes</div>
+              <div className="text-[11px] text-slate-500">Copy-ready text</div>
+              <div className="text-[9px] text-slate-600">Tab-separated — Word / Excel / Notes में paste-friendly</div>
             </div>
             <textarea
               readOnly
@@ -2977,7 +3268,7 @@ function RightPanel({ chartData }) {
           }}
         >
           <FileText size={16} />
-          <span>📄 Kundli PDF</span>
+          <span>📄 कुंडली PDF</span>
           <Download size={14} style={{ opacity: 0.7 }} />
         </button>
 
@@ -3023,7 +3314,7 @@ function RightPanel({ chartData }) {
           }}
         >
           <RefreshCw size={15} />
-          <span>New Kundli</span>
+          <span>नई Kundli</span>
           <span className="text-[10px] opacity-70">Fresh</span>
         </Link>
       </div>
@@ -3046,7 +3337,7 @@ function RightPanel({ chartData }) {
           style={{background:"rgba(168,85,247,.06)", borderColor:"rgba(168,85,247,.2)"}}>
           <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse flex-shrink-0"/>
           <span className="text-[10px] text-purple-400 flex-1" style={{fontFamily:"'Noto Sans Devanagari',sans-serif"}}>
-            Nadi AI engine loading — Yogas · Sutras · Saturn · Transits…
+            नाड़ी AI इंजन लोड हो रहा है — योग · सूत्र · शनि · गोचर…
           </span>
           <div className="w-3 h-3 border border-t-purple-400 border-purple-400/20 rounded-full animate-spin flex-shrink-0"/>
         </div>
@@ -3055,7 +3346,7 @@ function RightPanel({ chartData }) {
       {/* 4. Active dasha strip */}
       <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl mb-4 border border-amber-500/20 bg-amber-500/5 flex-shrink-0 flex-wrap">
         <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
-        <span className="text-[10px] text-amber-500/70 uppercase tracking-widest">Current Dasha</span>
+        <span className="text-[10px] text-amber-500/70 uppercase tracking-widest">वर्तमान दशा</span>
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-bold text-amber-300">{chartData.dasha.current.mahadasha}</span>
           <span className="text-slate-700 text-xs">›</span>
@@ -3063,7 +3354,7 @@ function RightPanel({ chartData }) {
           <span className="text-slate-700 text-xs">›</span>
           <span className="text-xs text-slate-500">{chartData.dasha.current.pratyantara}</span>
         </div>
-        <span className="ml-auto text-[10px] text-slate-600">Ends: {chartData.dasha.current.endDate}</span>
+        <span className="ml-auto text-[10px] text-slate-600">समाप्त: {chartData.dasha.current.endDate}</span>
       </div>
 
       {/* 5. Tab bar — desktop only (mobile uses MobileTabDrawer) */}
@@ -3086,7 +3377,7 @@ function RightPanel({ chartData }) {
               activeTab === t.id ? "bg-slate-700/70 text-slate-100 shadow-sm" : "text-slate-500 hover:text-slate-300",
             ].join(" ")}
           >
-            {({ charts: "Charts", shadbala: "Shadbala", planets: "Planets", drishti: "Aspects", dasha: "Dasha", av: "Ashtakavarga", yogas: "Yogas", gochar: "Transits", advanced_yogas: "Advanced Yogas", kp_btr: "KP Rectification", prashna: "Horary Chart", chalit: "Bhava Chalit", karaka: "Karaka" }[t.id] || t.label)}
+            {t.label}
             {/* KP SSL badge */}
             {t.id === "kp_btr" && kpSSL && !enginesLoading && (
               <span style={{
@@ -3265,14 +3556,15 @@ function ChartColumn({ chartData }) {
             {chartData.meta.dob} · {chartData.meta.time} · {chartData.meta.city}
           </div>
           <div className="flex flex-wrap items-center gap-2 mt-1">
-            {chartData.meta.sunrise && <div className="text-[10px] text-amber-400/80">🌅 Sunrise: {chartData.meta.sunrise}</div>}
-            <div className="text-[10px] text-cyan-300/90 font-medium">Weekday: {getBirthWeekday(chartData)}</div>
+            {chartData.meta.sunrise && <div className="text-[10px] text-amber-400/80">🌅 सूर्योदय: {chartData.meta.sunrise}</div>}
+            <div className="text-[10px] text-cyan-300/90 font-medium">वार: {getBirthWeekday(chartData.meta.dob)}</div>
             <button type="button" onClick={() => exportAstroSummaryPNG(chartData)} className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-bold text-cyan-200 hover:bg-cyan-500/20" title="D1/D9, Shadbala, Dasha और Ashtakavarga का एक-पृष्ठ PNG डाउनलोड करें">📥 One-page Report PNG</button>
+            <button type="button" onClick={() => exportKundliPDF(chartData, 6)} className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-200 hover:bg-amber-500/20" title="वही सारांश PDF में खोलें">PDF</button>
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
           <Badge variant="gold">
-            Ascendant: {chartData.meta.lagnaSign}
+            लग्न: {chartData.meta.lagnaSign}
           </Badge>
           <Badge variant="cyan">{chartData.meta.chartType}</Badge>
         </div>
@@ -3288,9 +3580,9 @@ function ChartColumn({ chartData }) {
       {/* Quick dignity stats */}
       <div className="grid grid-cols-3 gap-2">
         {[
-          { label: "Exalted",    value: exalted,     color: "#34D399" },
-          { label: "Debilitated",    value: debilitated, color: "#F87171" },
-          { label: "Own Sign", value: ownSign,     color: "#F59E0B" },
+          { label: "उच्च",    value: exalted,     color: "#34D399" },
+          { label: "नीच",    value: debilitated, color: "#F87171" },
+          { label: "स्वराशि", value: ownSign,     color: "#F59E0B" },
         ].map((s) => (
           <div
             key={s.label}
